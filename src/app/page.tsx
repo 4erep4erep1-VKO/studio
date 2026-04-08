@@ -35,6 +35,7 @@ function MainApp() {
   
   const { user: firebaseUser, isUserLoading } = useUser();
 
+  // 1. Загрузка сессии и настроек
   useEffect(() => {
     const storedUser = localStorage.getItem('creative_dispatch_user');
     if (storedUser) {
@@ -55,14 +56,7 @@ function MainApp() {
     }
   }, []);
 
-  // Синхронизация UID Firebase и сессии в localStorage
-  useEffect(() => {
-    if (firebaseUser && sessionUser && firebaseUser.uid !== sessionUser.id) {
-      // Если UID изменился (новая анонимная сессия), сбрасываем вход
-      handleLogout();
-    }
-  }, [firebaseUser, sessionUser]);
-
+  // 2. Применение темы
   const applyTheme = (theme: Theme) => {
     if (typeof window === 'undefined') return;
     const root = window.document.documentElement;
@@ -98,6 +92,7 @@ function MainApp() {
     );
   }
 
+  // Если нет сессии или нет авторизации Firebase, показываем экран входа
   if (!sessionUser || !firebaseUser) {
     return <LoginScreen onLogin={handleLogin} />;
   }

@@ -26,21 +26,19 @@ export function NotificationCenter({ currentUserId }: NotificationCenterProps) {
   const db = useFirestore();
   const { user: firebaseUser } = useUser();
 
+  // Мы слушаем уведомления ТОЛЬКО если у нас есть ID пользователя
   const notificationsQuery = useMemoFirebase(() => {
-    // Используем ID монтажника (currentUserId) или UID для админа
-    const targetId = currentUserId || firebaseUser?.uid;
-    
-    if (!db || !targetId || !firebaseUser) return null;
+    if (!db || !firebaseUser || !currentUserId) return null;
     
     return query(
       collection(db, 'notifications'),
-      where('userId', '==', targetId),
+      where('userId', '==', currentUserId),
       orderBy('createdAt', 'desc'),
       limit(20)
     );
   }, [db, firebaseUser, currentUserId]);
 
-  const { data: notifications, error } = useCollection<AppNotification>(notificationsQuery);
+  const { data: notifications } = useCollection<AppNotification>(notificationsQuery);
 
   const unreadCount = notifications?.filter(n => !n.read).length || 0;
 
