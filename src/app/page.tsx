@@ -1,7 +1,8 @@
+
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, LayoutGrid, LogOut, Settings, Briefcase, Filter, HardHat, Shield, User } from 'lucide-react';
+import { Plus, Search, LayoutGrid, LogOut, Settings, Briefcase, Filter, HardHat, Shield, User, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -15,7 +16,7 @@ import { AdminSettings } from '@/components/settings/AdminSettings';
 import { UserSettings } from '@/components/settings/UserSettings';
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { FirebaseClientProvider } from '@/firebase';
+import { FirebaseClientProvider, useUser } from '@/firebase';
 
 export default function App() {
   return (
@@ -26,17 +27,27 @@ export default function App() {
 }
 
 function MainApp() {
-  const [user, setUser] = useState<{ role: UserRole; id: string; name: string } | null>(null);
+  const [sessionUser, setSessionUser] = useState<{ role: UserRole; id: string; name: string } | null>(null);
   const [preferences, setPreferences] = useState<UserPreferences>({
     theme: 'system',
     notificationsEnabled: true
   });
+  
+  const { user: firebaseUser, isUserLoading } = useUser();
 
+  // Handle persistence
   useEffect(() => {
-    const stored = localStorage.getItem('creative_dispatch_prefs');
-    if (stored) {
+    const storedUser = localStorage.getItem('creative_dispatch_user');
+    if (storedUser) {
       try {
-        const parsed = JSON.parse(stored);
+        setSessionUser(JSON.parse(storedUser));
+      } catch (e) {}
+    }
+
+    const storedPrefs = localStorage.getItem('creative_dispatch_prefs');
+    if (storedPrefs) {
+      try {
+        const parsed = JSON.parse(storedPrefs);
         setPreferences(parsed);
         applyTheme(parsed.theme);
       } catch (e) {}
@@ -61,21 +72,38 @@ function MainApp() {
   };
 
   const handleLogin = (role: UserRole, id: string, name: string) => {
-    setUser({ role, id, name });
+    const userData = { role, id, name };
+    setSessionUser(userData);
+    localStorage.setItem('creative_dispatch_user', JSON.stringify(userData));
   };
 
-  if (!user) {
+  const handleLogout = () => {
+    setSessionUser(null);
+    localStorage.removeItem('creative_dispatch_user');
+  };
+
+  if (isUserLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // If we have a Firebase session but no local user data (e.g. refresh), 
+  // we might need to re-login if the local data was cleared, but usually they go together.
+  if (!sessionUser || !firebaseUser) {
     return <LoginScreen onLogin={handleLogin} />;
   }
 
   return (
     <Dashboard 
-      role={user.role} 
-      userId={user.id}
-      userName={user.name} 
+      role={sessionUser.role} 
+      userId={sessionUser.id}
+      userName={sessionUser.name} 
       preferences={preferences}
       onUpdatePreferences={handleUpdatePreferences}
-      onLogout={() => setUser(null)} 
+      onLogout={handleLogout} 
     />
   );
 }
@@ -295,7 +323,7 @@ function Dashboard({
             ) : (
               <UserSettings 
                 preferences={preferences} 
-                onUpdatePreferences={onUpdatePreferences} 
+                onUpdatePreferences={handleUpdatePreferences} 
                 userName={userName}
               />
             )}

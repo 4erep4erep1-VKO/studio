@@ -1,31 +1,42 @@
-import { useState, useEffect } from 'react';
+
+'use client';
+
+import { useFirestore, useDoc, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
+import { doc } from 'firebase/firestore';
 import { AppSettings } from '@/lib/types';
 import { useToast } from './use-toast';
+import { useEffect } from 'react';
 
 export function useAppSettings() {
-  const [settings, setSettings] = useState<AppSettings>({ adminPin: '1234' });
+  const db = useFirestore();
   const { toast } = useToast();
 
+  const settingsRef = useMemoFirebase(() => {
+    if (!db) return null;
+    return doc(db, 'settings', 'app');
+  }, [db]);
+
+  const { data: settings, isLoading } = useDoc<AppSettings>(settingsRef);
+
+  // Initialize settings if they don't exist
   useEffect(() => {
-    const stored = localStorage.getItem('creative_dispatch_settings');
-    if (stored) {
-      try {
-        setSettings(JSON.parse(stored));
-      } catch (e) {
-        console.error('Failed to parse settings');
-      }
+    if (!isLoading && !settings && settingsRef) {
+      setDocumentNonBlocking(settingsRef, { adminPin: '1234' }, { merge: true });
     }
-  }, []);
+  }, [settings, isLoading, settingsRef]);
 
   const updatePin = (newPin: string) => {
-    const newSettings = { ...settings, adminPin: newPin };
-    setSettings(newSettings);
-    localStorage.setItem('creative_dispatch_settings', JSON.stringify(newSettings));
+    if (!settingsRef) return;
+    updateDocumentNonBlocking(settingsRef, { adminPin: newPin });
     toast({
       title: "PIN-код изменен",
-      description: "Новый пароль успешно сохранен.",
+      description: "Новый пароль успешно сохранен в облаке.",
     });
   };
 
-  return { settings, updatePin };
+  return { 
+    settings: settings || { adminPin: '1234' }, 
+    isLoading, 
+    updatePin 
+  };
 }

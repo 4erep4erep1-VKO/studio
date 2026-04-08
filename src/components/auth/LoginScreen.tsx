@@ -1,7 +1,8 @@
+
 "use client";
 
-import React, { useState } from 'react';
-import { Shield, HardHat, ChevronRight, Lock, User, Search } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Shield, HardHat, ChevronRight, Lock, User, Search, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -9,9 +10,9 @@ import { UserRole, Installer } from '@/lib/types';
 import { useAppSettings } from '@/hooks/use-app-settings';
 import { useInstallers } from '@/hooks/use-installers';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useAuth, useFirestore, addDocumentNonBlocking } from '@/firebase';
-import { initiateAnonymousSignIn } from '@/firebase/non-blocking-login';
-import { collection } from 'firebase/firestore';
+import { useAuth, useFirestore, addDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
+import { collection, doc } from 'firebase/firestore';
+import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 
 interface LoginScreenProps {
   onLogin: (role: UserRole, id: string, name: string) => void;
@@ -22,7 +23,9 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   const [pin, setPin] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [error, setError] = useState('');
-  const { settings } = useAppSettings();
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  
+  const { settings, isLoading: isSettingsLoading } = useAppSettings();
   const { installers } = useInstallers();
   const auth = useAuth();
   const db = useFirestore();
@@ -44,31 +47,59 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
     setStep('installers');
   };
 
-  const handlePinSubmit = (e: React.FormEvent) => {
+  const handlePinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (pin === settings.adminPin) {
-      initiateAnonymousSignIn(auth);
-      logAccess('Administrator', 'Администратор');
-      onLogin('admin', 'admin_id', 'Администратор');
+      setIsLoggingIn(true);
+      try {
+        const cred = await signInAnonymously(auth);
+        if (db && cred.user) {
+          // Register admin UID in roles_admin to trigger Firestore Security Rules
+          const adminRef = doc(db, 'roles_admin', cred.user.uid);
+          setDocumentNonBlocking(adminRef, { id: cred.user.uid, name: 'Администратор' }, { merge: true });
+          
+          logAccess('Administrator', 'Администратор');
+          onLogin('admin', cred.user.uid, 'Администратор');
+        }
+      } catch (err) {
+        setError('Ошибка авторизации');
+      } finally {
+        setIsLoggingIn(false);
+      }
     } else {
       setError('Неверный PIN-код');
       setPin('');
     }
   };
 
-  const handleInstallerLogin = (installer: Installer) => {
-    initiateAnonymousSignIn(auth);
-    logAccess('Installer', installer.name);
-    onLogin('installer', installer.id, installer.name);
+  const handleInstallerLogin = async (installer: Installer) => {
+    setIsLoggingIn(true);
+    try {
+      const cred = await signInAnonymously(auth);
+      logAccess('Installer', installer.name);
+      onLogin('installer', installer.id, installer.name);
+    } catch (err) {
+      setError('Ошибка авторизации');
+    } finally {
+      setIsLoggingIn(false);
+    }
   };
 
   const filteredInstallers = installers.filter(inst => 
     inst.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  if (isSettingsLoading || isLoggingIn) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   if (step === 'choice') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <div className="min-h-screen flex items-center justify-center bg-background p-4 animate-in fade-in duration-500">
         <div className="max-w-md w-full space-y-8 text-center">
           <div className="space-y-2">
             <h1 className="text-4xl font-headline font-bold text-primary">Creative Dispatch</h1>
@@ -115,7 +146,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
 
   if (step === 'installers') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <div className="min-h-screen flex items-center justify-center bg-background p-4 animate-in slide-in-from-right-4 duration-300">
         <Card className="max-w-md w-full shadow-2xl overflow-hidden">
           <CardHeader className="text-center pb-2">
             <CardTitle className="font-headline text-2xl">Выберите аккаунт</CardTitle>
@@ -168,7 +199,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4 animate-in slide-in-from-right-4 duration-300">
       <Card className="max-w-sm w-full shadow-2xl">
         <CardHeader className="text-center">
           <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4 text-primary">
