@@ -10,9 +10,10 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Order, OrderStatus, INSTALLERS } from '@/lib/types';
+import { Order, OrderStatus } from '@/lib/types';
 import { estimateWork } from '@/ai/flows/ai-visual-work-estimator-flow';
 import { cn } from '@/lib/utils';
+import { useInstallers } from '@/hooks/use-installers';
 
 const orderSchema = z.object({
   objectName: z.string().min(1, 'Название объекта обязательно'),
@@ -33,6 +34,7 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
   const [isEstimating, setIsEstimating] = useState(false);
   const [aiResult, setAiResult] = useState(initialData?.aiEstimation);
   const dropZoneRef = useRef<HTMLDivElement>(null);
+  const { installers } = useInstallers();
 
   const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm({
     resolver: zodResolver(orderSchema),
@@ -119,7 +121,7 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
                 <SelectValue placeholder="Выберите монтажника" />
               </SelectTrigger>
               <SelectContent>
-                {INSTALLERS.map(name => (
+                {installers.map(name => (
                   <SelectItem key={name} value={name}>{name}</SelectItem>
                 ))}
               </SelectContent>

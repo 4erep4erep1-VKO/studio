@@ -1,4 +1,5 @@
 export type OrderStatus = 'В работе' | 'Завершен';
+export type UserRole = 'admin' | 'installer' | null;
 
 export interface Order {
   id: string;
@@ -16,7 +17,11 @@ export interface Order {
   };
 }
 
-export const INSTALLERS = [
+export interface AppSettings {
+  adminPin: string;
+}
+
+export const DEFAULT_INSTALLERS = [
   'Иван Петров',
   'Сергей Соколов',
   'Алексей Морозов',

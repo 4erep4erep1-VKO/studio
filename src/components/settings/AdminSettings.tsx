@@ -1,0 +1,124 @@
+"use client";
+
+import React, { useState } from 'react';
+import { UserPlus, Trash2, Key, Users, Check, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useInstallers } from '@/hooks/use-installers';
+import { useAppSettings } from '@/hooks/use-app-settings';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
+
+export function AdminSettings() {
+  const { installers, addInstaller, removeInstaller } = useInstallers();
+  const { settings, updatePin } = useAppSettings();
+  
+  const [newInstaller, setNewInstaller] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [isChangingPin, setIsChangingPin] = useState(false);
+
+  const handleAddInstaller = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newInstaller.trim()) {
+      addInstaller(newInstaller.trim());
+      setNewInstaller('');
+    }
+  };
+
+  const handleUpdatePin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPin.length >= 4) {
+      updatePin(newPin);
+      setNewPin('');
+      setIsChangingPin(false);
+    }
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {/* Управление монтажниками */}
+      <Card className="border-border/50">
+        <CardHeader className="flex flex-row items-center gap-3 space-y-0">
+          <Users className="w-5 h-5 text-primary" />
+          <CardTitle className="text-xl font-headline">Монтажники</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <form onSubmit={handleAddInstaller} className="flex gap-2">
+            <Input 
+              placeholder="ФИО монтажника..." 
+              value={newInstaller}
+              onChange={(e) => setNewInstaller(e.target.value)}
+            />
+            <Button type="submit" size="icon" className="shrink-0">
+              <UserPlus className="h-4 w-4" />
+            </Button>
+          </form>
+
+          <ScrollArea className="h-[300px] pr-4">
+            <div className="space-y-2">
+              {installers.map((name) => (
+                <div key={name} className="flex items-center justify-between p-3 bg-secondary/30 rounded-lg group">
+                  <span className="text-sm font-medium">{name}</span>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => removeInstaller(name)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </CardContent>
+      </Card>
+
+      {/* Безопасность */}
+      <Card className="border-border/50">
+        <CardHeader className="flex flex-row items-center gap-3 space-y-0">
+          <Key className="w-5 h-5 text-primary" />
+          <CardTitle className="text-xl font-headline">Безопасность</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-base">PIN-код администратора</Label>
+                <p className="text-sm text-muted-foreground">Используется для входа в панель управления</p>
+              </div>
+              {!isChangingPin && (
+                <Button variant="outline" onClick={() => setIsChangingPin(true)}>Изменить</Button>
+              )}
+            </div>
+
+            {isChangingPin && (
+              <form onSubmit={handleUpdatePin} className="space-y-4 pt-4 border-t border-border animate-in fade-in slide-in-from-top-2">
+                <div className="space-y-2">
+                  <Label htmlFor="pin">Новый PIN-код (мин. 4 цифры)</Label>
+                  <div className="flex gap-2">
+                    <Input 
+                      id="pin" 
+                      type="password" 
+                      placeholder="Введите новый код" 
+                      value={newPin}
+                      onChange={(e) => setNewPin(e.target.value)}
+                      autoFocus
+                    />
+                    <Button type="submit" variant="default" disabled={newPin.length < 4}>
+                      <Check className="h-4 w-4 mr-1" /> Сохранить
+                    </Button>
+                    <Button type="button" variant="ghost" onClick={() => setIsChangingPin(false)}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </form>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

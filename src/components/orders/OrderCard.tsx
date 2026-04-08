@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { Calendar, User, MoreVertical, Edit2, CheckCircle2, Clock, MapPin, Sparkles } from 'lucide-react';
+import { Calendar, User, MoreVertical, Edit2, CheckCircle2, Clock, MapPin, Sparkles, Lock } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -18,9 +18,10 @@ interface OrderCardProps {
   order: Order;
   onEdit: (order: Order) => void;
   onStatusChange: (order: Order) => void;
+  readOnly?: boolean;
 }
 
-export function OrderCard({ order, onEdit, onStatusChange }: OrderCardProps) {
+export function OrderCard({ order, onEdit, onStatusChange, readOnly = false }: OrderCardProps) {
   const isCompleted = order.status === 'Завершен';
 
   return (
@@ -55,22 +56,25 @@ export function OrderCard({ order, onEdit, onStatusChange }: OrderCardProps) {
           <h3 className="font-headline font-semibold text-lg leading-tight truncate pr-2" title={order.objectName}>
             {order.objectName}
           </h3>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 -mt-1 -mr-1">
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onEdit(order)}>
-                <Edit2 className="mr-2 h-4 w-4" /> Редактировать
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onStatusChange({ ...order, status: isCompleted ? 'В работе' : 'Завершен' })}>
-                {isCompleted ? <Clock className="mr-2 h-4 w-4" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-                {isCompleted ? 'Вернуть в работу' : 'Завершить заказ'}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {!readOnly && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 -mt-1 -mr-1">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onEdit(order)}>
+                  <Edit2 className="mr-2 h-4 w-4" /> Редактировать
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onStatusChange({ ...order, status: isCompleted ? 'В работе' : 'Завершен' })}>
+                  {isCompleted ? <Clock className="mr-2 h-4 w-4" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                  {isCompleted ? 'Вернуть в работу' : 'Завершить заказ'}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          {readOnly && <Lock className="h-3.5 w-3.5 text-muted-foreground/40 mt-1" />}
         </div>
         <p className="text-sm text-muted-foreground line-clamp-2 h-10">
           {order.description}
