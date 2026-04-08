@@ -5,21 +5,27 @@ export type Theme = 'light' | 'dark' | 'system';
 export interface Order {
   id: string;
   objectName: string;
-  description: string;
-  photoDataUri?: string;
+  workDescription: string; // Updated to match backend.json
+  imageUrls?: string[]; // Updated to match backend.json
   dueDate: string;
-  installer: string;
+  installerId: string; // Using ID for Firebase relations
   status: OrderStatus;
   createdAt: string;
-  aiEstimation?: {
-    complexities: string[];
-    requiredTools: string[];
-    estimatedDuration: string;
-  };
+  updatedAt: string;
 }
 
-export interface AppSettings {
-  adminPin: string;
+export interface Installer {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+}
+
+export interface AccessLog {
+  id: string;
+  timestamp: string;
+  accessedByRole: string;
+  userName?: string;
 }
 
 export interface UserPreferences {

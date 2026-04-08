@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, LayoutGrid, LogOut, Settings, Briefcase, Filter, HardHat, Shield, User, Bell } from 'lucide-react';
+import { Plus, Search, LayoutGrid, LogOut, Settings, Briefcase, Filter, HardHat, Shield, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -15,9 +15,18 @@ import { AdminSettings } from '@/components/settings/AdminSettings';
 import { UserSettings } from '@/components/settings/UserSettings';
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { FirebaseClientProvider } from '@/firebase';
 
 export default function App() {
-  const [user, setUser] = useState<{ role: UserRole; name: string } | null>(null);
+  return (
+    <FirebaseClientProvider>
+      <MainApp />
+    </FirebaseClientProvider>
+  );
+}
+
+function MainApp() {
+  const [user, setUser] = useState<{ role: UserRole; id: string; name: string } | null>(null);
   const [preferences, setPreferences] = useState<UserPreferences>({
     theme: 'system',
     notificationsEnabled: true
@@ -51,8 +60,8 @@ export default function App() {
     applyTheme(newPrefs.theme);
   };
 
-  const handleLogin = (role: UserRole, name?: string) => {
-    setUser({ role, name: name || (role === 'admin' ? 'Администратор' : 'Монтажник') });
+  const handleLogin = (role: UserRole, id: string, name: string) => {
+    setUser({ role, id, name });
   };
 
   if (!user) {
@@ -62,6 +71,7 @@ export default function App() {
   return (
     <Dashboard 
       role={user.role} 
+      userId={user.id}
       userName={user.name} 
       preferences={preferences}
       onUpdatePreferences={handleUpdatePreferences}
@@ -72,18 +82,20 @@ export default function App() {
 
 function Dashboard({ 
   role, 
+  userId,
   userName, 
   preferences,
   onUpdatePreferences,
   onLogout 
 }: { 
   role: UserRole, 
+  userId: string,
   userName: string, 
   preferences: UserPreferences,
   onUpdatePreferences: (prefs: UserPreferences) => void,
   onLogout: () => void 
 }) {
-  const { orders, addOrder, updateOrder } = useOrders();
+  const { orders, addOrder, updateOrder } = useOrders(userId, role || '');
   const [activeTab, setActiveTab] = useState<'orders' | 'admin-settings' | 'user-settings'>('orders');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | undefined>();
@@ -93,15 +105,8 @@ function Dashboard({
   const isAdmin = role === 'admin';
 
   const filteredOrders = orders.filter(order => {
-    const matchesSearch = order.objectName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                        order.installer.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = order.objectName.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesFilter = filterStatus === 'all' || order.status === filterStatus;
-    
-    // Если не админ, показываем только свои заказы
-    if (!isAdmin) {
-      return matchesSearch && matchesFilter && order.installer === userName;
-    }
-    
     return matchesSearch && matchesFilter;
   });
 
@@ -116,9 +121,9 @@ function Dashboard({
     setIsModalOpen(true);
   };
 
-  const handleFormSubmit = (data: Order) => {
+  const handleFormSubmit = (data: Partial<Order>) => {
     if (editingOrder) {
-      updateOrder(data);
+      updateOrder(editingOrder.id, data);
     } else {
       addOrder(data);
     }
@@ -205,7 +210,7 @@ function Dashboard({
             <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input 
-                placeholder="Поиск по объектам или монтажникам..." 
+                placeholder="Поиск по объектам..." 
                 className="pl-10 h-10 bg-secondary/30 border-none focus-visible:ring-primary/40 focus-visible:ring-offset-0"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -267,7 +272,7 @@ function Dashboard({
                         key={order.id} 
                         order={order} 
                         onEdit={handleEdit} 
-                        onStatusChange={updateOrder} 
+                        onStatusChange={(ord) => updateOrder(ord.id, { status: ord.status })} 
                         role={role}
                         currentUserName={userName}
                       />
@@ -307,7 +312,7 @@ function Dashboard({
                 {editingOrder ? 'Редактировать заказ' : 'Создать новый заказ'}
               </DialogTitle>
               <DialogDescription>
-                Заполните детали объекта и назначьте исполнителя. Используйте AI для быстрой оценки сложности.
+                Заполните детали объекта и назначьте исполнителя.
               </DialogDescription>
             </DialogHeader>
             <OrderForm 

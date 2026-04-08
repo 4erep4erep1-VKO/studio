@@ -1,34 +1,30 @@
-import { useState, useEffect } from 'react';
-import { DEFAULT_INSTALLERS } from '@/lib/types';
+'use client';
+
+import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
+import { collection, doc } from 'firebase/firestore';
+import { Installer } from '@/lib/types';
 
 export function useInstallers() {
-  const [installers, setInstallers] = useState<string[]>([]);
+  const db = useFirestore();
 
-  useEffect(() => {
-    const stored = localStorage.getItem('creative_dispatch_installers');
-    if (stored) {
-      try {
-        setInstallers(JSON.parse(stored));
-      } catch (e) {
-        setInstallers(DEFAULT_INSTALLERS);
-      }
-    } else {
-      setInstallers(DEFAULT_INSTALLERS);
-      localStorage.setItem('creative_dispatch_installers', JSON.stringify(DEFAULT_INSTALLERS));
-    }
-  }, []);
+  const installersQuery = useMemoFirebase(() => {
+    if (!db) return null;
+    return collection(db, 'installers');
+  }, [db]);
+
+  const { data: installers, isLoading } = useCollection<Installer>(installersQuery);
 
   const addInstaller = (name: string) => {
-    const newList = [...installers, name];
-    setInstallers(newList);
-    localStorage.setItem('creative_dispatch_installers', JSON.stringify(newList));
+    if (!db) return;
+    const colRef = collection(db, 'installers');
+    addDocumentNonBlocking(colRef, { name });
   };
 
-  const removeInstaller = (name: string) => {
-    const newList = installers.filter(i => i !== name);
-    setInstallers(newList);
-    localStorage.setItem('creative_dispatch_installers', JSON.stringify(newList));
+  const removeInstaller = (id: string) => {
+    if (!db) return;
+    const docRef = doc(db, 'installers', id);
+    deleteDocumentNonBlocking(docRef);
   };
 
-  return { installers, addInstaller, removeInstaller };
+  return { installers: installers || [], isLoading, addInstaller, removeInstaller };
 }

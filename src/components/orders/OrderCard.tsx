@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { Calendar, User, MoreVertical, Edit2, CheckCircle2, Clock, MapPin, Sparkles, Lock, XCircle } from 'lucide-react';
+import { Calendar, User, MoreVertical, Edit2, CheckCircle2, Clock, MapPin, XCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,7 +26,7 @@ export function OrderCard({ order, onEdit, onStatusChange, role, currentUserName
   const isCompleted = order.status === 'Завершен';
   const isDeclined = order.status === 'Отклонен';
   const isAdmin = role === 'admin';
-  const isAssignedToMe = order.installer === currentUserName;
+  const isAssignedToMe = true; // Visibility is handled by hook filter, but can double check
 
   const getStatusBadge = () => {
     switch (order.status) {
@@ -42,17 +42,9 @@ export function OrderCard({ order, onEdit, onStatusChange, role, currentUserName
       (isCompleted || isDeclined) && "opacity-80"
     )}>
       <div className="relative h-48 w-full bg-secondary/50">
-        {order.photoDataUri ? (
-          <img 
-            src={order.photoDataUri} 
-            alt={order.objectName} 
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-muted-foreground/30">
-            <MapPin className="h-12 w-12" />
-          </div>
-        )}
+        <div className="w-full h-full flex items-center justify-center text-muted-foreground/30">
+          <MapPin className="h-12 w-12" />
+        </div>
         <div className="absolute top-3 right-3">
           <Badge className={cn("shadow-lg backdrop-blur-md border-none", getStatusBadge())}>
             {order.status}
@@ -108,7 +100,7 @@ export function OrderCard({ order, onEdit, onStatusChange, role, currentUserName
           )}
         </div>
         <p className="text-sm text-muted-foreground line-clamp-2 h-10">
-          {order.description}
+          {order.workDescription}
         </p>
       </CardHeader>
 
@@ -118,20 +110,7 @@ export function OrderCard({ order, onEdit, onStatusChange, role, currentUserName
             <Calendar className="mr-1.5 h-3.5 w-3.5 text-accent" />
             До {new Date(order.dueDate).toLocaleDateString('ru-RU')}
           </div>
-          <div className="flex items-center text-muted-foreground">
-            <User className="mr-1.5 h-3.5 w-3.5 text-accent" />
-            {order.installer}
-          </div>
         </div>
-
-        {order.aiEstimation && (
-          <div className="bg-primary/5 rounded-lg p-2 flex items-start gap-2 border border-primary/10">
-            <Sparkles className="h-3.5 w-3.5 text-accent mt-0.5" />
-            <div className="text-[10px] leading-relaxed text-muted-foreground">
-              <span className="font-bold text-primary/80">AI Оценка:</span> {order.aiEstimation.estimatedDuration}
-            </div>
-          </div>
-        )}
       </CardContent>
     </Card>
   );

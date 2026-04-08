@@ -1,50 +1,62 @@
-import { useState, useEffect } from 'react';
+'use client';
+
+import { useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
+import { collection, query, where, doc, serverTimestamp } from 'firebase/firestore';
 import { Order } from '@/lib/types';
 import { useToast } from './use-toast';
 
-export function useOrders() {
-  const [orders, setOrders] = useState<Order[]>([]);
+export function useOrders(userId?: string, role?: string) {
+  const db = useFirestore();
   const { toast } = useToast();
 
-  useEffect(() => {
-    const stored = localStorage.getItem('creative_dispatch_orders');
-    if (stored) {
-      try {
-        setOrders(JSON.parse(stored));
-      } catch (e) {
-        console.error('Failed to parse orders from localStorage', e);
-      }
+  const ordersQuery = useMemoFirebase(() => {
+    if (!db) return null;
+    const baseQuery = collection(db, 'orders');
+    if (role === 'installer' && userId) {
+      return query(baseQuery, where('installerId', '==', userId));
     }
-  }, []);
+    return baseQuery;
+  }, [db, userId, role]);
 
-  const saveOrders = (newOrders: Order[]) => {
-    setOrders(newOrders);
-    localStorage.setItem('creative_dispatch_orders', JSON.stringify(newOrders));
-  };
+  const { data: orders, isLoading } = useCollection<Order>(ordersQuery);
 
-  const addOrder = (order: Order) => {
-    saveOrders([order, ...orders]);
+  const addOrder = (orderData: Partial<Order>) => {
+    if (!db) return;
+    const colRef = collection(db, 'orders');
+    const newOrder = {
+      ...orderData,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      status: 'В работе',
+    };
+    addDocumentNonBlocking(colRef, newOrder);
     toast({
       title: "Заказ создан",
-      description: `Объект "${order.objectName}" успешно добавлен.`,
+      description: `Объект "${orderData.objectName}" успешно добавлен.`,
     });
   };
 
-  const updateOrder = (updatedOrder: Order) => {
-    saveOrders(orders.map(o => o.id === updatedOrder.id ? updatedOrder : o));
+  const updateOrder = (orderId: string, updates: Partial<Order>) => {
+    if (!db) return;
+    const docRef = doc(db, 'orders', orderId);
+    updateDocumentNonBlocking(docRef, {
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    });
     toast({
       title: "Заказ обновлен",
-      description: `Данные объекта "${updatedOrder.objectName}" успешно изменены.`,
     });
   };
 
   const deleteOrder = (id: string) => {
-    saveOrders(orders.filter(o => o.id !== id));
+    if (!db) return;
+    const docRef = doc(db, 'orders', id);
+    deleteDocumentNonBlocking(docRef);
     toast({
       title: "Заказ удален",
       variant: "destructive",
     });
   };
 
-  return { orders, addOrder, updateOrder, deleteOrder };
+  return { orders: orders || [], isLoading, addOrder, updateOrder, deleteOrder };
 }

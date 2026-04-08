@@ -5,13 +5,16 @@ import { Shield, HardHat, ChevronRight, Lock, User, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { UserRole } from '@/lib/types';
+import { UserRole, Installer } from '@/lib/types';
 import { useAppSettings } from '@/hooks/use-app-settings';
 import { useInstallers } from '@/hooks/use-installers';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useAuth, useFirestore, addDocumentNonBlocking } from '@/firebase';
+import { initiateAnonymousSignIn } from '@/firebase/non-blocking-login';
+import { collection } from 'firebase/firestore';
 
 interface LoginScreenProps {
-  onLogin: (role: UserRole, name?: string) => void;
+  onLogin: (role: UserRole, id: string, name: string) => void;
 }
 
 export function LoginScreen({ onLogin }: LoginScreenProps) {
@@ -21,6 +24,17 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   const [error, setError] = useState('');
   const { settings } = useAppSettings();
   const { installers } = useInstallers();
+  const auth = useAuth();
+  const db = useFirestore();
+
+  const logAccess = (role: string, userName: string) => {
+    if (!db) return;
+    addDocumentNonBlocking(collection(db, 'accessLogs'), {
+      timestamp: new Date().toISOString(),
+      accessedByRole: role,
+      userName: userName
+    });
+  };
 
   const handleAdminChoice = () => {
     setStep('pin');
@@ -33,15 +47,23 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   const handlePinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (pin === settings.adminPin) {
-      onLogin('admin', 'Администратор');
+      initiateAnonymousSignIn(auth);
+      logAccess('Administrator', 'Администратор');
+      onLogin('admin', 'admin_id', 'Администратор');
     } else {
       setError('Неверный PIN-код');
       setPin('');
     }
   };
 
-  const filteredInstallers = installers.filter(name => 
-    name.toLowerCase().includes(searchQuery.toLowerCase())
+  const handleInstallerLogin = (installer: Installer) => {
+    initiateAnonymousSignIn(auth);
+    logAccess('Installer', installer.name);
+    onLogin('installer', installer.id, installer.name);
+  };
+
+  const filteredInstallers = installers.filter(inst => 
+    inst.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   if (step === 'choice') {
@@ -113,18 +135,18 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
           <CardContent className="p-0">
             <ScrollArea className="h-[350px]">
               <div className="p-6 pt-0 space-y-2">
-                {filteredInstallers.map((name) => (
+                {filteredInstallers.map((inst) => (
                   <Button
-                    key={name}
+                    key={inst.id}
                     variant="ghost"
                     className="w-full justify-between h-14 px-4 hover:bg-primary/10 hover:text-primary transition-colors group"
-                    onClick={() => onLogin('installer', name)}
+                    onClick={() => handleInstallerLogin(inst)}
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-xs font-bold group-hover:bg-primary group-hover:text-white transition-colors">
                         <User className="w-4 h-4" />
                       </div>
-                      <span className="font-medium">{name}</span>
+                      <span className="font-medium">{inst.name}</span>
                     </div>
                     <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
                   </Button>
