@@ -13,14 +13,9 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Проверка роли администратора через коллекцию roles_admin
+    // Проверка роли администратора
     function isAdmin() {
       return isSignedIn() && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
-    }
-
-    // Получаем ID монтажника из документа роли пользователя
-    function getInstallerId() {
-      return get(/databases/$(database)/documents/roles_installer/$(request.auth.uid)).data.installerId;
     }
 
     // Проверка наличия роли монтажника
@@ -28,38 +23,40 @@ service cloud.firestore {
       return isSignedIn() && exists(/databases/$(database)/documents/roles_installer/$(request.auth.uid));
     }
 
+    // Получаем ID монтажника
+    function getInstallerId() {
+      return get(/databases/$(database)/documents/roles_installer/$(request.auth.uid)).data.installerId;
+    }
+
     // --- Collection Rules ---
 
-    /** Настройки приложения: чтение доступно всем для проверки PIN, запись только админу */
-    match /settings/app {
+    /** Настройки приложения: чтение доступно всем, запись только админу */
+    match /settings/{docId} {
       allow read: if true;
-      allow write: if isAdmin() || !exists(/databases/$(database)/documents/roles_admin/any_admin);
+      allow write: if isAdmin();
     }
 
     /** Роли администраторов */
     match /roles_admin/{userId} {
-      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      allow list: if isAdmin();
-      allow create, update: if isSignedIn() && request.auth.uid == userId;
-      allow delete: if isAdmin();
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
     }
 
     /** Связка UID пользователя и ID монтажника */
     match /roles_installer/{userId} {
-      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      allow create, update: if isSignedIn() && request.auth.uid == userId;
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
     }
 
     /** Профили монтажников */
     match /installers/{installerId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin();
+      allow write: if isAdmin();
     }
 
     /** Заказы */
     match /orders/{orderId} {
-      // Администратор видит всё. Монтажник может запрашивать (list) заказы, 
-      // но доступ к данным (get) ограничен только его ID.
+      // Разрешаем list для всех вошедших, фильтрация происходит в коде
       allow list: if isSignedIn();
       allow get, update: if isSignedIn() && (
         isAdmin() || 
@@ -70,15 +67,13 @@ service cloud.firestore {
 
     /** Логи доступа */
     match /accessLogs/{logId} {
-      allow list: if isAdmin();
-      allow get: if isAdmin();
+      allow list, get: if isAdmin();
       allow create: if isSignedIn();
       allow update, delete: if false; 
     }
 
     /** Уведомления */
     match /notifications/{notificationId} {
-      // Разделяем list и get для обхода ограничений на использование get() в запросах
       allow list: if isSignedIn();
       allow get, update, delete: if isSignedIn() && (
         isAdmin() || 
