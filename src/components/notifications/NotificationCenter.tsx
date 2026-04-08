@@ -18,19 +18,28 @@ import { AppNotification } from '@/lib/types';
 import { formatDistanceToNow } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
-export function NotificationCenter() {
+interface NotificationCenterProps {
+  currentUserId?: string;
+}
+
+export function NotificationCenter({ currentUserId }: NotificationCenterProps) {
   const db = useFirestore();
-  const { user } = useUser();
+  const { user: firebaseUser } = useUser();
 
   const notificationsQuery = useMemoFirebase(() => {
-    if (!db || !user) return null;
+    // Используем переданный currentUserId (это ID монтажника или админа из сессии)
+    // Если его нет, пробуем UID Firebase
+    const targetId = currentUserId || firebaseUser?.uid;
+    
+    if (!db || !targetId) return null;
+    
     return query(
       collection(db, 'notifications'),
-      where('userId', '==', user.uid),
+      where('userId', '==', targetId),
       orderBy('createdAt', 'desc'),
       limit(20)
     );
-  }, [db, user]);
+  }, [db, firebaseUser, currentUserId]);
 
   const { data: notifications } = useCollection<AppNotification>(notificationsQuery);
 

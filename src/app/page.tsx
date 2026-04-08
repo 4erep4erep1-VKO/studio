@@ -245,7 +245,7 @@ function Dashboard({
           </div>
           
           <div className="flex items-center gap-3">
-            <NotificationCenter />
+            <NotificationCenter currentUserId={userId} />
             
             {isAdmin && activeTab === 'orders' && (
               <Button onClick={handleOpenCreate} className="bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/10 gap-2 px-3 sm:px-4">
