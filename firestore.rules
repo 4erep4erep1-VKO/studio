@@ -1,45 +1,117 @@
+/**
+ * # Firestore Security Rules for Advertising Agency Work Order System
+ *
+ * ## Core Philosophy
+ * This ruleset implements a robust, role-based authorization model designed for an advertising agency 
+ * managing installers and work orders. It prioritizes "Authorization Independence" by using 
+ * denormalized fields (like `installerId` on orders) and Database Access Control (DBAC) through 
+ * an administrative role collection. The system is in Prototyping Mode, enforcing strict access 
+ * control while remaining flexible on data schema for rapid iteration.
+ *
+ * ## Data Structure
+ * - `/roles_admin/{userId}`: Marker documents for administrative users.
+ * - `/users/{userId}`: Private user profiles, accessible only by the owner.
+ * - `/installers/{installerId}`: Professional profiles for installers, managed by admins and owners.
+ * - `/orders/{orderId}`: Central collection for work orders assigned to installers.
+ *
+ * ## Key Security Decisions
+ * - **Admin Overrides**: Users identified in the `/roles_admin` collection are granted global CRUD access.
+ * - **Ownership-Based Access**: Access to user and installer profiles is strictly limited to the 
+ *   authenticated user matching the document ID.
+ * - **Relational Integrity**: Orders are protected via the `installerId` field. While admins manage 
+ *   all orders, installers can only access (get) orders specifically assigned to them.
+ * - **Query Safety**: In accordance with the "Rules are not Filters" principle and strict security 
+ *   guidelines, listing the top-level `/orders` collection is restricted to administrators to 
+ *   prevent unauthorized data exposure.
+ *
+ * ## Denormalization for Authorization
+ * - `installerId` is stored directly on each `Order` document. This allows for immediate 
+ *   authorization checks (`resource.data.installerId == request.auth.uid`) without performing 
+ *   expensive cross-collection lookups during read or update operations.
+ */
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // --- Global Helper Functions ---
+
+    /** Checks if the user is authenticated. */
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // Настройки приложения: открыты для чтения (для проверки PIN)
-    match /settings/{docId} {
-      allow read: if true;
-      allow write: if isSignedIn();
+    /** Checks if the authenticated user has an entry in the roles_admin collection. */
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
     }
 
-    // Роли пользователей
+    /** Checks if the authenticated user matches the provided ID. */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /** Checks ownership and ensures the document exists for update/delete. */
+    function isExistingOwner(userId) {
+      return isOwner(userId) && resource != null;
+    }
+
+    // --- Collection Rules ---
+
+    /**
+     * @description Rules for Admin Role markers. These are read-only for owners and restricted for management.
+     * @path /roles_admin/{userId}
+     * @allow (get) Authenticated user checking their own role status.
+     * @deny (create, update, delete) Non-system/Manual users attempting to escalate privileges.
+     * @principle Implements Database Access Control (DBAC) for system-wide roles.
+     */
     match /roles_admin/{userId} {
-      allow read, write: if isSignedIn();
+      allow get: if isOwner(userId);
+      allow list: if isAdmin();
+      allow create, update, delete: if false;
     }
 
-    match /roles_installer/{userId} {
-      allow read, write: if isSignedIn();
+    /**
+     * @description Private user profile management.
+     * @path /users/{userId}
+     * @allow (get, list, create, update) User accessing their own profile data.
+     * @deny (delete) Users deleting their own system account (Admin only).
+     * @principle Restricts access to a user's own data tree based on UID matching.
+     */
+    match /users/{userId} {
+      allow get, list: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow delete: if isAdmin();
     }
 
-    // Профили монтажников
+    /**
+     * @description Installer profile management. Admins manage the fleet, installers manage their own details.
+     * @path /installers/{installerId}
+     * @allow (get) The installer themselves or an admin checking a profile.
+     * @deny (create) An installer trying to create a profile with a different UID.
+     * @principle Enforces path-to-data consistency for professional profiles.
+     */
     match /installers/{installerId} {
-      allow read, write: if isSignedIn();
+      allow get, list: if isOwner(installerId) || isAdmin();
+      allow create: if isAdmin() || (isOwner(installerId) && request.resource.data.id == installerId);
+      allow update: if isAdmin() || (isExistingOwner(installerId) && request.resource.data.id == resource.data.id);
+      allow delete: if isAdmin();
     }
 
-    // Заказы: разрешаем доступ всем авторизованным. 
-    // Фильтрация данных происходит в коде через .where()
+    /**
+     * @description Work Order management. Access is dictated by the assigned installerId.
+     * @path /orders/{orderId}
+     * @allow (get) The assigned installer reading their specific task.
+     * @deny (list) Installers attempting to browse the full orders collection (Admin only).
+     * @principle Uses denormalized ownership (installerId) for performant authorization.
+     */
     match /orders/{orderId} {
-      allow read, write: if isSignedIn();
-    }
-
-    // Уведомления: разрешаем доступ всем авторизованным.
-    match /notifications/{notificationId} {
-      allow read, write: if isSignedIn();
-    }
-
-    // Логи доступа
-    match /accessLogs/{logId} {
-      allow read, write: if isSignedIn();
+      allow get: if isAdmin() || (isSignedIn() && resource.data.installerId == request.auth.uid);
+      allow list: if isAdmin();
+      allow create: if isAdmin() || (isSignedIn() && request.resource.data.installerId == request.auth.uid);
+      allow update: if isAdmin() || (isSignedIn() && resource != null && resource.data.installerId == request.auth.uid && request.resource.data.installerId == resource.data.installerId);
+      allow delete: if isAdmin();
     }
   }
 }
