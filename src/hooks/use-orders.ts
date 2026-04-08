@@ -11,15 +11,16 @@ export function useOrders(userId?: string, role?: string) {
   const { toast } = useToast();
 
   const ordersQuery = useMemoFirebase(() => {
-    // Ждем полной инициализации авторизации и ролей
     if (!db || !firebaseUser || !role || !userId) return null;
     
     const baseQuery = collection(db, 'orders');
     
+    // Для монтажника фильтруем по его ID
     if (role === 'installer') {
       return query(baseQuery, where('installerId', '==', userId));
     }
     
+    // Для администратора показываем всё
     if (role === 'admin') {
       return query(baseQuery, orderBy('createdAt', 'desc'));
     }
@@ -86,7 +87,7 @@ export function useOrders(userId?: string, role?: string) {
 
   const deleteOrder = (id: string) => {
     if (!db) return;
-    const docRef = doc(db, id);
+    const docRef = doc(db, 'orders', id);
     deleteDocumentNonBlocking(docRef);
     toast({
       title: "Заказ удален",

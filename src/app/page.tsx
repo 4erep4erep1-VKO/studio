@@ -35,11 +35,12 @@ function MainApp() {
   const { user: firebaseUser, isUserLoading } = useUser();
 
   useEffect(() => {
-    // Синхронизация локальной сессии и Firebase UID
     const storedUser = localStorage.getItem('creative_dispatch_user');
     if (storedUser && firebaseUser) {
       try {
         const parsed = JSON.parse(storedUser);
+        // Если в сессии есть пользователь, но он не соответствует анонимному UID (редко, но бывает при сбросе)
+        // мы пока доверяем сохраненной роли, если она совпадает с логикой Firebase
         setSessionUser(parsed);
       } catch (e) {
         localStorage.removeItem('creative_dispatch_user');
@@ -93,7 +94,6 @@ function MainApp() {
     );
   }
 
-  // Если нет юзера в Firebase ИЛИ нет сессии в localStorage — показываем вход
   if (!firebaseUser || !sessionUser) {
     return <LoginScreen onLogin={handleLogin} />;
   }
@@ -321,7 +321,7 @@ function Dashboard({
             ) : (
               <UserSettings 
                 preferences={preferences} 
-                onUpdatePreferences={onUpdatePreferences} 
+                onUpdatePreferences={handleUpdatePreferences} 
                 userName={userName}
               />
             )}

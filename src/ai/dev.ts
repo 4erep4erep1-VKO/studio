@@ -1,1 +1,1 @@
-// AI functionality removed.
+// AI functionality removed for stability.

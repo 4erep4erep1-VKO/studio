@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Order, OrderStatus } from '@/lib/types';
 import { useInstallers } from '@/hooks/use-installers';
-import { ImagePlus, X, Camera } from 'lucide-react';
+import { ImagePlus, X } from 'lucide-react';
 
 const orderSchema = z.object({
   objectName: z.string().min(1, 'Название объекта обязательно'),
