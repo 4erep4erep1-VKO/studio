@@ -14,13 +14,15 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
 
-    // Роли: запись только самому себе
+    // Роли: чтение разрешено всем вошедшим для проверки прав в коде
     match /roles_admin/{userId} {
-      allow read, write: if isSignedIn() && request.auth.uid == userId;
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == userId;
     }
 
     match /roles_installer/{userId} {
-      allow read, write: if isSignedIn() && request.auth.uid == userId;
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == userId;
     }
 
     // Профили монтажников
