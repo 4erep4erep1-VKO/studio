@@ -26,7 +26,7 @@ export function NotificationCenter({ currentUserId }: NotificationCenterProps) {
   const { user: firebaseUser } = useUser();
 
   const notificationsQuery = useMemoFirebase(() => {
-    // ВАЖНО: Мы используем ID из сессии, чтобы запрос был стабильным.
+    // Безопасный запрос: только когда авторизация и ID пользователя готовы
     if (!db || !firebaseUser || !currentUserId) return null;
     
     return query(

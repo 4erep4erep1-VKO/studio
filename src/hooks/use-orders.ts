@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking, addDocumentNonBlocking, deleteDocumentNonBlocking, useUser } from '@/firebase';
@@ -8,17 +7,16 @@ import { useToast } from './use-toast';
 
 export function useOrders(userId?: string, role?: string) {
   const db = useFirestore();
-  const { user } = useUser();
+  const { user: firebaseUser } = useUser();
   const { toast } = useToast();
 
   const ordersQuery = useMemoFirebase(() => {
-    if (!db || !user || !role) return null;
+    // Ждем полной инициализации авторизации и ролей
+    if (!db || !firebaseUser || !role || !userId) return null;
     
     const baseQuery = collection(db, 'orders');
     
-    // ВАЖНО: Фильтрация заказов по installerId для монтажника
     if (role === 'installer') {
-      if (!userId) return null;
       return query(baseQuery, where('installerId', '==', userId));
     }
     
@@ -27,7 +25,7 @@ export function useOrders(userId?: string, role?: string) {
     }
     
     return null;
-  }, [db, userId, role, user]);
+  }, [db, userId, role, firebaseUser]);
 
   const { data: orders, isLoading } = useCollection<Order>(ordersQuery as Query);
 
@@ -44,7 +42,6 @@ export function useOrders(userId?: string, role?: string) {
     
     addDocumentNonBlocking(colRef, newOrder);
 
-    // Отправка уведомления назначенному монтажнику
     if (orderData.installerId) {
       const notifyRef = collection(db, 'notifications');
       addDocumentNonBlocking(notifyRef, {

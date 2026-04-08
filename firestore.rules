@@ -6,46 +6,40 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Настройки: чтение разрешено всем для проверки PIN
+    // Настройки приложения: открыты для чтения (для проверки PIN)
     match /settings/{docId} {
       allow read: if true;
       allow write: if isSignedIn();
     }
 
-    // Роли: чтение разрешено всем вошедшим
+    // Роли пользователей
     match /roles_admin/{userId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && request.auth.uid == userId;
+      allow read, write: if isSignedIn();
     }
 
     match /roles_installer/{userId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && request.auth.uid == userId;
+      allow read, write: if isSignedIn();
     }
 
     // Профили монтажников
     match /installers/{installerId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read, write: if isSignedIn();
     }
 
-    // Заказы: разрешаем list всем вошедшим. Безопасность данных обеспечивается фильтром в коде.
-    // get/update доступны только если пользователь авторизован.
+    // Заказы: разрешаем доступ всем авторизованным. 
+    // Фильтрация данных происходит в коде через .where()
     match /orders/{orderId} {
-      allow list: if isSignedIn();
-      allow get, update, create, delete: if isSignedIn();
+      allow read, write: if isSignedIn();
     }
 
-    // Логи доступа: разрешаем запись всем вошедшим для аудита.
-    match /accessLogs/{logId} {
-      allow list, get: if isSignedIn();
-      allow create: if isSignedIn();
-    }
-
-    // Уведомления: разрешаем list всем вошедшим.
+    // Уведомления: разрешаем доступ всем авторизованным.
     match /notifications/{notificationId} {
-      allow list: if isSignedIn();
-      allow get, update, delete, create: if isSignedIn();
+      allow read, write: if isSignedIn();
+    }
+
+    // Логи доступа
+    match /accessLogs/{logId} {
+      allow read, write: if isSignedIn();
     }
   }
 }

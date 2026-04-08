@@ -35,10 +35,12 @@ function MainApp() {
   const { user: firebaseUser, isUserLoading } = useUser();
 
   useEffect(() => {
+    // Синхронизация локальной сессии и Firebase UID
     const storedUser = localStorage.getItem('creative_dispatch_user');
-    if (storedUser) {
+    if (storedUser && firebaseUser) {
       try {
-        setSessionUser(JSON.parse(storedUser));
+        const parsed = JSON.parse(storedUser);
+        setSessionUser(parsed);
       } catch (e) {}
     }
 
@@ -52,7 +54,7 @@ function MainApp() {
     } else {
       applyTheme('system');
     }
-  }, []);
+  }, [firebaseUser]);
 
   const applyTheme = (theme: Theme) => {
     if (typeof window === 'undefined') return;
