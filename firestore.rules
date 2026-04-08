@@ -20,17 +20,12 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    function isAssignedToOrder(resourceData) {
-      // В данной версии приложения мы доверяем анонимной сессии и фильтруем по installerId на клиенте
-      return isSignedIn();
-    }
-
     // --- Collection Rules ---
 
     /** Настройки приложения (PIN-код) доступны для чтения всем для проверки при входе */
     match /settings/app {
       allow get: if true;
-      allow write: if isAdmin() || (isSignedIn() && !exists(/databases/$(database)/documents/roles_admin/any));
+      allow write: if isAdmin() || (isSignedIn() && !exists(/databases/$(database)/documents/roles_admin/any_admin));
     }
 
     match /roles_admin/{userId} {
@@ -49,7 +44,7 @@ service cloud.firestore {
     match /orders/{orderId} {
       allow get, list: if isSignedIn();
       allow create, delete: if isAdmin();
-      allow update: if isAdmin() || isAssignedToOrder(resource.data);
+      allow update: if isSignedIn();
     }
 
     match /accessLogs/{logId} {

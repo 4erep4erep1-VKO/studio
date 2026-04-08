@@ -9,22 +9,22 @@ import { useEffect } from 'react';
 export function useAppSettings() {
   const db = useFirestore();
   const { toast } = useToast();
-  const { user } = useUser();
+  const { user, isUserLoading: isAuthLoading } = useUser();
 
   const settingsRef = useMemoFirebase(() => {
     if (!db) return null;
     return doc(db, 'settings', 'app');
   }, [db]);
 
-  const { data: settings, isLoading } = useDoc<AppSettings>(settingsRef);
+  const { data: settings, isLoading: isDocLoading } = useDoc<AppSettings>(settingsRef);
 
-  // Инициализация настроек по умолчанию, если они отсутствуют в БД
+  // Initialize default settings if they are missing and user is signed in
   useEffect(() => {
-    // Выполняем только если данные загружены, их нет, и пользователь авторизован (хотя бы анонимно)
-    if (!isLoading && !settings && settingsRef && user) {
+    // Only attempt to initialize if auth is done and doc is missing
+    if (!isAuthLoading && !isDocLoading && !settings && settingsRef && user) {
       setDocumentNonBlocking(settingsRef, { adminPin: '1234' }, { merge: true });
     }
-  }, [settings, isLoading, settingsRef, user]);
+  }, [settings, isDocLoading, isAuthLoading, settingsRef, user]);
 
   const updatePin = (newPin: string) => {
     if (!settingsRef) return;
@@ -37,7 +37,7 @@ export function useAppSettings() {
 
   return { 
     settings: settings || { adminPin: '1234' }, 
-    isLoading, 
+    isLoading: isDocLoading, 
     updatePin 
   };
 }

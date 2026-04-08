@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -12,7 +11,7 @@ import { useInstallers } from '@/hooks/use-installers';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth, useFirestore, addDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
-import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { signInAnonymously } from 'firebase/auth';
 
 interface LoginScreenProps {
   onLogin: (role: UserRole, id: string, name: string) => void;
@@ -29,6 +28,13 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   const { installers } = useInstallers();
   const auth = useAuth();
   const db = useFirestore();
+
+  // Ensure anonymous sign-in as soon as the component mounts
+  useEffect(() => {
+    if (!auth.currentUser) {
+      signInAnonymously(auth).catch(err => console.error("Anonymous auth failed:", err));
+    }
+  }, [auth]);
 
   const logAccess = (role: string, userName: string) => {
     if (!db) return;
@@ -49,17 +55,18 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
 
   const handlePinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (pin === settings.adminPin) {
+    if (pin === (settings?.adminPin || '1234')) {
       setIsLoggingIn(true);
       try {
-        const cred = await signInAnonymously(auth);
-        if (db && cred.user) {
+        // We already have anonymous auth from useEffect, so we just use the UID
+        const currentUser = auth.currentUser;
+        if (db && currentUser) {
           // Register admin UID in roles_admin to trigger Firestore Security Rules
-          const adminRef = doc(db, 'roles_admin', cred.user.uid);
-          setDocumentNonBlocking(adminRef, { id: cred.user.uid, name: 'Администратор' }, { merge: true });
+          const adminRef = doc(db, 'roles_admin', currentUser.uid);
+          setDocumentNonBlocking(adminRef, { id: currentUser.uid, name: 'Администратор' }, { merge: true });
           
           logAccess('Administrator', 'Администратор');
-          onLogin('admin', cred.user.uid, 'Администратор');
+          onLogin('admin', currentUser.uid, 'Администратор');
         }
       } catch (err) {
         setError('Ошибка авторизации');
@@ -75,9 +82,13 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   const handleInstallerLogin = async (installer: Installer) => {
     setIsLoggingIn(true);
     try {
-      const cred = await signInAnonymously(auth);
-      logAccess('Installer', installer.name);
-      onLogin('installer', installer.id, installer.name);
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        logAccess('Installer', installer.name);
+        onLogin('installer', installer.id, installer.name);
+      } else {
+        setError('Сессия не установлена. Пожалуйста, подождите.');
+      }
     } catch (err) {
       setError('Ошибка авторизации');
     } finally {
@@ -92,7 +103,10 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   if (isSettingsLoading || isLoggingIn) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="w-10 h-10 animate-spin text-primary" />
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-10 h-10 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Загрузка системы...</p>
+        </div>
       </div>
     );
   }
