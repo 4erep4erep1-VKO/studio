@@ -15,7 +15,8 @@ export function useOrders(userId?: string, role?: string) {
       let allOrders: Order[] = stored ? JSON.parse(stored) : [];
       
       if (role === 'installer' && userId) {
-        allOrders = allOrders.filter(o => o.installerId === userId);
+        // Монтажник видит свои заказы И общие заказы
+        allOrders = allOrders.filter(o => o.installerId === userId || o.installerId === 'general');
       }
       
       setOrders(allOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
@@ -44,7 +45,7 @@ export function useOrders(userId?: string, role?: string) {
       workDescription: orderData.workDescription || '',
       imageUrls: orderData.imageUrls || [],
       dueDate: orderData.dueDate || now,
-      installerId: orderData.installerId || '',
+      installerId: orderData.installerId || 'general',
       status: orderData.status || 'В работе',
       createdAt: now,
       updatedAt: now,
@@ -52,25 +53,31 @@ export function useOrders(userId?: string, role?: string) {
     
     saveOrders([newOrder, ...allOrders]);
 
-    if (newOrder.installerId) {
-      const notifStored = localStorage.getItem('local_notifications');
-      const allNotifs = notifStored ? JSON.parse(notifStored) : [];
-      const newNotif = {
-        id: Math.random().toString(36).substr(2, 9),
-        userId: newOrder.installerId,
-        title: 'Новый заказ',
-        message: `Вам назначен объект: ${newOrder.objectName}`,
-        createdAt: now,
-        read: false
-      };
-      localStorage.setItem('local_notifications', JSON.stringify([newNotif, ...allNotifs]));
-      window.dispatchEvent(new Event('storage'));
+    // Уведомление конкретному монтажнику, если он назначен сразу
+    if (newOrder.installerId && newOrder.installerId !== 'general') {
+      sendNotification(newOrder.installerId, 'Новый заказ', `Вам назначен объект: ${newOrder.objectName}`);
     }
 
     toast({ title: "Заказ создан", description: `Объект "${newOrder.objectName}" успешно добавлен.` });
   };
 
-  const updateOrder = (orderId: string, updates: Partial<Order>) => {
+  const sendNotification = (toUserId: string, title: string, message: string) => {
+    const now = new Date().toISOString();
+    const notifStored = localStorage.getItem('local_notifications');
+    const allNotifs = notifStored ? JSON.parse(notifStored) : [];
+    const newNotif = {
+      id: Math.random().toString(36).substr(2, 9),
+      userId: toUserId,
+      title,
+      message,
+      createdAt: now,
+      read: false
+    };
+    localStorage.setItem('local_notifications', JSON.stringify([newNotif, ...allNotifs]));
+    window.dispatchEvent(new Event('storage'));
+  };
+
+  const updateOrder = (orderId: string, updates: Partial<Order>, currentUserName?: string) => {
     const stored = localStorage.getItem('local_orders');
     const allOrders: Order[] = stored ? JSON.parse(stored) : [];
     
@@ -79,31 +86,27 @@ export function useOrders(userId?: string, role?: string) {
     
     if (!orderToUpdate) return;
 
+    // Логика взятия общего заказа монтажником
+    const isClaimingGeneral = orderToUpdate.installerId === 'general' && updates.installerId && updates.installerId !== 'general';
+
     const updatedOrders = allOrders.map(o => 
       o.id === orderId ? { ...o, ...updates, updatedAt: now } : o
     );
     
     saveOrders(updatedOrders);
 
-    // Notification for admin if status changes to Declined or Completed by an installer
-    if (updates.status === 'Отклонен' || updates.status === 'Завершен') {
-      const notifStored = localStorage.getItem('local_notifications');
-      const allNotifs = notifStored ? JSON.parse(notifStored) : [];
-      const newNotif = {
-        id: Math.random().toString(36).substr(2, 9),
-        userId: 'admin-id', // Admin ID in local session
-        title: updates.status === 'Отклонен' ? 'Заказ отклонен' : 'Заказ выполнен',
-        message: updates.status === 'Отклонен' 
-          ? `Монтажник отклонил объект: ${orderToUpdate.objectName}`
-          : `Монтажник завершил работу по объекту: ${orderToUpdate.objectName}`,
-        createdAt: now,
-        read: false
-      };
-      localStorage.setItem('local_notifications', JSON.stringify([newNotif, ...allNotifs]));
-      window.dispatchEvent(new Event('storage'));
+    // Уведомление админу при различных действиях
+    if (isClaimingGeneral) {
+      sendNotification('admin-id', 'Заказ принят', `Монтажник ${currentUserName || 'Кто-то'} взял общий заказ: ${orderToUpdate.objectName}`);
+      toast({ title: "Заказ принят", description: "Теперь этот объект закреплен за вами." });
+    } else if (updates.status === 'Отклонен' || updates.status === 'Завершен') {
+      const statusText = updates.status === 'Отклонен' ? 'отклонил' : 'завершил';
+      sendNotification('admin-id', updates.status === 'Отклонен' ? 'Заказ отклонен' : 'Заказ выполнен', 
+        `Монтажник ${currentUserName || ''} ${statusText} объект: ${orderToUpdate.objectName}`);
+      toast({ title: updates.status === 'Завершен' ? "Заказ выполнен" : "Заказ отклонен" });
+    } else {
+      toast({ title: "Заказ обновлен" });
     }
-
-    toast({ title: "Заказ обновлен" });
   };
 
   const deleteOrder = (id: string) => {

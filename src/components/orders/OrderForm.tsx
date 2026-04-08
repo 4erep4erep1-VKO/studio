@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Order, OrderStatus } from '@/lib/types';
 import { useInstallers } from '@/hooks/use-installers';
-import { ImagePlus, X } from 'lucide-react';
+import { ImagePlus, X, Users } from 'lucide-react';
 
 const orderSchema = z.object({
   objectName: z.string().min(1, 'Название объекта обязательно'),
@@ -31,7 +31,7 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
   const { installers } = useInstallers();
   const [images, setImages] = useState<string[]>(initialData?.imageUrls || []);
 
-  const { register, handleSubmit, formState: { errors }, setValue } = useForm({
+  const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm({
     resolver: zodResolver(orderSchema),
     defaultValues: initialData ? {
       objectName: initialData.objectName,
@@ -47,6 +47,8 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
       status: 'В работе' as OrderStatus,
     }
   });
+
+  const currentInstallerId = watch('installerId');
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -91,16 +93,27 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
               onValueChange={(val) => setValue('installerId', val)} 
               defaultValue={initialData?.installerId}
             >
-              <SelectTrigger>
+              <SelectTrigger className={currentInstallerId === 'general' ? "border-accent bg-accent/5" : ""}>
                 <SelectValue placeholder="Выберите монтажника" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="general" className="font-bold text-accent">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4" />
+                    <span>Общий заказ (свободный выбор)</span>
+                  </div>
+                </SelectItem>
                 {installers.map(inst => (
                   <SelectItem key={inst.id} value={inst.id}>{inst.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
             {errors.installerId && <p className="text-xs text-destructive">{errors.installerId.message as string}</p>}
+            {currentInstallerId === 'general' && (
+              <p className="text-[10px] text-accent font-medium leading-tight">
+                * Любой монтажник сможет самостоятельно взять этот заказ в работу.
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">

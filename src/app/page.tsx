@@ -265,7 +265,7 @@ function Dashboard({
                     <p className="text-muted-foreground">
                       {isAdmin 
                         ? `Всего активных объектов: ${orders.filter(o => o.status === 'В работе').length}`
-                        : `Вам назначено объектов: ${filteredOrders.filter(o => o.status === 'В работе').length}`}
+                        : `Вам доступно объектов: ${filteredOrders.filter(o => o.status === 'В работе').length}`}
                     </p>
                   </div>
                   
@@ -286,9 +286,10 @@ function Dashboard({
                         key={order.id} 
                         order={order} 
                         onEdit={handleEdit} 
-                        onStatusChange={(ord) => updateOrder(ord.id, { status: ord.status })} 
+                        onStatusChange={(ord) => updateOrder(order.id, ord, userName)} 
                         role={role}
                         currentUserName={userName}
+                        currentUserId={userId}
                       />
                     ))}
                   </div>
