@@ -1,4 +1,3 @@
-
 export type OrderStatus = 'В работе' | 'Завершен' | 'Отклонен';
 export type UserRole = 'admin' | 'installer' | null;
 export type Theme = 'light' | 'dark' | 'system';

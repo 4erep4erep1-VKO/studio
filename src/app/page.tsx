@@ -26,7 +26,7 @@ export default function App() {
 }
 
 function MainApp() {
-  const [sessionUser, setSessionUser] = useState<{ role: UserRole; id: string; name: string } | null>(null);
+  const [sessionUser, setSessionUser] = useState<{ role: UserRole; id: string; name: string; uid?: string } | null>(null);
   const [preferences, setPreferences] = useState<UserPreferences>({
     theme: 'system',
     notificationsEnabled: true
@@ -39,9 +39,12 @@ function MainApp() {
     if (storedUser && firebaseUser) {
       try {
         const parsed = JSON.parse(storedUser);
-        // Если в сессии есть пользователь, но он не соответствует анонимному UID (редко, но бывает при сбросе)
-        // мы пока доверяем сохраненной роли, если она совпадает с логикой Firebase
-        setSessionUser(parsed);
+        // Если системный UID изменился (например, новая сессия), сбрасываем старую роль
+        if (parsed.uid && parsed.uid !== firebaseUser.uid) {
+          handleLogout();
+        } else {
+          setSessionUser(parsed);
+        }
       } catch (e) {
         localStorage.removeItem('creative_dispatch_user');
       }
@@ -76,7 +79,7 @@ function MainApp() {
   };
 
   const handleLogin = (role: UserRole, id: string, name: string) => {
-    const userData = { role, id, name };
+    const userData = { role, id, name, uid: firebaseUser?.uid };
     setSessionUser(userData);
     localStorage.setItem('creative_dispatch_user', JSON.stringify(userData));
   };
@@ -321,7 +324,7 @@ function Dashboard({
             ) : (
               <UserSettings 
                 preferences={preferences} 
-                onUpdatePreferences={handleUpdatePreferences} 
+                onUpdatePreferences={onUpdatePreferences} 
                 userName={userName}
               />
             )}
