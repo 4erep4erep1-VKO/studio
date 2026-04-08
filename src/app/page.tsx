@@ -35,7 +35,6 @@ function MainApp() {
   
   const { user: firebaseUser, isUserLoading } = useUser();
 
-  // 1. Загрузка сессии и настроек
   useEffect(() => {
     const storedUser = localStorage.getItem('creative_dispatch_user');
     if (storedUser) {
@@ -56,7 +55,6 @@ function MainApp() {
     }
   }, []);
 
-  // 2. Применение темы
   const applyTheme = (theme: Theme) => {
     if (typeof window === 'undefined') return;
     const root = window.document.documentElement;
@@ -92,7 +90,6 @@ function MainApp() {
     );
   }
 
-  // Если нет сессии или нет авторизации Firebase, показываем экран входа
   if (!sessionUser || !firebaseUser) {
     return <LoginScreen onLogin={handleLogin} />;
   }

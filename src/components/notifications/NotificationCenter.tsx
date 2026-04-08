@@ -26,8 +26,9 @@ export function NotificationCenter({ currentUserId }: NotificationCenterProps) {
   const db = useFirestore();
   const { user: firebaseUser } = useUser();
 
-  // Мы слушаем уведомления ТОЛЬКО если у нас есть ID пользователя
   const notificationsQuery = useMemoFirebase(() => {
+    // ВАЖНО: Мы используем currentUserId (ID монтажника или админа), 
+    // чтобы запросы были стабильными даже при смене анонимного UID Firebase.
     if (!db || !firebaseUser || !currentUserId) return null;
     
     return query(
@@ -104,7 +105,7 @@ export function NotificationCenter({ currentUserId }: NotificationCenterProps) {
                       <p className={cn("text-sm font-semibold leading-none", !notif.read && "text-primary")}>{notif.title}</p>
                       <p className="text-xs text-muted-foreground leading-relaxed">{notif.message}</p>
                       <p className="text-[10px] text-muted-foreground/60">
-                        {formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true, locale: ru })}
+                        {notif.createdAt ? formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true, locale: ru }) : 'Недавно'}
                       </p>
                     </div>
                   </div>

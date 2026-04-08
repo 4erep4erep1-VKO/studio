@@ -16,6 +16,7 @@ export function useOrders(userId?: string, role?: string) {
     
     const baseQuery = collection(db, 'orders');
     
+    // ВАЖНО: Фильтрация заказов по installerId для монтажника
     if (role === 'installer') {
       if (!userId) return null;
       return query(baseQuery, where('installerId', '==', userId));
@@ -26,9 +27,9 @@ export function useOrders(userId?: string, role?: string) {
     }
     
     return null;
-  }, [db, userId, role, user]) as (CollectionReference | Query | null);
+  }, [db, userId, role, user]);
 
-  const { data: orders, isLoading } = useCollection<Order>(ordersQuery);
+  const { data: orders, isLoading } = useCollection<Order>(ordersQuery as Query);
 
   const addOrder = (orderData: Partial<Order>) => {
     if (!db) return;
@@ -43,6 +44,7 @@ export function useOrders(userId?: string, role?: string) {
     
     addDocumentNonBlocking(colRef, newOrder);
 
+    // Отправка уведомления назначенному монтажнику
     if (orderData.installerId) {
       const notifyRef = collection(db, 'notifications');
       addDocumentNonBlocking(notifyRef, {

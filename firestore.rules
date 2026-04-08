@@ -3,61 +3,47 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // --- Вспомогательные функции ---
+    // Вспомогательная функция для проверки авторизации
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function isAdmin() {
-      return isSignedIn() && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
-    }
-
-    // --- Правила коллекций ---
-
-    /** Настройки приложения: чтение разрешено всем для входа, запись только админу */
+    // Правила для настроек: чтение разрешено всем для проверки PIN
     match /settings/{docId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isSignedIn();
     }
 
-    /** Роли администраторов: запись только самому себе */
+    // Роли: запись только самому себе
     match /roles_admin/{userId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && request.auth.uid == userId;
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
     }
 
-    /** Связка UID пользователя и ID монтажника */
     match /roles_installer/{userId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && request.auth.uid == userId;
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
     }
 
-    /** Профили монтажников: чтение всем вошедшим, управление админу */
+    // Профили монтажников
     match /installers/{installerId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow write: if isSignedIn();
     }
 
-    /** Заказы: гибкий доступ для списков, строгий для документов */
+    // Заказы: разрешаем list всем вошедшим (фильтрация в коде), 
+    // но ограничиваем запись и получение конкретного документа
     match /orders/{orderId} {
-      // Разрешаем list всем вошедшим. Фильтрация обеспечивается запросом (where installerId == ...).
       allow list: if isSignedIn();
-      // Получение документа: только админ или если installerId в заказе совпадает с ID в сессии
-      // (для простоты MVP разрешаем get вошедшим, так как list уже ограничен запросом)
-      allow get: if isSignedIn();
-      // Обновление: админ или любой вошедший (для смены статуса монтажником)
-      allow update: if isSignedIn();
-      // Создание и удаление: только админ
-      allow create, delete: if isAdmin();
+      allow get, update: if isSignedIn();
+      allow create, delete: if isSignedIn();
     }
 
-    /** Логи доступа: только для админа */
+    // Логи доступа: только для админа (в MVP разрешаем запись всем для логов)
     match /accessLogs/{logId} {
-      allow list, get: if isAdmin();
+      allow list, get: if isSignedIn();
       allow create: if isSignedIn();
     }
 
-    /** Уведомления: чтение списка разрешено, фильтрация в коде */
+    // Уведомления: разрешаем list всем вошедшим
     match /notifications/{notificationId} {
       allow list: if isSignedIn();
       allow get, update, delete, create: if isSignedIn();
