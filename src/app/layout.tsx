@@ -3,8 +3,8 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
-  title: 'Creative Dispatch | Ad Agency Order Management',
-  description: 'Streamlined order distribution for advertising installers.',
+  title: 'MontazhkaPRO v 3.0 | Система управления монтажом',
+  description: 'Профессиональное управление заказами для рекламных монтажников.',
 };
 
 export default function RootLayout({
@@ -13,7 +13,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="ru">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />

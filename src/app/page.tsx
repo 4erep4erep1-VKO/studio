@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -15,7 +14,6 @@ import { LoginScreen } from '@/components/auth/LoginScreen';
 import { AdminSettings } from '@/components/settings/AdminSettings';
 import { UserSettings } from '@/components/settings/UserSettings';
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 
 export default function App() {
@@ -121,8 +119,8 @@ function SidebarContent({
           <Briefcase className="w-6 h-6" />
         </div>
         <div>
-          <h1 className="font-headline font-bold text-lg leading-none">Creative</h1>
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">Dispatch</p>
+          <h1 className="font-headline font-bold text-lg leading-none">Montazhka</h1>
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">PRO v 3.0</p>
         </div>
       </div>
       

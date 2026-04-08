@@ -81,8 +81,8 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
       <div className="min-h-screen flex items-center justify-center bg-background p-4 animate-in fade-in duration-500">
         <div className="max-w-md w-full space-y-8 text-center">
           <div className="space-y-2">
-            <h1 className="text-4xl font-headline font-bold text-primary">Creative Dispatch</h1>
-            <p className="text-muted-foreground uppercase tracking-widest text-xs">Система управления монтажом (Локальная)</p>
+            <h1 className="text-4xl font-headline font-bold text-primary">MontazhkaPRO v 3.0</h1>
+            <p className="text-muted-foreground uppercase tracking-widest text-xs">Профессиональная система управления монтажом</p>
           </div>
 
           <div className="grid grid-cols-1 gap-4">
