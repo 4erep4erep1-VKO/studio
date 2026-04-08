@@ -1,7 +1,8 @@
+
 'use client';
 
 import { useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
-import { collection, query, where, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, doc } from 'firebase/firestore';
 import { Order } from '@/lib/types';
 import { useToast } from './use-toast';
 
@@ -29,7 +30,21 @@ export function useOrders(userId?: string, role?: string) {
       updatedAt: new Date().toISOString(),
       status: 'В работе',
     };
+    
     addDocumentNonBlocking(colRef, newOrder);
+
+    // Create notification for the installer
+    if (orderData.installerId) {
+      const notifyRef = collection(db, 'notifications');
+      addDocumentNonBlocking(notifyRef, {
+        userId: orderData.installerId,
+        title: 'Новый заказ',
+        message: `Вам назначен объект: ${orderData.objectName}`,
+        createdAt: new Date().toISOString(),
+        read: false
+      });
+    }
+
     toast({
       title: "Заказ создан",
       description: `Объект "${orderData.objectName}" успешно добавлен.`,
@@ -43,6 +58,20 @@ export function useOrders(userId?: string, role?: string) {
       ...updates,
       updatedAt: new Date().toISOString(),
     });
+
+    // If status changed to completed/declined, notify admin? (Optional MVP)
+    // Or if installer was changed, notify new installer
+    if (updates.installerId) {
+      const notifyRef = collection(db, 'notifications');
+      addDocumentNonBlocking(notifyRef, {
+        userId: updates.installerId,
+        title: 'Обновление заказа',
+        message: `Вы назначены на объект: ${updates.objectName || 'Объект обновлен'}`,
+        createdAt: new Date().toISOString(),
+        read: false
+      });
+    }
+
     toast({
       title: "Заказ обновлен",
     });

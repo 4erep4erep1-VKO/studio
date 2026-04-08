@@ -1,3 +1,4 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -22,7 +23,7 @@ service cloud.firestore {
 
     // --- Collection Rules ---
 
-    /** Настройки приложения (PIN-код) доступны для чтения всем для проверки при входе */
+    /** Настройки приложения доступны всем для проверки при входе */
     match /settings/app {
       allow get: if true;
       allow write: if isAdmin() || (isSignedIn() && !exists(/databases/$(database)/documents/roles_admin/any_admin));
@@ -31,7 +32,6 @@ service cloud.firestore {
     match /roles_admin/{userId} {
       allow get: if isAdmin() || isOwner(userId);
       allow list: if isAdmin();
-      // Позволяем пользователю зарегистрировать себя как админа (предполагается проверка PIN в UI)
       allow create, update: if isOwner(userId);
       allow delete: if isAdmin();
     }
@@ -51,6 +51,11 @@ service cloud.firestore {
       allow get, list: if isAdmin();
       allow create: if isSignedIn();
       allow update, delete: if false; 
+    }
+
+    match /notifications/{notificationId} {
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn();
     }
   }
 }

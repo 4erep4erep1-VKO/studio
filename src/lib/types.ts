@@ -37,3 +37,12 @@ export interface UserPreferences {
 export interface AppSettings {
   adminPin: string;
 }
+
+export interface AppNotification {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  createdAt: string;
+  read: boolean;
+}
