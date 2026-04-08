@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState } from 'react';
@@ -12,6 +13,7 @@ import { Order, UserRole } from '@/lib/types';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LoginScreen } from '@/components/auth/LoginScreen';
 import { AdminSettings } from '@/components/settings/AdminSettings';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export default function App() {
   const [role, setRole] = useState<UserRole>(null);
@@ -103,9 +105,23 @@ function Dashboard({ role, onLogout }: { role: UserRole, onLogout: () => void })
               <p className="text-sm font-medium truncate">{isAdmin ? 'Администратор' : 'Монтажник'}</p>
               <p className="text-[10px] text-muted-foreground truncate">{isAdmin ? 'Полный доступ' : 'Только просмотр'}</p>
             </div>
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={onLogout}>
-              <LogOut className="w-4 h-4" />
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" 
+                    onClick={onLogout}
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Сменить аккаунт</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
       </aside>
@@ -113,7 +129,7 @@ function Dashboard({ role, onLogout }: { role: UserRole, onLogout: () => void })
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 bg-background/95">
         {/* Header */}
-        <header className="h-20 border-b border-border flex items-center justify-between px-6 bg-background/50 backdrop-blur-md sticky top-0 z-10">
+        <header className="h-20 border-b border-border flex items-center justify-between px-6 bg-background/50 backdrop-blur-md sticky top-0 z-10 gap-4">
           <div className="flex items-center gap-4 flex-1 max-w-xl">
             <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -125,12 +141,32 @@ function Dashboard({ role, onLogout }: { role: UserRole, onLogout: () => void })
               />
             </div>
           </div>
-          <div className="flex items-center gap-4 ml-6">
+          
+          <div className="flex items-center gap-3">
             {isAdmin && activeTab === 'orders' && (
-              <Button onClick={handleOpenCreate} className="bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/10 gap-2">
-                <Plus className="h-4 w-4" /> Новый заказ
+              <Button onClick={handleOpenCreate} className="bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/10 gap-2 px-3 sm:px-4">
+                <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Новый заказ</span>
               </Button>
             )}
+            
+            {/* Logout button for mobile and quick access */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="icon" 
+                    onClick={onLogout} 
+                    className="md:hidden border-border/50 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                  >
+                    <LogOut className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Сменить аккаунт</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </header>
 
