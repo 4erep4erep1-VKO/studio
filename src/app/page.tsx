@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState } from 'react';
@@ -16,16 +15,20 @@ import { AdminSettings } from '@/components/settings/AdminSettings';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export default function App() {
-  const [role, setRole] = useState<UserRole>(null);
+  const [user, setUser] = useState<{ role: UserRole; name: string } | null>(null);
 
-  if (!role) {
-    return <LoginScreen onLogin={setRole} />;
+  const handleLogin = (role: UserRole, name?: string) => {
+    setUser({ role, name: name || (role === 'admin' ? 'Администратор' : 'Монтажник') });
+  };
+
+  if (!user) {
+    return <LoginScreen onLogin={handleLogin} />;
   }
 
-  return <Dashboard role={role} onLogout={() => setRole(null)} />;
+  return <Dashboard role={user.role} userName={user.name} onLogout={() => setUser(null)} />;
 }
 
-function Dashboard({ role, onLogout }: { role: UserRole, onLogout: () => void }) {
+function Dashboard({ role, userName, onLogout }: { role: UserRole, userName: string, onLogout: () => void }) {
   const { orders, addOrder, updateOrder } = useOrders();
   const [activeTab, setActiveTab] = useState<'orders' | 'settings'>('orders');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -99,11 +102,11 @@ function Dashboard({ role, onLogout }: { role: UserRole, onLogout: () => void })
         <div className="p-4 border-t border-border mt-auto">
           <div className="flex items-center gap-3 p-2 bg-secondary/20 rounded-lg">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${isAdmin ? 'bg-primary text-white' : 'bg-accent text-primary'}`}>
-              {isAdmin ? <Shield className="w-4 h-4" /> : <HardHat className="w-4 h-4" />}
+              {isAdmin ? <Shield className="w-4 h-4" /> : <User className="w-4 h-4" />}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{isAdmin ? 'Администратор' : 'Монтажник'}</p>
-              <p className="text-[10px] text-muted-foreground truncate">{isAdmin ? 'Полный доступ' : 'Только просмотр'}</p>
+              <p className="text-sm font-medium truncate">{userName}</p>
+              <p className="text-[10px] text-muted-foreground truncate">{isAdmin ? 'Администратор' : 'Монтажник'}</p>
             </div>
             <TooltipProvider>
               <Tooltip>
