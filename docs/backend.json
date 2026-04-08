@@ -1,0 +1,194 @@
+{
+  "entities": {
+    "Installer": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Installer",
+      "type": "object",
+      "description": "Represents an installer who performs work orders.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Installer entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "Full name of the installer."
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the installer for contact.",
+          "format": "email"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Phone number of the installer for contact."
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ]
+    },
+    "Order": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Order",
+      "type": "object",
+      "description": "Represents a single work order with details about the task, location, and assigned installer.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Order entity."
+        },
+        "objectName": {
+          "type": "string",
+          "description": "The name or identifier of the object or location where the work is to be performed."
+        },
+        "workDescription": {
+          "type": "string",
+          "description": "A detailed description of the work required for the order."
+        },
+        "imageUrls": {
+          "type": "array",
+          "description": "An array of URLs or paths to images associated with the order (e.g., uploaded photos or screenshots).",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dueDate": {
+          "type": "string",
+          "description": "The date by which the work for this order should be completed.",
+          "format": "date"
+        },
+        "installerId": {
+          "type": "string",
+          "description": "Reference to the Installer assigned to this order. (Relationship: Installer 1:N Order)"
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the order. Valid values are 'В работе' (In Progress) or 'Завершен' (Completed)."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the order was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the order was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "objectName",
+        "workDescription",
+        "dueDate",
+        "installerId",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AccessLog": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "AccessLog",
+      "type": "object",
+      "description": "Records instances of application access, tracking when and by whom (role) the application was used.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the AccessLog entry."
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "Timestamp indicating when the application access occurred.",
+          "format": "date-time"
+        },
+        "accessedByRole": {
+          "type": "string",
+          "description": "The role of the user who accessed the application (e.g., 'Administrator', 'Installer'). This field helps identify 'who' accessed without requiring user authentication."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "accessedByRole"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/roles_admin/{userId}",
+        "definition": {
+          "entityName": "adminRole",
+          "schema": {
+            "$ref": "#/backend/entities/Installer"
+          },
+          "description": "This collection identifies administrators. The existence of a document at `/roles_admin/{userId}` signifies that the `userId` corresponds to an administrator. This is used for Database Access Control (DBAC) to grant administrative privileges for managing installers, orders, and viewing access logs.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user who is assigned the administrator role."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/installers/{installerId}",
+        "definition": {
+          "entityName": "Installer",
+          "schema": {
+            "$ref": "#/backend/entities/Installer"
+          },
+          "description": "Stores individual installer profiles. Accessible by administrators for full R/W operations. Installers might read their own profiles.",
+          "params": [
+            {
+              "name": "installerId",
+              "description": "The unique identifier of the installer."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/orders/{orderId}",
+        "definition": {
+          "entityName": "Order",
+          "schema": {
+            "$ref": "#/backend/entities/Order"
+          },
+          "description": "Contains all work orders. This collection is central for managing tasks. Each order document includes 'installerId' which is a denormalized field critical for Authorization Independence, allowing installers to read/update their assigned orders without parent lookups. Administrators have full R/W access to all orders. Installers can read and update orders where 'installerId' matches their own UID.",
+          "params": [
+            {
+              "name": "orderId",
+              "description": "The unique identifier of the work order."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/accessLogs/{logId}",
+        "definition": {
+          "entityName": "AccessLog",
+          "schema": {
+            "$ref": "#/backend/entities/AccessLog"
+          },
+          "description": "Records application access events, including timestamp and the role of the accessor. This collection supports the administrator's requirement to monitor who accessed the application and when. Read access is restricted to administrators.",
+          "params": [
+            {
+              "name": "logId",
+              "description": "The unique identifier for the access log entry."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to be secure, scalable, and debuggable by strictly adhering to the core design principles and strategy mandates. Authorization Independence is achieved primarily through denormalization and structural segregation. For 'Order' entities, the 'installerId' field is embedded directly within each order document. This allows security rules to check `resource.data.installerId == request.auth.uid` without requiring any `get()` operations on parent documents (e.g., the 'Installer' profile), thus ensuring atomic operations and simplifying rule logic. This denormalization is crucial for enabling secure Queryable Access Patterns (QAPs) for installers. An installer can perform a query like `orders.where('installerId', '==', currentUser.uid)` and the security rules can efficiently validate each returned document's ownership without additional database reads, fulfilling the QAP mandate.\n\nStructural segregation is applied by placing entities with different security postures into separate top-level collections. For instance, 'installers' is a collection for managing installer profiles, 'orders' contains all work orders, and 'accessLogs' is dedicated to logging. A separate collection, 'roles_admin', is used for Database Access Control (DBAC) to define administrators. The existence of a document in `/roles_admin/{userId}` grants administrative privileges, making authorization explicit and independent of other data. This 'existence over content' approach for roles simplifies rules by avoiding complex lookups within user profiles. All documents within a collection are designed to have a homogeneous security posture, which further simplifies rule development and debugging.\n\nThe overall design prioritizes path-based ownership for specific user data (e.g., an installer's own orders identified by `installerId` within the order document), and a global collection for shared resources with explicit authorization fields. This ensures clarity of intent and predictability in access patterns, making the system robust against common security vulnerabilities and easy to maintain."
+  }
+}
