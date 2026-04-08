@@ -30,10 +30,18 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   const auth = useAuth();
   const db = useFirestore();
 
+  // Инициализируем анонимную сессию сразу, чтобы правила Firestore работали
   useEffect(() => {
-    if (!auth.currentUser) {
-      signInAnonymously(auth).catch(err => console.error("Anonymous auth failed:", err));
-    }
+    const initAuth = async () => {
+      if (!auth.currentUser) {
+        try {
+          await signInAnonymously(auth);
+        } catch (err) {
+          console.error("Anonymous auth failed:", err);
+        }
+      }
+    };
+    initAuth();
   }, [auth]);
 
   const logAccess = async (role: string, userName: string) => {
@@ -105,12 +113,12 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
     inst.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  if (isSettingsLoading || isLoggingIn) {
+  if (isLoggingIn) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-10 h-10 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">Авторизация...</p>
+          <p className="text-sm text-muted-foreground">Вход в систему...</p>
         </div>
       </div>
     );
@@ -201,6 +209,11 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                     <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100" />
                   </Button>
                 ))}
+                {!filteredInstallers.length && (
+                  <div className="text-center py-10 text-muted-foreground">
+                    Монтажники не найдены
+                  </div>
+                )}
               </div>
             </ScrollArea>
             <div className="p-4 border-t bg-secondary/10">
@@ -238,7 +251,9 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
             {error && <p className="text-xs text-destructive text-center">{error}</p>}
             <div className="flex gap-3 pt-2">
               <Button type="button" variant="ghost" className="flex-1" onClick={() => setStep('choice')}>Назад</Button>
-              <Button type="submit" className="flex-1 bg-primary text-white">Войти</Button>
+              <Button type="submit" className="flex-1 bg-primary text-white" disabled={isSettingsLoading}>
+                {isSettingsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Войти'}
+              </Button>
             </div>
           </form>
         </CardContent>

@@ -21,7 +21,7 @@ service cloud.firestore {
 
     /** Настройки приложения доступны для чтения всем (проверка PIN), запись только админу */
     match /settings/app {
-      allow get: if true;
+      allow read: if true;
       allow write: if isAdmin() || !exists(/databases/$(database)/documents/roles_admin/any_admin);
     }
 
@@ -38,29 +38,27 @@ service cloud.firestore {
     }
 
     match /installers/{installerId} {
-      allow get, list: if isSignedIn();
+      allow read: if isSignedIn();
       allow create, update, delete: if isAdmin();
     }
 
     match /orders/{orderId} {
-      // Упрощенные правила для предотвращения ошибок при загрузке.
-      // Реальная фильтрация происходит на стороне клиента через query(where('installerId', '==', ...))
-      allow list: if isSignedIn();
-      allow get: if isSignedIn();
+      // Разрешаем чтение всем авторизованным. 
+      // Firestore сам ограничит выдачу документов согласно фильтрам (installerId) в запросе.
+      allow read: if isSignedIn();
       allow create, delete: if isAdmin();
       allow update: if isSignedIn();
     }
 
     match /accessLogs/{logId} {
-      allow get, list: if isAdmin();
+      allow read: if isAdmin();
       allow create: if isSignedIn();
       allow update, delete: if false; 
     }
 
     match /notifications/{notificationId} {
-      // Разрешаем чтение всем авторизованным. 
-      // Firestore сам ограничит выдачу документов согласно фильтру userId в запросе.
-      allow read, update, delete: if isSignedIn();
+      // Каждый видит только свои уведомления
+      allow read, update, delete: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid || isAdmin());
       allow create: if isSignedIn();
     }
   }
