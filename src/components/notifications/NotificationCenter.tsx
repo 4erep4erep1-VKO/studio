@@ -113,9 +113,7 @@ export function NotificationCenter({ currentUserId }: NotificationCenterProps) {
           ) : (
             <div className="py-12 text-center space-y-2">
               <Bell className="w-10 h-10 text-muted-foreground/30 mx-auto" />
-              <p className="text-sm text-muted-foreground">
-                Уведомлений пока нет
-              </p>
+              <p className="text-sm text-muted-foreground">Уведомлений пока нет</p>
             </div>
           )}
         </ScrollArea>

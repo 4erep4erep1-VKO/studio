@@ -41,7 +41,9 @@ function MainApp() {
       try {
         const parsed = JSON.parse(storedUser);
         setSessionUser(parsed);
-      } catch (e) {}
+      } catch (e) {
+        localStorage.removeItem('creative_dispatch_user');
+      }
     }
 
     const storedPrefs = localStorage.getItem('creative_dispatch_prefs');
@@ -91,7 +93,8 @@ function MainApp() {
     );
   }
 
-  if (!sessionUser || !firebaseUser) {
+  // Если нет юзера в Firebase ИЛИ нет сессии в localStorage — показываем вход
+  if (!firebaseUser || !sessionUser) {
     return <LoginScreen onLogin={handleLogin} />;
   }
 

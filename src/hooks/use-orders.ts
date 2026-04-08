@@ -1,7 +1,7 @@
 'use client';
 
 import { useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking, addDocumentNonBlocking, deleteDocumentNonBlocking, useUser } from '@/firebase';
-import { collection, query, where, doc, orderBy, CollectionReference, Query } from 'firebase/firestore';
+import { collection, query, where, doc, orderBy, Query } from 'firebase/firestore';
 import { Order } from '@/lib/types';
 import { useToast } from './use-toast';
 
@@ -86,7 +86,7 @@ export function useOrders(userId?: string, role?: string) {
 
   const deleteOrder = (id: string) => {
     if (!db) return;
-    const docRef = doc(db, 'orders', id);
+    const docRef = doc(db, id);
     deleteDocumentNonBlocking(docRef);
     toast({
       title: "Заказ удален",

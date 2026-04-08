@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -30,49 +29,32 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   const auth = useAuth();
   const db = useFirestore();
 
-  // Инициализируем анонимную сессию сразу, чтобы правила Firestore работали
-  useEffect(() => {
-    const initAuth = async () => {
-      if (!auth.currentUser) {
-        try {
-          await signInAnonymously(auth);
-        } catch (err) {
-          console.error("Anonymous auth failed:", err);
-        }
-      }
-    };
-    initAuth();
-  }, [auth]);
-
-  const logAccess = async (role: string, userName: string) => {
-    if (!db) return;
-    try {
-      await addDoc(collection(db, 'accessLogs'), {
-        timestamp: new Date().toISOString(),
-        accessedByRole: role,
-        userName: userName
-      });
-    } catch (e) {
-      console.error("Failed to log access", e);
-    }
-  };
-
   const handlePinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (pin === (settings?.adminPin || '1234')) {
       setIsLoggingIn(true);
       try {
-        const currentUser = auth.currentUser;
+        // Гарантируем анонимный вход перед записью роли
+        let currentUser = auth.currentUser;
+        if (!currentUser) {
+          const cred = await signInAnonymously(auth);
+          currentUser = cred.user;
+        }
+
         if (db && currentUser) {
-          // Ждем записи роли, чтобы правила Firestore начали работать до редиректа
           const adminRef = doc(db, 'roles_admin', currentUser.uid);
           await setDoc(adminRef, { id: currentUser.uid, name: 'Администратор' }, { merge: true });
           
-          await logAccess('Administrator', 'Администратор');
+          await addDoc(collection(db, 'accessLogs'), {
+            timestamp: new Date().toISOString(),
+            accessedByRole: 'Administrator',
+            userName: 'Администратор'
+          });
+
           onLogin('admin', currentUser.uid, 'Администратор');
         }
       } catch (err) {
-        setError('Ошибка авторизации в базе данных');
+        setError('Ошибка входа в систему');
         console.error(err);
       } finally {
         setIsLoggingIn(false);
@@ -86,9 +68,13 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   const handleInstallerLogin = async (installer: Installer) => {
     setIsLoggingIn(true);
     try {
-      const currentUser = auth.currentUser;
+      let currentUser = auth.currentUser;
+      if (!currentUser) {
+        const cred = await signInAnonymously(auth);
+        currentUser = cred.user;
+      }
+
       if (db && currentUser) {
-        // Регистрируем сессию монтажника для правил доступа
         const installerRoleRef = doc(db, 'roles_installer', currentUser.uid);
         await setDoc(installerRoleRef, { 
           installerId: installer.id, 
@@ -96,10 +82,13 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
           loginTime: new Date().toISOString() 
         }, { merge: true });
 
-        await logAccess('Installer', installer.name);
+        await addDoc(collection(db, 'accessLogs'), {
+          timestamp: new Date().toISOString(),
+          accessedByRole: 'Installer',
+          userName: installer.name
+        });
+
         onLogin('installer', installer.id, installer.name);
-      } else {
-        setError('Сессия не установлена. Пожалуйста, подождите.');
       }
     } catch (err) {
       setError('Ошибка авторизации');
@@ -116,10 +105,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   if (isLoggingIn) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-10 h-10 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">Вход в систему...</p>
-        </div>
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
       </div>
     );
   }
@@ -134,35 +120,29 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
           </div>
 
           <div className="grid grid-cols-1 gap-4">
-            <Card 
-              className="cursor-pointer hover:border-primary/50 transition-all group overflow-hidden"
-              onClick={() => setStep('pin')}
-            >
+            <Card className="cursor-pointer hover:border-primary/50 transition-all group" onClick={() => setStep('pin')}>
               <CardContent className="p-6 flex items-center gap-6">
-                <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+                <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center text-primary">
                   <Shield className="w-8 h-8" />
                 </div>
                 <div className="text-left flex-1">
                   <h3 className="font-headline font-bold text-lg">Администратор</h3>
                   <p className="text-sm text-muted-foreground">Управление заказами и персоналом</p>
                 </div>
-                <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:translate-x-1 transition-transform" />
+                <ChevronRight className="w-5 h-5 text-muted-foreground" />
               </CardContent>
             </Card>
 
-            <Card 
-              className="cursor-pointer hover:border-accent/50 transition-all group overflow-hidden"
-              onClick={() => setStep('installers')}
-            >
+            <Card className="cursor-pointer hover:border-accent/50 transition-all group" onClick={() => setStep('installers')}>
               <CardContent className="p-6 flex items-center gap-6">
-                <div className="w-14 h-14 bg-accent/10 rounded-2xl flex items-center justify-center text-accent group-hover:scale-110 transition-transform">
+                <div className="w-14 h-14 bg-accent/10 rounded-2xl flex items-center justify-center text-accent">
                   <HardHat className="w-8 h-8" />
                 </div>
                 <div className="text-left flex-1">
                   <h3 className="font-headline font-bold text-lg">Монтажник</h3>
-                  <p className="text-sm text-muted-foreground">Выбор сотрудника и просмотр задач</p>
+                  <p className="text-sm text-muted-foreground">Просмотр и выполнение задач</p>
                 </div>
-                <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:translate-x-1 transition-transform" />
+                <ChevronRight className="w-5 h-5 text-muted-foreground" />
               </CardContent>
             </Card>
           </div>
@@ -173,9 +153,9 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
 
   if (step === 'installers') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4 animate-in slide-in-from-right-4 duration-300">
-        <Card className="max-w-md w-full shadow-2xl overflow-hidden">
-          <CardHeader className="text-center pb-2">
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="max-w-md w-full shadow-2xl">
+          <CardHeader className="text-center">
             <CardTitle className="font-headline text-2xl">Выберите аккаунт</CardTitle>
             <CardDescription>Выберите ваше имя из списка для входа</CardDescription>
           </CardHeader>
@@ -210,9 +190,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                   </Button>
                 ))}
                 {!filteredInstallers.length && (
-                  <div className="text-center py-10 text-muted-foreground">
-                    Монтажники не найдены
-                  </div>
+                  <div className="text-center py-10 text-muted-foreground">Монтажники не найдены</div>
                 )}
               </div>
             </ScrollArea>
@@ -226,7 +204,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4 animate-in slide-in-from-right-4 duration-300">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="max-w-sm w-full shadow-2xl">
         <CardHeader className="text-center">
           <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4 text-primary">
@@ -251,9 +229,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
             {error && <p className="text-xs text-destructive text-center">{error}</p>}
             <div className="flex gap-3 pt-2">
               <Button type="button" variant="ghost" className="flex-1" onClick={() => setStep('choice')}>Назад</Button>
-              <Button type="submit" className="flex-1 bg-primary text-white" disabled={isSettingsLoading}>
-                {isSettingsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Войти'}
-              </Button>
+              <Button type="submit" className="flex-1 bg-primary text-white" disabled={isSettingsLoading}>Войти</Button>
             </div>
           </form>
         </CardContent>
