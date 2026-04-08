@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserPlus, Trash2, Key, Users, Check, X, History, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,8 +9,6 @@ import { useInstallers } from '@/hooks/use-installers';
 import { useAppSettings } from '@/hooks/use-app-settings';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy, limit } from 'firebase/firestore';
 import { AccessLog } from '@/lib/types';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -18,18 +16,21 @@ import { ru } from 'date-fns/locale';
 export function AdminSettings() {
   const { installers, addInstaller, removeInstaller } = useInstallers();
   const { settings, updatePin } = useAppSettings();
-  const db = useFirestore();
+  const [logs, setLogs] = useState<AccessLog[]>([]);
   
   const [newInstaller, setNewInstaller] = useState('');
   const [newPin, setNewPin] = useState('');
   const [isChangingPin, setIsChangingPin] = useState(false);
 
-  const logsQuery = useMemoFirebase(() => {
-    if (!db) return null;
-    return query(collection(db, 'accessLogs'), orderBy('timestamp', 'desc'), limit(50));
-  }, [db]);
-
-  const { data: logs } = useCollection<AccessLog>(logsQuery);
+  useEffect(() => {
+    const loadLogs = () => {
+      const stored = localStorage.getItem('local_access_logs');
+      if (stored) setLogs(JSON.parse(stored));
+    };
+    loadLogs();
+    window.addEventListener('storage', loadLogs);
+    return () => window.removeEventListener('storage', loadLogs);
+  }, []);
 
   const handleAddInstaller = (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,7 +52,6 @@ export function AdminSettings() {
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Управление монтажниками */}
         <Card className="border-border/50">
           <CardHeader className="flex flex-row items-center gap-3 space-y-0">
             <Users className="w-5 h-5 text-primary" />
@@ -89,7 +89,6 @@ export function AdminSettings() {
           </CardContent>
         </Card>
 
-        {/* Безопасность */}
         <Card className="border-border/50">
           <CardHeader className="flex flex-row items-center gap-3 space-y-0">
             <Key className="w-5 h-5 text-primary" />
@@ -135,19 +134,18 @@ export function AdminSettings() {
         </Card>
       </div>
 
-      {/* История посещений */}
       <Card className="border-border/50">
         <CardHeader className="flex flex-row items-center gap-3 space-y-0">
           <History className="w-5 h-5 text-primary" />
           <div>
             <CardTitle className="text-xl font-headline">История посещений</CardTitle>
-            <CardDescription>Последние действия пользователей в системе</CardDescription>
+            <CardDescription>Последние действия пользователей (Локально)</CardDescription>
           </div>
         </CardHeader>
         <CardContent>
           <ScrollArea className="h-[400px]">
             <div className="space-y-4">
-              {logs?.map((log) => (
+              {logs.map((log) => (
                 <div key={log.id} className="flex items-center justify-between p-4 bg-secondary/20 rounded-xl border border-border/50">
                   <div className="flex items-center gap-4">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center ${log.accessedByRole === 'Administrator' ? 'bg-primary/20 text-primary' : 'bg-accent/20 text-accent'}`}>
@@ -167,10 +165,8 @@ export function AdminSettings() {
                   </div>
                 </div>
               ))}
-              {!logs?.length && (
-                <div className="text-center py-10 text-muted-foreground">
-                  История пуста
-                </div>
+              {!logs.length && (
+                <div className="text-center py-10 text-muted-foreground">История пуста</div>
               )}
             </div>
           </ScrollArea>

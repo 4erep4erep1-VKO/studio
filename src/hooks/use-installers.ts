@@ -1,33 +1,48 @@
-
 'use client';
 
-import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking, useUser } from '@/firebase';
-import { collection, doc } from 'firebase/firestore';
+import { useState, useEffect } from 'react';
 import { Installer } from '@/lib/types';
 
+const DEFAULT_INSTALLERS: Installer[] = [
+  { id: '1', name: 'Иванов Иван' },
+  { id: '2', name: 'Петров Петр' },
+  { id: '3', name: 'Сидоров Сидор' }
+];
+
 export function useInstallers() {
-  const db = useFirestore();
-  const { user } = useUser();
+  const [installers, setInstallers] = useState<Installer[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const installersQuery = useMemoFirebase(() => {
-    // Ждем авторизации пользователя (даже анонимной), чтобы выполнить запрос к installers
-    if (!db || !user) return null;
-    return collection(db, 'installers');
-  }, [db, user]);
-
-  const { data: installers, isLoading } = useCollection<Installer>(installersQuery);
+  useEffect(() => {
+    const load = () => {
+      const stored = localStorage.getItem('local_installers');
+      if (stored) {
+        setInstallers(JSON.parse(stored));
+      } else {
+        localStorage.setItem('local_installers', JSON.stringify(DEFAULT_INSTALLERS));
+        setInstallers(DEFAULT_INSTALLERS);
+      }
+      setIsLoading(false);
+    };
+    load();
+    window.addEventListener('storage', load);
+    return () => window.removeEventListener('storage', load);
+  }, []);
 
   const addInstaller = (name: string) => {
-    if (!db) return;
-    const colRef = collection(db, 'installers');
-    addDocumentNonBlocking(colRef, { name });
+    const newInst = { id: Math.random().toString(36).substr(2, 9), name };
+    const updated = [...installers, newInst];
+    localStorage.setItem('local_installers', JSON.stringify(updated));
+    setInstallers(updated);
+    window.dispatchEvent(new Event('storage'));
   };
 
   const removeInstaller = (id: string) => {
-    if (!db) return;
-    const docRef = doc(db, 'installers', id);
-    deleteDocumentNonBlocking(docRef);
+    const updated = installers.filter(i => i.id !== id);
+    localStorage.setItem('local_installers', JSON.stringify(updated));
+    setInstallers(updated);
+    window.dispatchEvent(new Event('storage'));
   };
 
-  return { installers: installers || [], isLoading, addInstaller, removeInstaller };
+  return { installers, isLoading, addInstaller, removeInstaller };
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Bell, Check, Trash2, Info } from 'lucide-react';
 import {
   Popover,
@@ -11,8 +11,6 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { useFirestore, useCollection, useMemoFirebase, useUser, updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
-import { collection, query, where, orderBy, doc, limit } from 'firebase/firestore';
 import { AppNotification } from '@/lib/types';
 import { formatDistanceToNow } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -22,44 +20,51 @@ interface NotificationCenterProps {
 }
 
 export function NotificationCenter({ currentUserId }: NotificationCenterProps) {
-  const db = useFirestore();
-  const { user: firebaseUser } = useUser();
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
-  const notificationsQuery = useMemoFirebase(() => {
-    // Безопасный запрос: только когда авторизация и ID пользователя готовы
-    if (!db || !firebaseUser || !currentUserId) return null;
-    
-    return query(
-      collection(db, 'notifications'),
-      where('userId', '==', currentUserId),
-      orderBy('createdAt', 'desc'),
-      limit(20)
-    );
-  }, [db, firebaseUser, currentUserId]);
+  useEffect(() => {
+    const load = () => {
+      const stored = localStorage.getItem('local_notifications');
+      if (stored && currentUserId) {
+        const all: AppNotification[] = JSON.parse(stored);
+        setNotifications(all.filter(n => n.userId === currentUserId));
+      }
+    };
+    load();
+    window.addEventListener('storage', load);
+    return () => window.removeEventListener('storage', load);
+  }, [currentUserId]);
 
-  const { data: notifications } = useCollection<AppNotification>(notificationsQuery);
-
-  const unreadCount = notifications?.filter(n => !n.read).length || 0;
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   const markAllRead = () => {
-    if (!notifications || !db) return;
-    notifications.forEach(n => {
-      if (!n.read) {
-        updateDocumentNonBlocking(doc(db, 'notifications', n.id), { read: true });
-      }
-    });
+    const stored = localStorage.getItem('local_notifications');
+    if (!stored || !currentUserId) return;
+    const all: AppNotification[] = JSON.parse(stored);
+    const updated = all.map(n => n.userId === currentUserId ? { ...n, read: true } : n);
+    localStorage.setItem('local_notifications', JSON.stringify(updated));
+    setNotifications(updated.filter(n => n.userId === currentUserId));
+    window.dispatchEvent(new Event('storage'));
   };
 
   const clearAll = () => {
-    if (!notifications || !db) return;
-    notifications.forEach(n => {
-      deleteDocumentNonBlocking(doc(db, 'notifications', n.id));
-    });
+    const stored = localStorage.getItem('local_notifications');
+    if (!stored || !currentUserId) return;
+    const all: AppNotification[] = JSON.parse(stored);
+    const updated = all.filter(n => n.userId !== currentUserId);
+    localStorage.setItem('local_notifications', JSON.stringify(updated));
+    setNotifications([]);
+    window.dispatchEvent(new Event('storage'));
   };
 
   const markAsRead = (id: string) => {
-    if (!db) return;
-    updateDocumentNonBlocking(doc(db, 'notifications', id), { read: true });
+    const stored = localStorage.getItem('local_notifications');
+    if (!stored) return;
+    const all: AppNotification[] = JSON.parse(stored);
+    const updated = all.map(n => n.id === id ? { ...n, read: true } : n);
+    localStorage.setItem('local_notifications', JSON.stringify(updated));
+    setNotifications(updated.filter(n => n.userId === currentUserId));
+    window.dispatchEvent(new Event('storage'));
   };
 
   return (
@@ -87,7 +92,7 @@ export function NotificationCenter({ currentUserId }: NotificationCenterProps) {
           </div>
         </div>
         <ScrollArea className="h-[350px]">
-          {notifications && notifications.length > 0 ? (
+          {notifications.length > 0 ? (
             <div className="divide-y divide-border/50">
               {notifications.map((notif) => (
                 <div 
@@ -103,7 +108,7 @@ export function NotificationCenter({ currentUserId }: NotificationCenterProps) {
                       <p className={cn("text-sm font-semibold leading-none", !notif.read && "text-primary")}>{notif.title}</p>
                       <p className="text-xs text-muted-foreground leading-relaxed">{notif.message}</p>
                       <p className="text-[10px] text-muted-foreground/60">
-                        {notif.createdAt ? formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true, locale: ru }) : 'Недавно'}
+                        {formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true, locale: ru })}
                       </p>
                     </div>
                   </div>

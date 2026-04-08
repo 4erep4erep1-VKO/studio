@@ -15,42 +15,26 @@ import { AdminSettings } from '@/components/settings/AdminSettings';
 import { UserSettings } from '@/components/settings/UserSettings';
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { FirebaseClientProvider, useUser } from '@/firebase';
 
 export default function App() {
-  return (
-    <FirebaseClientProvider>
-      <MainApp />
-    </FirebaseClientProvider>
-  );
-}
-
-function MainApp() {
-  const [sessionUser, setSessionUser] = useState<{ role: UserRole; id: string; name: string; uid?: string } | null>(null);
+  const [sessionUser, setSessionUser] = useState<{ role: UserRole; id: string; name: string } | null>(null);
+  const [isReady, setIsReady] = useState(false);
   const [preferences, setPreferences] = useState<UserPreferences>({
     theme: 'system',
     notificationsEnabled: true
   });
-  
-  const { user: firebaseUser, isUserLoading } = useUser();
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('creative_dispatch_user');
-    if (storedUser && firebaseUser) {
+    const storedUser = localStorage.getItem('local_session_user');
+    if (storedUser) {
       try {
-        const parsed = JSON.parse(storedUser);
-        // Если системный UID изменился (например, новая сессия), сбрасываем старую роль
-        if (parsed.uid && parsed.uid !== firebaseUser.uid) {
-          handleLogout();
-        } else {
-          setSessionUser(parsed);
-        }
+        setSessionUser(JSON.parse(storedUser));
       } catch (e) {
-        localStorage.removeItem('creative_dispatch_user');
+        localStorage.removeItem('local_session_user');
       }
     }
 
-    const storedPrefs = localStorage.getItem('creative_dispatch_prefs');
+    const storedPrefs = localStorage.getItem('local_preferences');
     if (storedPrefs) {
       try {
         const parsed = JSON.parse(storedPrefs);
@@ -60,7 +44,8 @@ function MainApp() {
     } else {
       applyTheme('system');
     }
-  }, [firebaseUser]);
+    setIsReady(true);
+  }, []);
 
   const applyTheme = (theme: Theme) => {
     if (typeof window === 'undefined') return;
@@ -74,22 +59,22 @@ function MainApp() {
 
   const handleUpdatePreferences = (newPrefs: UserPreferences) => {
     setPreferences(newPrefs);
-    localStorage.setItem('creative_dispatch_prefs', JSON.stringify(newPrefs));
+    localStorage.setItem('local_preferences', JSON.stringify(newPrefs));
     applyTheme(newPrefs.theme);
   };
 
   const handleLogin = (role: UserRole, id: string, name: string) => {
-    const userData = { role, id, name, uid: firebaseUser?.uid };
+    const userData = { role, id, name };
     setSessionUser(userData);
-    localStorage.setItem('creative_dispatch_user', JSON.stringify(userData));
+    localStorage.setItem('local_session_user', JSON.stringify(userData));
   };
 
   const handleLogout = () => {
     setSessionUser(null);
-    localStorage.removeItem('creative_dispatch_user');
+    localStorage.removeItem('local_session_user');
   };
 
-  if (isUserLoading) {
+  if (!isReady) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
@@ -97,7 +82,7 @@ function MainApp() {
     );
   }
 
-  if (!firebaseUser || !sessionUser) {
+  if (!sessionUser) {
     return <LoginScreen onLogin={handleLogin} />;
   }
 

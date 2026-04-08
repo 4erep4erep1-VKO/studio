@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Shield, HardHat, ChevronRight, Lock, User, Search, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,9 +9,6 @@ import { UserRole, Installer } from '@/lib/types';
 import { useAppSettings } from '@/hooks/use-app-settings';
 import { useInstallers } from '@/hooks/use-installers';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useAuth, useFirestore } from '@/firebase';
-import { collection, doc, setDoc, addDoc } from 'firebase/firestore';
-import { signInAnonymously } from 'firebase/auth';
 
 interface LoginScreenProps {
   onLogin: (role: UserRole, id: string, name: string) => void;
@@ -26,76 +23,45 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   
   const { settings, isLoading: isSettingsLoading } = useAppSettings();
   const { installers } = useInstallers();
-  const auth = useAuth();
-  const db = useFirestore();
 
-  const handlePinSubmit = async (e: React.FormEvent) => {
+  const handlePinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (pin === (settings?.adminPin || '1234')) {
       setIsLoggingIn(true);
-      try {
-        // Гарантируем анонимный вход перед записью роли
-        let currentUser = auth.currentUser;
-        if (!currentUser) {
-          const cred = await signInAnonymously(auth);
-          currentUser = cred.user;
-        }
-
-        if (db && currentUser) {
-          const adminRef = doc(db, 'roles_admin', currentUser.uid);
-          await setDoc(adminRef, { id: currentUser.uid, name: 'Администратор' }, { merge: true });
-          
-          await addDoc(collection(db, 'accessLogs'), {
-            timestamp: new Date().toISOString(),
-            accessedByRole: 'Administrator',
-            userName: 'Администратор'
-          });
-
-          onLogin('admin', currentUser.uid, 'Администратор');
-        }
-      } catch (err) {
-        setError('Ошибка входа в систему');
-        console.error(err);
-      } finally {
+      setTimeout(() => {
+        const logId = Math.random().toString(36).substr(2, 9);
+        const logs = JSON.parse(localStorage.getItem('local_access_logs') || '[]');
+        logs.unshift({
+          id: logId,
+          timestamp: new Date().toISOString(),
+          accessedByRole: 'Administrator',
+          userName: 'Администратор'
+        });
+        localStorage.setItem('local_access_logs', JSON.stringify(logs.slice(0, 50)));
+        onLogin('admin', 'admin-id', 'Администратор');
         setIsLoggingIn(false);
-      }
+      }, 500);
     } else {
       setError('Неверный PIN-код');
       setPin('');
     }
   };
 
-  const handleInstallerLogin = async (installer: Installer) => {
+  const handleInstallerLogin = (installer: Installer) => {
     setIsLoggingIn(true);
-    try {
-      let currentUser = auth.currentUser;
-      if (!currentUser) {
-        const cred = await signInAnonymously(auth);
-        currentUser = cred.user;
-      }
-
-      if (db && currentUser) {
-        const installerRoleRef = doc(db, 'roles_installer', currentUser.uid);
-        await setDoc(installerRoleRef, { 
-          installerId: installer.id, 
-          name: installer.name,
-          loginTime: new Date().toISOString() 
-        }, { merge: true });
-
-        await addDoc(collection(db, 'accessLogs'), {
-          timestamp: new Date().toISOString(),
-          accessedByRole: 'Installer',
-          userName: installer.name
-        });
-
-        onLogin('installer', installer.id, installer.name);
-      }
-    } catch (err) {
-      setError('Ошибка авторизации');
-      console.error(err);
-    } finally {
+    setTimeout(() => {
+      const logId = Math.random().toString(36).substr(2, 9);
+      const logs = JSON.parse(localStorage.getItem('local_access_logs') || '[]');
+      logs.unshift({
+        id: logId,
+        timestamp: new Date().toISOString(),
+        accessedByRole: 'Installer',
+        userName: installer.name
+      });
+      localStorage.setItem('local_access_logs', JSON.stringify(logs.slice(0, 50)));
+      onLogin('installer', installer.id, installer.name);
       setIsLoggingIn(false);
-    }
+    }, 500);
   };
 
   const filteredInstallers = installers.filter(inst => 
@@ -116,7 +82,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
         <div className="max-w-md w-full space-y-8 text-center">
           <div className="space-y-2">
             <h1 className="text-4xl font-headline font-bold text-primary">Creative Dispatch</h1>
-            <p className="text-muted-foreground uppercase tracking-widest text-xs">Система управления монтажом</p>
+            <p className="text-muted-foreground uppercase tracking-widest text-xs">Система управления монтажом (Локальная)</p>
           </div>
 
           <div className="grid grid-cols-1 gap-4">
