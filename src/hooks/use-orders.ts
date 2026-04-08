@@ -23,7 +23,6 @@ export function useOrders(userId?: string, role?: string) {
     };
 
     loadOrders();
-    // Listen for changes in other components
     window.addEventListener('storage', loadOrders);
     return () => window.removeEventListener('storage', loadOrders);
   }, [userId, role]);
@@ -76,11 +75,34 @@ export function useOrders(userId?: string, role?: string) {
     const allOrders: Order[] = stored ? JSON.parse(stored) : [];
     
     const now = new Date().toISOString();
+    const orderToUpdate = allOrders.find(o => o.id === orderId);
+    
+    if (!orderToUpdate) return;
+
     const updatedOrders = allOrders.map(o => 
       o.id === orderId ? { ...o, ...updates, updatedAt: now } : o
     );
     
     saveOrders(updatedOrders);
+
+    // Notification for admin if status changes to Declined or Completed by an installer
+    if (updates.status === 'Отклонен' || updates.status === 'Завершен') {
+      const notifStored = localStorage.getItem('local_notifications');
+      const allNotifs = notifStored ? JSON.parse(notifStored) : [];
+      const newNotif = {
+        id: Math.random().toString(36).substr(2, 9),
+        userId: 'admin-id', // Admin ID in local session
+        title: updates.status === 'Отклонен' ? 'Заказ отклонен' : 'Заказ выполнен',
+        message: updates.status === 'Отклонен' 
+          ? `Монтажник отклонил объект: ${orderToUpdate.objectName}`
+          : `Монтажник завершил работу по объекту: ${orderToUpdate.objectName}`,
+        createdAt: now,
+        read: false
+      };
+      localStorage.setItem('local_notifications', JSON.stringify([newNotif, ...allNotifs]));
+      window.dispatchEvent(new Event('storage'));
+    }
+
     toast({ title: "Заказ обновлен" });
   };
 

@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { Calendar, User, MoreVertical, Edit2, CheckCircle2, Clock, MapPin, XCircle, ImageIcon } from 'lucide-react';
+import { Calendar, MoreVertical, Edit2, CheckCircle2, Clock, XCircle, ImageIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -39,7 +39,7 @@ export function OrderCard({ order, onEdit, onStatusChange, role, currentUserName
   return (
     <Card className={cn(
       "group overflow-hidden border-border/50 hover:border-primary/50 transition-all duration-300 shadow-md flex flex-col h-full",
-      (isCompleted || isDeclined) && "opacity-80"
+      (isCompleted || isDeclined) && !isAdmin && "opacity-80"
     )}>
       <div className="relative h-48 w-full bg-secondary/50 overflow-hidden">
         {hasImages ? (
