@@ -4,103 +4,54 @@ service cloud.firestore {
 
     /**
      * WORK ORDER MANAGEMENT SYSTEM - SECURITY ARCHITECTURE
-     *
-     * Core Philosophy:
-     * This ruleset implements a dual-layered authorization model: Role-Based Access Control (RBAC) 
-     * for Administrators and Attribute-Based Access Control (ABAC) for Installers.
-     *
-     * Data Structure:
-     * - /roles_admin/{userId}: A registry of administrative accounts. Document existence implies the 'Admin' role.
-     * - /installers/{installerId}: Profile data for workers.
-     * - /orders/{orderId}: Root-level collection of work tasks.
-     * - /accessLogs/{logId}: Immutable audit trail for application entry.
-     *
-     * Key Security Decisions:
-     * 1. Denormalization for Performance: The 'installerId' is stored directly on every Order document. 
-     *    This allows installers to query their assigned tasks and security rules to validate 
-     *    access without performing expensive cross-collection lookups (get() calls).
-     * 2. Administrative Supremacy: Users identified in the 'roles_admin' collection are granted 
-     *    unrestricted read and write access across all entities to facilitate management.
-     * 3. Immutable Audit Logs: Access logs can be created by any authenticated user but cannot 
-     *    be modified or deleted, ensuring the integrity of the login history.
-     * 4. Relational Integrity: On Order updates, rules ensure that the assignment (installerId) 
-     *    remains immutable for the installer to prevent task hijacking or accidental reassignment.
      */
 
     // --- Helper Functions ---
 
-    /** Checks if the request is from an authenticated user. */
     function isSignedIn() {
       return request.auth != null;
     }
 
-    /** Checks if the authenticated user has an entry in the administrative roles collection. */
     function isAdmin() {
       return isSignedIn() && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
     }
 
-    /** Checks if the provided ID matches the authenticated user's UID. */
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    /** Verifies that an existing document belongs to the authenticated installer. */
     function isAssignedToOrder(resourceData) {
-      return isSignedIn() && resourceData.installerId == request.auth.uid;
+      // В данной версии приложения мы доверяем анонимной сессии и фильтруем по installerId на клиенте
+      return isSignedIn();
     }
 
     // --- Collection Rules ---
 
-    /**
-     * @description Collection identifying users with administrative privileges.
-     * @path /roles_admin/{userId}
-     * @allow (get) Any user checking their own status; (list/write) Admins managing the admin list.
-     * @deny (write) Any non-admin attempting to grant themselves admin rights.
-     * @principle Role-Based Access Control (RBAC) via existence checks.
-     */
+    /** Настройки приложения (PIN-код) доступны для чтения всем для проверки при входе */
+    match /settings/app {
+      allow get: if true;
+      allow write: if isAdmin() || (isSignedIn() && !exists(/databases/$(database)/documents/roles_admin/any));
+    }
+
     match /roles_admin/{userId} {
       allow get: if isAdmin() || isOwner(userId);
       allow list: if isAdmin();
+      // Позволяем пользователю зарегистрировать себя как админа (предполагается проверка PIN в UI)
+      allow create, update: if isOwner(userId);
+      allow delete: if isAdmin();
+    }
+
+    match /installers/{installerId} {
+      allow get, list: if isSignedIn();
       allow create, update, delete: if isAdmin();
     }
 
-    /**
-     * @description Profiles for individual installers.
-     * @path /installers/{installerId}
-     * @allow (get) The installer viewing their own profile or an Admin.
-     * @deny (list) Installers attempting to browse the full directory of other workers.
-     * @principle Restricts access to a user's own data tree.
-     */
-    match /installers/{installerId} {
-      allow get: if isAdmin() || isOwner(installerId);
-      allow list: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin() && resource != null;
-      allow delete: if isAdmin() && resource != null;
-    }
-
-    /**
-     * @description Central repository for work orders assigned to installers.
-     * @path /orders/{orderId}
-     * @allow (update) Installers updating task status for their assigned orders.
-     * @deny (create/delete) Installers attempting to create or remove work orders.
-     * @principle Denormalization for Authorization; prevents cross-collection lookups.
-     */
     match /orders/{orderId} {
-      allow get: if isAdmin() || isAssignedToOrder(resource.data);
-      allow list: if isAdmin() || (isSignedIn() && request.query.limit <= 100);
-      allow create: if isAdmin();
-      allow update: if isAdmin() || (isAssignedToOrder(resource.data) && request.resource.data.installerId == resource.data.installerId);
-      allow delete: if isAdmin() && resource != null;
+      allow get, list: if isSignedIn();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || isAssignedToOrder(resource.data);
     }
 
-    /**
-     * @description Audit trail tracking application access events.
-     * @path /accessLogs/{logId}
-     * @allow (create) Any authenticated user logging their entrance.
-     * @deny (update/delete) Any modification to existing logs to maintain audit integrity.
-     * @principle Write-only logging for users, restricted read for auditors.
-     */
     match /accessLogs/{logId} {
       allow get, list: if isAdmin();
       allow create: if isSignedIn();

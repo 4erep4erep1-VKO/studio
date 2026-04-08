@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useFirestore, useDoc, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
+import { useFirestore, useDoc, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, useUser } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { AppSettings } from '@/lib/types';
 import { useToast } from './use-toast';
@@ -10,6 +9,7 @@ import { useEffect } from 'react';
 export function useAppSettings() {
   const db = useFirestore();
   const { toast } = useToast();
+  const { user } = useUser();
 
   const settingsRef = useMemoFirebase(() => {
     if (!db) return null;
@@ -18,12 +18,13 @@ export function useAppSettings() {
 
   const { data: settings, isLoading } = useDoc<AppSettings>(settingsRef);
 
-  // Initialize settings if they don't exist
+  // Инициализация настроек по умолчанию, если они отсутствуют в БД
   useEffect(() => {
-    if (!isLoading && !settings && settingsRef) {
+    // Выполняем только если данные загружены, их нет, и пользователь авторизован (хотя бы анонимно)
+    if (!isLoading && !settings && settingsRef && user) {
       setDocumentNonBlocking(settingsRef, { adminPin: '1234' }, { merge: true });
     }
-  }, [settings, isLoading, settingsRef]);
+  }, [settings, isLoading, settingsRef, user]);
 
   const updatePin = (newPin: string) => {
     if (!settingsRef) return;
