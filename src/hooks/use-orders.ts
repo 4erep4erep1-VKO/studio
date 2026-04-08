@@ -1,23 +1,34 @@
 
 'use client';
 
-import { useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking, addDocumentNonBlocking, deleteDocumentNonBlocking, useUser } from '@/firebase';
 import { collection, query, where, doc } from 'firebase/firestore';
 import { Order } from '@/lib/types';
 import { useToast } from './use-toast';
 
 export function useOrders(userId?: string, role?: string) {
   const db = useFirestore();
+  const { user } = useUser();
   const { toast } = useToast();
 
   const ordersQuery = useMemoFirebase(() => {
-    if (!db) return null;
+    if (!db || !user || !role) return null;
+    
     const baseQuery = collection(db, 'orders');
-    if (role === 'installer' && userId) {
+    
+    // Если монтажник - обязательно добавляем фильтр, иначе правила отклонят запрос
+    if (role === 'installer') {
+      if (!userId) return null;
       return query(baseQuery, where('installerId', '==', userId));
     }
-    return baseQuery;
-  }, [db, userId, role]);
+    
+    // Администратор может запрашивать всю коллекцию
+    if (role === 'admin') {
+      return baseQuery;
+    }
+    
+    return null;
+  }, [db, userId, role, user]);
 
   const { data: orders, isLoading } = useCollection<Order>(ordersQuery);
 
@@ -33,7 +44,6 @@ export function useOrders(userId?: string, role?: string) {
     
     addDocumentNonBlocking(colRef, newOrder);
 
-    // Create notification for the installer
     if (orderData.installerId) {
       const notifyRef = collection(db, 'notifications');
       addDocumentNonBlocking(notifyRef, {
@@ -59,8 +69,6 @@ export function useOrders(userId?: string, role?: string) {
       updatedAt: new Date().toISOString(),
     });
 
-    // If status changed to completed/declined, notify admin? (Optional MVP)
-    // Or if installer was changed, notify new installer
     if (updates.installerId) {
       const notifyRef = collection(db, 'notifications');
       addDocumentNonBlocking(notifyRef, {

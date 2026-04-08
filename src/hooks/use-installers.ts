@@ -1,16 +1,19 @@
+
 'use client';
 
-import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking, useUser } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 import { Installer } from '@/lib/types';
 
 export function useInstallers() {
   const db = useFirestore();
+  const { user } = useUser();
 
   const installersQuery = useMemoFirebase(() => {
-    if (!db) return null;
+    // Ждем авторизации пользователя (даже анонимной), чтобы выполнить запрос к installers
+    if (!db || !user) return null;
     return collection(db, 'installers');
-  }, [db]);
+  }, [db, user]);
 
   const { data: installers, isLoading } = useCollection<Installer>(installersQuery);
 
