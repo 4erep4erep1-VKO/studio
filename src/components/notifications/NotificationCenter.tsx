@@ -27,8 +27,7 @@ export function NotificationCenter({ currentUserId }: NotificationCenterProps) {
   const { user: firebaseUser } = useUser();
 
   const notificationsQuery = useMemoFirebase(() => {
-    // Используем переданный currentUserId (это ID монтажника или админа из сессии)
-    // Если его нет, пробуем UID Firebase
+    // Используем ID сотрудника из сессии или UID Firebase
     const targetId = currentUserId || firebaseUser?.uid;
     
     if (!db || !targetId) return null;
@@ -41,7 +40,7 @@ export function NotificationCenter({ currentUserId }: NotificationCenterProps) {
     );
   }, [db, firebaseUser, currentUserId]);
 
-  const { data: notifications } = useCollection<AppNotification>(notificationsQuery);
+  const { data: notifications, error } = useCollection<AppNotification>(notificationsQuery);
 
   const unreadCount = notifications?.filter(n => !n.read).length || 0;
 
@@ -117,7 +116,9 @@ export function NotificationCenter({ currentUserId }: NotificationCenterProps) {
           ) : (
             <div className="py-12 text-center space-y-2">
               <Bell className="w-10 h-10 text-muted-foreground/30 mx-auto" />
-              <p className="text-sm text-muted-foreground">Нет новых уведомлений</p>
+              <p className="text-sm text-muted-foreground">
+                {error ? 'Ошибка загрузки уведомлений' : 'Нет новых уведомлений'}
+              </p>
             </div>
           )}
         </ScrollArea>
