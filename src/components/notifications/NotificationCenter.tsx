@@ -27,11 +27,13 @@ export function NotificationCenter({ currentUserId }: NotificationCenterProps) {
   const { user: firebaseUser } = useUser();
 
   const notificationsQuery = useMemoFirebase(() => {
-    // Используем ID сотрудника из сессии или UID Firebase
+    // Для монтажников используем их ID сотрудника (currentUserId)
+    // Для админов или если ID не передан - UID Firebase
     const targetId = currentUserId || firebaseUser?.uid;
     
     if (!db || !targetId) return null;
     
+    // ВАЖНО: Правила безопасности теперь позволяют этот запрос, так как list разрешен
     return query(
       collection(db, 'notifications'),
       where('userId', '==', targetId),
@@ -117,7 +119,7 @@ export function NotificationCenter({ currentUserId }: NotificationCenterProps) {
             <div className="py-12 text-center space-y-2">
               <Bell className="w-10 h-10 text-muted-foreground/30 mx-auto" />
               <p className="text-sm text-muted-foreground">
-                {error ? 'Ошибка загрузки уведомлений' : 'Нет новых уведомлений'}
+                {error ? 'Нет доступа к уведомлениям' : 'Нет новых уведомлений'}
               </p>
             </div>
           )}
