@@ -2,7 +2,7 @@
 'use client';
 
 import { useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking, addDocumentNonBlocking, deleteDocumentNonBlocking, useUser } from '@/firebase';
-import { collection, query, where, doc } from 'firebase/firestore';
+import { collection, query, where, doc, orderBy } from 'firebase/firestore';
 import { Order } from '@/lib/types';
 import { useToast } from './use-toast';
 
@@ -12,19 +12,19 @@ export function useOrders(userId?: string, role?: string) {
   const { toast } = useToast();
 
   const ordersQuery = useMemoFirebase(() => {
+    // Ждем, пока сессия и роль будут полностью инициализированы
     if (!db || !user || !role) return null;
     
     const baseQuery = collection(db, 'orders');
     
-    // Если монтажник - обязательно добавляем фильтр, иначе правила отклонят запрос
     if (role === 'installer') {
       if (!userId) return null;
+      // Для монтажников обязательно добавляем фильтр, чтобы правила разрешили чтение
       return query(baseQuery, where('installerId', '==', userId));
     }
     
-    // Администратор может запрашивать всю коллекцию
     if (role === 'admin') {
-      return baseQuery;
+      return query(baseQuery, orderBy('createdAt', 'desc'));
     }
     
     return null;
@@ -39,7 +39,7 @@ export function useOrders(userId?: string, role?: string) {
       ...orderData,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      status: 'В работе',
+      status: orderData.status || 'В работе',
     };
     
     addDocumentNonBlocking(colRef, newOrder);
@@ -74,7 +74,7 @@ export function useOrders(userId?: string, role?: string) {
       addDocumentNonBlocking(notifyRef, {
         userId: updates.installerId,
         title: 'Обновление заказа',
-        message: `Вы назначены на объект: ${updates.objectName || 'Объект обновлен'}`,
+        message: `Вы назначены на объект: ${updates.objectName || 'Заказ обновлен'}`,
         createdAt: new Date().toISOString(),
         read: false
       });
