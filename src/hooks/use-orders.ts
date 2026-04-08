@@ -2,7 +2,7 @@
 'use client';
 
 import { useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking, addDocumentNonBlocking, deleteDocumentNonBlocking, useUser } from '@/firebase';
-import { collection, query, where, doc, orderBy } from 'firebase/firestore';
+import { collection, query, where, doc, orderBy, CollectionReference, Query } from 'firebase/firestore';
 import { Order } from '@/lib/types';
 import { useToast } from './use-toast';
 
@@ -12,14 +12,12 @@ export function useOrders(userId?: string, role?: string) {
   const { toast } = useToast();
 
   const ordersQuery = useMemoFirebase(() => {
-    // Ждем, пока сессия и роль будут полностью инициализированы
     if (!db || !user || !role) return null;
     
     const baseQuery = collection(db, 'orders');
     
     if (role === 'installer') {
       if (!userId) return null;
-      // Для монтажников обязательно добавляем фильтр, чтобы правила разрешили чтение
       return query(baseQuery, where('installerId', '==', userId));
     }
     
@@ -28,17 +26,18 @@ export function useOrders(userId?: string, role?: string) {
     }
     
     return null;
-  }, [db, userId, role, user]);
+  }, [db, userId, role, user]) as (CollectionReference | Query | null);
 
   const { data: orders, isLoading } = useCollection<Order>(ordersQuery);
 
   const addOrder = (orderData: Partial<Order>) => {
     if (!db) return;
     const colRef = collection(db, 'orders');
+    const now = new Date().toISOString();
     const newOrder = {
       ...orderData,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
       status: orderData.status || 'В работе',
     };
     
@@ -50,7 +49,7 @@ export function useOrders(userId?: string, role?: string) {
         userId: orderData.installerId,
         title: 'Новый заказ',
         message: `Вам назначен объект: ${orderData.objectName}`,
-        createdAt: new Date().toISOString(),
+        createdAt: now,
         read: false
       });
     }
@@ -64,9 +63,10 @@ export function useOrders(userId?: string, role?: string) {
   const updateOrder = (orderId: string, updates: Partial<Order>) => {
     if (!db) return;
     const docRef = doc(db, 'orders', orderId);
+    const now = new Date().toISOString();
     updateDocumentNonBlocking(docRef, {
       ...updates,
-      updatedAt: new Date().toISOString(),
+      updatedAt: now,
     });
 
     if (updates.installerId) {
@@ -75,7 +75,7 @@ export function useOrders(userId?: string, role?: string) {
         userId: updates.installerId,
         title: 'Обновление заказа',
         message: `Вы назначены на объект: ${updates.objectName || 'Заказ обновлен'}`,
-        createdAt: new Date().toISOString(),
+        createdAt: now,
         read: false
       });
     }
