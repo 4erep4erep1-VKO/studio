@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -312,6 +313,8 @@ function Dashboard({
                 preferences={preferences} 
                 onUpdatePreferences={onUpdatePreferences} 
                 userName={userName}
+                orders={orders}
+                userId={userId}
               />
             )}
           </div>

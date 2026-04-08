@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from 'react';
@@ -6,17 +7,24 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Theme, UserPreferences } from '@/lib/types';
+import { Theme, UserPreferences, Order } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 
 interface UserSettingsProps {
   preferences: UserPreferences;
   onUpdatePreferences: (prefs: UserPreferences) => void;
   userName: string;
+  orders: Order[];
+  userId: string;
 }
 
-export function UserSettings({ preferences, onUpdatePreferences, userName }: UserSettingsProps) {
+export function UserSettings({ preferences, onUpdatePreferences, userName, orders, userId }: UserSettingsProps) {
   const { toast } = useToast();
+
+  // Фильтруем заказы именно этого пользователя (исключая общие, если он их не взял)
+  const myOrders = orders.filter(o => o.installerId === userId);
+  const completedCount = myOrders.filter(o => o.status === 'Завершен').length;
+  const inProgressCount = myOrders.filter(o => o.status === 'В работе').length;
 
   const handleThemeChange = (theme: Theme) => {
     onUpdatePreferences({ ...preferences, theme });
@@ -93,15 +101,15 @@ export function UserSettings({ preferences, onUpdatePreferences, userName }: Use
 
       <Card className="border-border/50 bg-primary/5">
         <CardContent className="p-6">
-          <h4 className="font-headline font-bold mb-2">Статистика</h4>
+          <h4 className="font-headline font-bold mb-2">Ваша статистика</h4>
           <div className="grid grid-cols-2 gap-4">
             <div className="p-4 bg-background rounded-xl border border-border/50 shadow-sm">
               <p className="text-xs text-muted-foreground uppercase">Выполнено заказов</p>
-              <p className="text-2xl font-bold text-primary">0</p>
+              <p className="text-2xl font-bold text-primary">{completedCount}</p>
             </div>
             <div className="p-4 bg-background rounded-xl border border-border/50 shadow-sm">
               <p className="text-xs text-muted-foreground uppercase">В работе</p>
-              <p className="text-2xl font-bold text-accent">0</p>
+              <p className="text-2xl font-bold text-accent">{inProgressCount}</p>
             </div>
           </div>
         </CardContent>
