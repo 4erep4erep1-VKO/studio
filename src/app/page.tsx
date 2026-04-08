@@ -90,8 +90,6 @@ function MainApp() {
     );
   }
 
-  // If we have a Firebase session but no local user data (e.g. refresh), 
-  // we might need to re-login if the local data was cleared, but usually they go together.
   if (!sessionUser || !firebaseUser) {
     return <LoginScreen onLogin={handleLogin} />;
   }
@@ -323,7 +321,7 @@ function Dashboard({
             ) : (
               <UserSettings 
                 preferences={preferences} 
-                onUpdatePreferences={handleUpdatePreferences} 
+                onUpdatePreferences={onUpdatePreferences} 
                 userName={userName}
               />
             )}

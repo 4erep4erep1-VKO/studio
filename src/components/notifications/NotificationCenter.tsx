@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState } from 'react';
@@ -10,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 interface Notification {
   id: string;
@@ -100,5 +102,3 @@ export function NotificationCenter() {
     </Popover>
   );
 }
-
-import { cn } from '@/lib/utils';
