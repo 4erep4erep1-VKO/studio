@@ -77,7 +77,7 @@ export default function App() {
 
   if (!isReady) {
     return (
-      <div className="h-screen flex items-center justify-center bg-background">
+      <div className="h-[100dvh] flex items-center justify-center bg-background">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
       </div>
     );
@@ -150,7 +150,7 @@ function Dashboard({
   };
 
   return (
-    <div className="flex h-screen bg-background text-foreground overflow-hidden">
+    <div className="flex h-[100dvh] bg-background text-foreground overflow-hidden">
       <aside className="w-64 border-r border-border hidden md:flex flex-col bg-card/30 backdrop-blur-xl">
         <div className="p-6 border-b border-border flex items-center gap-3">
           <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white shadow-lg shadow-primary/20">
@@ -220,8 +220,8 @@ function Dashboard({
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col min-w-0 bg-background/95">
-        <header className="h-20 border-b border-border flex items-center justify-between px-6 bg-background/50 backdrop-blur-md sticky top-0 z-10 gap-4">
+      <main className="flex-1 flex flex-col min-w-0 bg-background/95 relative h-full">
+        <header className="h-20 border-b border-border flex items-center justify-between px-6 bg-background/50 backdrop-blur-md sticky top-0 z-20 gap-4 shrink-0">
           <div className="flex items-center gap-4 flex-1 max-w-xl">
             <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -254,34 +254,34 @@ function Dashboard({
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-6 lg:p-10">
-          <div className="max-w-[1400px] mx-auto space-y-8">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-10 scroll-smooth">
+          <div className="max-w-[1400px] mx-auto space-y-8 pb-10">
             {activeTab === 'orders' ? (
               <>
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                   <div className="space-y-1">
-                    <h2 className="text-3xl font-headline font-bold">
+                    <h2 className="text-2xl sm:text-3xl font-headline font-bold">
                       {isAdmin ? 'Управление заказами' : 'Мои заказы'}
                     </h2>
-                    <p className="text-muted-foreground">
+                    <p className="text-sm text-muted-foreground">
                       {isAdmin 
                         ? `Всего активных объектов: ${orders.filter(o => o.status === 'В работе').length}`
                         : `Вам доступно объектов: ${filteredOrders.filter(o => o.status === 'В работе').length}`}
                     </p>
                   </div>
                   
-                  <Tabs defaultValue="all" className="w-auto" onValueChange={(val: any) => setFilterStatus(val)}>
-                    <TabsList className="bg-secondary/30 p-1 h-auto overflow-x-auto">
-                      <TabsTrigger value="all" className="px-4 py-2 text-xs uppercase tracking-wider font-semibold">Все</TabsTrigger>
-                      <TabsTrigger value="В работе" className="px-4 py-2 text-xs uppercase tracking-wider font-semibold">В работе</TabsTrigger>
-                      <TabsTrigger value="Завершен" className="px-4 py-2 text-xs uppercase tracking-wider font-semibold">Завершенные</TabsTrigger>
-                      <TabsTrigger value="Отклонен" className="px-4 py-2 text-xs uppercase tracking-wider font-semibold">Отклоненные</TabsTrigger>
+                  <Tabs defaultValue="all" className="w-full sm:w-auto" onValueChange={(val: any) => setFilterStatus(val)}>
+                    <TabsList className="bg-secondary/30 p-1 h-auto w-full sm:w-auto flex flex-nowrap overflow-x-auto no-scrollbar">
+                      <TabsTrigger value="all" className="flex-1 sm:flex-none px-4 py-2 text-[10px] sm:text-xs uppercase tracking-wider font-semibold whitespace-nowrap">Все</TabsTrigger>
+                      <TabsTrigger value="В работе" className="flex-1 sm:flex-none px-4 py-2 text-[10px] sm:text-xs uppercase tracking-wider font-semibold whitespace-nowrap">В работе</TabsTrigger>
+                      <TabsTrigger value="Завершен" className="flex-1 sm:flex-none px-4 py-2 text-[10px] sm:text-xs uppercase tracking-wider font-semibold whitespace-nowrap">Завершенные</TabsTrigger>
+                      <TabsTrigger value="Отклонен" className="flex-1 sm:flex-none px-4 py-2 text-[10px] sm:text-xs uppercase tracking-wider font-semibold whitespace-nowrap">Отклоненные</TabsTrigger>
                     </TabsList>
                   </Tabs>
                 </div>
 
                 {filteredOrders.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-in fade-in duration-700">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 animate-in fade-in duration-700">
                     {filteredOrders.map(order => (
                       <OrderCard 
                         key={order.id} 
@@ -322,13 +322,13 @@ function Dashboard({
       </main>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="max-w-4xl p-0 overflow-hidden border-border bg-card">
-          <div className="p-8">
+        <DialogContent className="max-w-4xl p-0 overflow-hidden border-border bg-card w-[95vw] sm:w-full max-h-[90dvh] overflow-y-auto">
+          <div className="p-4 sm:p-8">
             <DialogHeader className="mb-6">
-              <DialogTitle className="text-2xl font-headline">
+              <DialogTitle className="text-xl sm:text-2xl font-headline">
                 {editingOrder ? 'Редактировать заказ' : 'Создать новый заказ'}
               </DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="text-sm">
                 Заполните детали объекта и назначьте исполнителя.
               </DialogDescription>
             </DialogHeader>
