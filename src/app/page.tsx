@@ -1,21 +1,55 @@
 "use client";
 
-import React, { useState } from 'react';
-import { Plus, Search, LayoutGrid, List as ListIcon, LogOut, Settings, Briefcase, Filter, HardHat, Shield, User } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Search, LayoutGrid, LogOut, Settings, Briefcase, Filter, HardHat, Shield, User, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useOrders } from '@/hooks/use-orders';
 import { OrderCard } from '@/components/orders/OrderCard';
 import { OrderForm } from '@/components/orders/OrderForm';
-import { Order, UserRole } from '@/lib/types';
+import { Order, UserRole, Theme, UserPreferences } from '@/lib/types';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LoginScreen } from '@/components/auth/LoginScreen';
 import { AdminSettings } from '@/components/settings/AdminSettings';
+import { UserSettings } from '@/components/settings/UserSettings';
+import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export default function App() {
   const [user, setUser] = useState<{ role: UserRole; name: string } | null>(null);
+  const [preferences, setPreferences] = useState<UserPreferences>({
+    theme: 'system',
+    notificationsEnabled: true
+  });
+
+  useEffect(() => {
+    const stored = localStorage.getItem('creative_dispatch_prefs');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        setPreferences(parsed);
+        applyTheme(parsed.theme);
+      } catch (e) {}
+    } else {
+      applyTheme('system');
+    }
+  }, []);
+
+  const applyTheme = (theme: Theme) => {
+    const root = window.document.documentElement;
+    const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    const actualTheme = theme === 'system' ? systemTheme : theme;
+    
+    root.classList.remove("light", "dark");
+    root.classList.add(actualTheme);
+  };
+
+  const handleUpdatePreferences = (newPrefs: UserPreferences) => {
+    setPreferences(newPrefs);
+    localStorage.setItem('creative_dispatch_prefs', JSON.stringify(newPrefs));
+    applyTheme(newPrefs.theme);
+  };
 
   const handleLogin = (role: UserRole, name?: string) => {
     setUser({ role, name: name || (role === 'admin' ? 'Администратор' : 'Монтажник') });
@@ -25,16 +59,36 @@ export default function App() {
     return <LoginScreen onLogin={handleLogin} />;
   }
 
-  return <Dashboard role={user.role} userName={user.name} onLogout={() => setUser(null)} />;
+  return (
+    <Dashboard 
+      role={user.role} 
+      userName={user.name} 
+      preferences={preferences}
+      onUpdatePreferences={handleUpdatePreferences}
+      onLogout={() => setUser(null)} 
+    />
+  );
 }
 
-function Dashboard({ role, userName, onLogout }: { role: UserRole, userName: string, onLogout: () => void }) {
+function Dashboard({ 
+  role, 
+  userName, 
+  preferences,
+  onUpdatePreferences,
+  onLogout 
+}: { 
+  role: UserRole, 
+  userName: string, 
+  preferences: UserPreferences,
+  onUpdatePreferences: (prefs: UserPreferences) => void,
+  onLogout: () => void 
+}) {
   const { orders, addOrder, updateOrder } = useOrders();
-  const [activeTab, setActiveTab] = useState<'orders' | 'settings'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'admin-settings' | 'user-settings'>('orders');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | undefined>();
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'В работе' | 'Завершен'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'В работе' | 'Завершен' | 'Отклонен'>('all');
 
   const isAdmin = role === 'admin';
 
@@ -42,6 +96,12 @@ function Dashboard({ role, userName, onLogout }: { role: UserRole, userName: str
     const matchesSearch = order.objectName.toLowerCase().includes(searchQuery.toLowerCase()) ||
                         order.installer.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesFilter = filterStatus === 'all' || order.status === filterStatus;
+    
+    // Если не админ, показываем только свои заказы
+    if (!isAdmin) {
+      return matchesSearch && matchesFilter && order.installer === userName;
+    }
+    
     return matchesSearch && matchesFilter;
   });
 
@@ -82,19 +142,27 @@ function Dashboard({ role, userName, onLogout }: { role: UserRole, userName: str
         <nav className="flex-1 p-4 space-y-2">
           <Button 
             variant={activeTab === 'orders' ? 'secondary' : 'ghost'} 
-            className={`w-full justify-start gap-3 ${activeTab === 'orders' ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}
+            className={`w-full justify-start gap-3 transition-all ${activeTab === 'orders' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-primary/5'}`}
             onClick={() => setActiveTab('orders')}
           >
             <LayoutGrid className="w-4 h-4" /> Заказы
           </Button>
           
+          <Button 
+            variant={activeTab === 'user-settings' ? 'secondary' : 'ghost'} 
+            className={`w-full justify-start gap-3 transition-all ${activeTab === 'user-settings' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-primary/5'}`}
+            onClick={() => setActiveTab('user-settings')}
+          >
+            <User className="w-4 h-4" /> Кабинет
+          </Button>
+          
           {isAdmin && (
             <Button 
-              variant={activeTab === 'settings' ? 'secondary' : 'ghost'} 
-              className={`w-full justify-start gap-3 ${activeTab === 'settings' ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}
-              onClick={() => setActiveTab('settings')}
+              variant={activeTab === 'admin-settings' ? 'secondary' : 'ghost'} 
+              className={`w-full justify-start gap-3 transition-all ${activeTab === 'admin-settings' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-primary/5'}`}
+              onClick={() => setActiveTab('admin-settings')}
             >
-              <Settings className="w-4 h-4" /> Настройки
+              <Settings className="w-4 h-4" /> Администрирование
             </Button>
           )}
         </nav>
@@ -102,7 +170,7 @@ function Dashboard({ role, userName, onLogout }: { role: UserRole, userName: str
         <div className="p-4 border-t border-border mt-auto">
           <div className="flex items-center gap-3 p-2 bg-secondary/20 rounded-lg">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${isAdmin ? 'bg-primary text-white' : 'bg-accent text-primary'}`}>
-              {isAdmin ? <Shield className="w-4 h-4" /> : <User className="w-4 h-4" />}
+              {isAdmin ? <Shield className="w-4 h-4" /> : <HardHat className="w-4 h-4" />}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">{userName}</p>
@@ -121,7 +189,7 @@ function Dashboard({ role, userName, onLogout }: { role: UserRole, userName: str
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Сменить аккаунт</p>
+                  <p>Выйти</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -146,30 +214,22 @@ function Dashboard({ role, userName, onLogout }: { role: UserRole, userName: str
           </div>
           
           <div className="flex items-center gap-3">
+            <NotificationCenter />
+            
             {isAdmin && activeTab === 'orders' && (
               <Button onClick={handleOpenCreate} className="bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/10 gap-2 px-3 sm:px-4">
                 <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Новый заказ</span>
               </Button>
             )}
             
-            {/* Logout button for mobile and quick access */}
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    variant="outline" 
-                    size="icon" 
-                    onClick={onLogout} 
-                    className="md:hidden border-border/50 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                  >
-                    <LogOut className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Сменить аккаунт</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <Button 
+              variant="outline" 
+              size="icon" 
+              onClick={onLogout} 
+              className="md:hidden border-border/50 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
           </div>
         </header>
 
@@ -180,28 +240,36 @@ function Dashboard({ role, userName, onLogout }: { role: UserRole, userName: str
               <>
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                   <div className="space-y-1">
-                    <h2 className="text-3xl font-headline font-bold">Управление заказами</h2>
-                    <p className="text-muted-foreground">Всего активных объектов: {orders.filter(o => o.status === 'В работе').length}</p>
+                    <h2 className="text-3xl font-headline font-bold">
+                      {isAdmin ? 'Управление заказами' : 'Мои заказы'}
+                    </h2>
+                    <p className="text-muted-foreground">
+                      {isAdmin 
+                        ? `Всего активных объектов: ${orders.filter(o => o.status === 'В работе').length}`
+                        : `Вам назначено объектов: ${filteredOrders.filter(o => o.status === 'В работе').length}`}
+                    </p>
                   </div>
                   
                   <Tabs defaultValue="all" className="w-auto" onValueChange={(val: any) => setFilterStatus(val)}>
-                    <TabsList className="bg-secondary/30 p-1 h-auto">
+                    <TabsList className="bg-secondary/30 p-1 h-auto overflow-x-auto">
                       <TabsTrigger value="all" className="px-4 py-2 text-xs uppercase tracking-wider font-semibold">Все</TabsTrigger>
                       <TabsTrigger value="В работе" className="px-4 py-2 text-xs uppercase tracking-wider font-semibold">В работе</TabsTrigger>
                       <TabsTrigger value="Завершен" className="px-4 py-2 text-xs uppercase tracking-wider font-semibold">Завершенные</TabsTrigger>
+                      <TabsTrigger value="Отклонен" className="px-4 py-2 text-xs uppercase tracking-wider font-semibold">Отклоненные</TabsTrigger>
                     </TabsList>
                   </Tabs>
                 </div>
 
                 {filteredOrders.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-in fade-in duration-700">
                     {filteredOrders.map(order => (
                       <OrderCard 
                         key={order.id} 
                         order={order} 
                         onEdit={handleEdit} 
-                        onStatusChange={isAdmin ? updateOrder : () => {}} 
-                        readOnly={!isAdmin}
+                        onStatusChange={updateOrder} 
+                        role={role}
+                        currentUserName={userName}
                       />
                     ))}
                   </div>
@@ -212,18 +280,19 @@ function Dashboard({ role, userName, onLogout }: { role: UserRole, userName: str
                     </div>
                     <div className="space-y-1">
                       <h3 className="text-xl font-headline font-semibold">Заказы не найдены</h3>
-                      <p className="text-muted-foreground max-w-sm">Попробуйте изменить параметры поиска или создайте новый заказ.</p>
+                      <p className="text-muted-foreground max-w-sm">Попробуйте изменить параметры поиска или фильтрации.</p>
                     </div>
-                    {isAdmin && (
-                      <Button variant="outline" onClick={handleOpenCreate} className="mt-4">
-                        Создать первый заказ
-                      </Button>
-                    )}
                   </div>
                 )}
               </>
-            ) : (
+            ) : activeTab === 'admin-settings' ? (
               <AdminSettings />
+            ) : (
+              <UserSettings 
+                preferences={preferences} 
+                onUpdatePreferences={onUpdatePreferences} 
+                userName={userName}
+              />
             )}
           </div>
         </div>

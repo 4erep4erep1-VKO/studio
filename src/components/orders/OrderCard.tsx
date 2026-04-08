@@ -1,11 +1,11 @@
 "use client";
 
 import React from 'react';
-import { Calendar, User, MoreVertical, Edit2, CheckCircle2, Clock, MapPin, Sparkles, Lock } from 'lucide-react';
+import { Calendar, User, MoreVertical, Edit2, CheckCircle2, Clock, MapPin, Sparkles, Lock, XCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Order } from '@/lib/types';
+import { Order, UserRole } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -18,16 +18,28 @@ interface OrderCardProps {
   order: Order;
   onEdit: (order: Order) => void;
   onStatusChange: (order: Order) => void;
-  readOnly?: boolean;
+  role: UserRole;
+  currentUserName?: string;
 }
 
-export function OrderCard({ order, onEdit, onStatusChange, readOnly = false }: OrderCardProps) {
+export function OrderCard({ order, onEdit, onStatusChange, role, currentUserName }: OrderCardProps) {
   const isCompleted = order.status === 'Завершен';
+  const isDeclined = order.status === 'Отклонен';
+  const isAdmin = role === 'admin';
+  const isAssignedToMe = order.installer === currentUserName;
+
+  const getStatusBadge = () => {
+    switch (order.status) {
+      case 'Завершен': return "bg-green-600/90 hover:bg-green-600 text-white";
+      case 'Отклонен': return "bg-destructive/90 hover:bg-destructive text-white";
+      default: return "bg-primary/90 hover:bg-primary text-white";
+    }
+  };
 
   return (
     <Card className={cn(
       "group overflow-hidden border-border/50 hover:border-primary/50 transition-all duration-300 shadow-md",
-      isCompleted && "opacity-80"
+      (isCompleted || isDeclined) && "opacity-80"
     )}>
       <div className="relative h-48 w-full bg-secondary/50">
         {order.photoDataUri ? (
@@ -42,10 +54,7 @@ export function OrderCard({ order, onEdit, onStatusChange, readOnly = false }: O
           </div>
         )}
         <div className="absolute top-3 right-3">
-          <Badge className={cn(
-            "shadow-lg backdrop-blur-md",
-            isCompleted ? "bg-green-600/90 hover:bg-green-600" : "bg-primary/90 hover:bg-primary"
-          )}>
+          <Badge className={cn("shadow-lg backdrop-blur-md border-none", getStatusBadge())}>
             {order.status}
           </Badge>
         </div>
@@ -56,7 +65,7 @@ export function OrderCard({ order, onEdit, onStatusChange, readOnly = false }: O
           <h3 className="font-headline font-semibold text-lg leading-tight truncate pr-2" title={order.objectName}>
             {order.objectName}
           </h3>
-          {!readOnly && (
+          {isAdmin ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8 -mt-1 -mr-1">
@@ -69,12 +78,34 @@ export function OrderCard({ order, onEdit, onStatusChange, readOnly = false }: O
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onStatusChange({ ...order, status: isCompleted ? 'В работе' : 'Завершен' })}>
                   {isCompleted ? <Clock className="mr-2 h-4 w-4" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-                  {isCompleted ? 'Вернуть в работу' : 'Завершить заказ'}
+                  {isCompleted ? 'Вернуть в работу' : 'Завершить'}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+          ) : (
+            isAssignedToMe && order.status === 'В работе' && (
+              <div className="flex gap-1">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 text-green-500 hover:text-green-600 hover:bg-green-500/10" 
+                  onClick={() => onStatusChange({ ...order, status: 'Завершен' })}
+                  title="Завершить"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 text-destructive hover:bg-destructive/10" 
+                  onClick={() => onStatusChange({ ...order, status: 'Отклонен' })}
+                  title="Отказаться"
+                >
+                  <XCircle className="h-4 w-4" />
+                </Button>
+              </div>
+            )
           )}
-          {readOnly && <Lock className="h-3.5 w-3.5 text-muted-foreground/40 mt-1" />}
         </div>
         <p className="text-sm text-muted-foreground line-clamp-2 h-10">
           {order.description}
