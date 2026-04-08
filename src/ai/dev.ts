@@ -1,1 +1,2 @@
-// AI functionality removed as requested.
+
+// AI functionality removed.

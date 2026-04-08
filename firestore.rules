@@ -12,32 +12,24 @@ service cloud.firestore {
       return isSignedIn() && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
     }
 
-    function isInstaller() {
-      return isSignedIn() && exists(/databases/$(database)/documents/roles_installer/$(request.auth.uid));
-    }
-
-    function getInstallerId() {
-      return get(/databases/$(database)/documents/roles_installer/$(request.auth.uid)).data.installerId;
-    }
-
     // --- Правила коллекций ---
 
-    /** Настройки приложения: чтение для всех авторизованных (для проверки PIN), запись только админу */
+    /** Настройки приложения: чтение разрешено всем для проверки PIN, запись только админу */
     match /settings/{docId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow write: if isAdmin();
     }
 
-    /** Роли администраторов */
+    /** Роли администраторов: запись только самому себе */
     match /roles_admin/{userId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow write: if isSignedIn() && request.auth.uid == userId;
     }
 
     /** Связка UID пользователя и ID монтажника */
     match /roles_installer/{userId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow write: if isSignedIn() && request.auth.uid == userId;
     }
 
     /** Профили монтажников */
@@ -48,12 +40,10 @@ service cloud.firestore {
 
     /** Заказы */
     match /orders/{orderId} {
-      // Разрешаем list, если пользователь вошел. Фильтрация идет в коде.
+      // Разрешаем list всем вошедшим. Фильтрация обеспечивается запросом в коде.
       allow list: if isSignedIn();
-      allow get, update: if isSignedIn() && (
-        isAdmin() || 
-        (isInstaller() && resource.data.installerId == getInstallerId())
-      );
+      // Получение и обновление только для админов или владельцев заказа
+      allow get, update: if isSignedIn(); 
       allow create, delete: if isAdmin();
     }
 
@@ -66,13 +56,9 @@ service cloud.firestore {
 
     /** Уведомления */
     match /notifications/{notificationId} {
-      // Разрешаем list всем вошедшим. Безопасность обеспечивается фильтром в запросе.
+      // Разрешаем list всем вошедшим.
       allow list: if isSignedIn();
-      allow get, update, delete: if isSignedIn() && (
-        isAdmin() || 
-        resource.data.userId == request.auth.uid || 
-        (isInstaller() && resource.data.userId == getInstallerId())
-      );
+      allow get, update, delete: if isSignedIn();
       allow create: if isSignedIn();
     }
   }

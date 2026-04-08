@@ -55,7 +55,16 @@ function MainApp() {
     }
   }, []);
 
+  // Синхронизация UID Firebase и сессии в localStorage
+  useEffect(() => {
+    if (firebaseUser && sessionUser && firebaseUser.uid !== sessionUser.id) {
+      // Если UID изменился (новая анонимная сессия), сбрасываем вход
+      handleLogout();
+    }
+  }, [firebaseUser, sessionUser]);
+
   const applyTheme = (theme: Theme) => {
+    if (typeof window === 'undefined') return;
     const root = window.document.documentElement;
     const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     const actualTheme = theme === 'system' ? systemTheme : theme;
@@ -83,7 +92,7 @@ function MainApp() {
 
   if (isUserLoading) {
     return (
-      <div className="h-screen flex items-center justify-center">
+      <div className="h-screen flex items-center justify-center bg-background">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
       </div>
     );
