@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -34,6 +35,22 @@ export function useOrders(userId?: string, role?: string) {
     window.dispatchEvent(new Event('storage'));
   };
 
+  const sendNotification = (toUserId: string, title: string, message: string) => {
+    const now = new Date().toISOString();
+    const notifStored = localStorage.getItem('local_notifications');
+    const allNotifs = notifStored ? JSON.parse(notifStored) : [];
+    const newNotif = {
+      id: Math.random().toString(36).substr(2, 9),
+      userId: toUserId,
+      title,
+      message,
+      createdAt: now,
+      read: false
+    };
+    localStorage.setItem('local_notifications', JSON.stringify([newNotif, ...allNotifs]));
+    window.dispatchEvent(new Event('storage'));
+  };
+
   const addOrder = (orderData: Partial<Order>) => {
     const stored = localStorage.getItem('local_orders');
     const allOrders: Order[] = stored ? JSON.parse(stored) : [];
@@ -53,28 +70,15 @@ export function useOrders(userId?: string, role?: string) {
     
     saveOrders([newOrder, ...allOrders]);
 
-    // Уведомление конкретному монтажнику, если он назначен сразу
+    // Уведомление исполнителю
     if (newOrder.installerId && newOrder.installerId !== 'general') {
       sendNotification(newOrder.installerId, 'Новый заказ', `Вам назначен объект: ${newOrder.objectName}`);
+    } else if (newOrder.installerId === 'general') {
+      // Можно было бы уведомить всех монтажников, но для простоты опустим или уведомим "общего"
+      // sendNotification('all', 'Общий заказ', `Доступен новый объект: ${newOrder.objectName}`);
     }
 
     toast({ title: "Заказ создан", description: `Объект "${newOrder.objectName}" успешно добавлен.` });
-  };
-
-  const sendNotification = (toUserId: string, title: string, message: string) => {
-    const now = new Date().toISOString();
-    const notifStored = localStorage.getItem('local_notifications');
-    const allNotifs = notifStored ? JSON.parse(notifStored) : [];
-    const newNotif = {
-      id: Math.random().toString(36).substr(2, 9),
-      userId: toUserId,
-      title,
-      message,
-      createdAt: now,
-      read: false
-    };
-    localStorage.setItem('local_notifications', JSON.stringify([newNotif, ...allNotifs]));
-    window.dispatchEvent(new Event('storage'));
   };
 
   const updateOrder = (orderId: string, updates: Partial<Order>, currentUserName?: string) => {
@@ -95,17 +99,25 @@ export function useOrders(userId?: string, role?: string) {
     
     saveOrders(updatedOrders);
 
-    // Уведомление админу при различных действиях
-    if (isClaimingGeneral) {
-      sendNotification('admin-id', 'Заказ принят', `Монтажник ${currentUserName || 'Кто-то'} взял общий заказ: ${orderToUpdate.objectName}`);
-      toast({ title: "Заказ принят", description: "Теперь этот объект закреплен за вами." });
-    } else if (updates.status === 'Отклонен' || updates.status === 'Завершен') {
-      const statusText = updates.status === 'Отклонен' ? 'отклонил' : 'завершил';
-      sendNotification('admin-id', updates.status === 'Отклонен' ? 'Заказ отклонен' : 'Заказ выполнен', 
-        `Монтажник ${currentUserName || ''} ${statusText} объект: ${orderToUpdate.objectName}`);
-      toast({ title: updates.status === 'Завершен' ? "Заказ выполнен" : "Заказ отклонен" });
-    } else {
-      toast({ title: "Заказ обновлен" });
+    // Уведомление админу при различных действиях монтажника
+    if (role === 'installer') {
+      if (isClaimingGeneral) {
+        sendNotification('admin-id', 'Заказ принят', `Монтажник ${currentUserName || 'Кто-то'} взял общий заказ: ${orderToUpdate.objectName}`);
+        toast({ title: "Заказ принят", description: "Теперь этот объект закреплен за вами." });
+      } else if (updates.status === 'Отклонен' || updates.status === 'Завершен') {
+        const statusText = updates.status === 'Отклонен' ? 'отклонил' : 'завершил';
+        sendNotification('admin-id', updates.status === 'Отклонен' ? 'Заказ отклонен' : 'Заказ выполнен', 
+          `Монтажник ${currentUserName || ''} ${statusText} объект: ${orderToUpdate.objectName}`);
+        toast({ title: updates.status === 'Завершен' ? "Заказ выполнен" : "Заказ отклонен" });
+      }
+    } 
+    
+    // Уведомление монтажнику при действиях админа
+    if (role === 'admin' && updates.status) {
+       if (orderToUpdate.installerId !== 'general') {
+         sendNotification(orderToUpdate.installerId, 'Статус заказа изменен', `Администратор изменил статус объекта "${orderToUpdate.objectName}" на "${updates.status}"`);
+       }
+       toast({ title: "Заказ обновлен" });
     }
   };
 

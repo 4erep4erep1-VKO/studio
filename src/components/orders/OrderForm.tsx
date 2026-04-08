@@ -1,6 +1,7 @@
+
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -11,7 +12,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Order, OrderStatus } from '@/lib/types';
 import { useInstallers } from '@/hooks/use-installers';
-import { ImagePlus, X, Users } from 'lucide-react';
+import { ImagePlus, X, Users, Clipboard } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 const orderSchema = z.object({
   objectName: z.string().min(1, 'Название объекта обязательно'),
@@ -30,6 +32,7 @@ interface OrderFormProps {
 export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
   const { installers } = useInstallers();
   const [images, setImages] = useState<string[]>(initialData?.imageUrls || []);
+  const { toast } = useToast();
 
   const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm({
     resolver: zodResolver(orderSchema),
@@ -49,6 +52,31 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
   });
 
   const currentInstallerId = watch('installerId');
+
+  // Обработка вставки из буфера обмена (Ctrl+V)
+  useEffect(() => {
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+          const blob = items[i].getAsFile();
+          if (blob) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              setImages(prev => [...prev, event.target?.result as string]);
+              toast({ title: "Изображение вставлено", description: "Скриншот добавлен к заказу." });
+            };
+            reader.readAsDataURL(blob);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('paste', handleGlobalPaste);
+    return () => window.removeEventListener('paste', handleGlobalPaste);
+  }, [toast]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -109,15 +137,16 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
               </SelectContent>
             </Select>
             {errors.installerId && <p className="text-xs text-destructive">{errors.installerId.message as string}</p>}
-            {currentInstallerId === 'general' && (
-              <p className="text-[10px] text-accent font-medium leading-tight">
-                * Любой монтажник сможет самостоятельно взять этот заказ в работу.
-              </p>
-            )}
           </div>
 
           <div className="space-y-2">
-            <Label>Фотографии объекта</Label>
+            <div className="flex items-center justify-between">
+              <Label>Фотографии объекта</Label>
+              <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                <Clipboard className="w-3 h-3" />
+                <span>Можно вставить из буфера (Ctrl+V)</span>
+              </div>
+            </div>
             <div className="grid grid-cols-3 gap-2 mt-2">
               {images.map((url, idx) => (
                 <div key={idx} className="relative aspect-square rounded-md overflow-hidden border border-border group">

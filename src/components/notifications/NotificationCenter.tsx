@@ -1,6 +1,7 @@
+
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Bell, Check, Trash2, Info } from 'lucide-react';
 import {
   Popover,
@@ -19,15 +20,38 @@ interface NotificationCenterProps {
   currentUserId?: string;
 }
 
+// Базовый звук уведомления (короткий бип)
+const BEEP_SOUND = "data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YTdvT18AZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQ==";
+
 export function NotificationCenter({ currentUserId }: NotificationCenterProps) {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const prevCountRef = useRef(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3');
+    }
+  }, []);
 
   useEffect(() => {
     const load = () => {
       const stored = localStorage.getItem('local_notifications');
       if (stored && currentUserId) {
         const all: AppNotification[] = JSON.parse(stored);
-        setNotifications(all.filter(n => n.userId === currentUserId));
+        const filtered = all.filter(n => n.userId === currentUserId);
+        
+        // Звуковое сопровождение при новых уведомлениях
+        const prefs = JSON.parse(localStorage.getItem('local_preferences') || '{}');
+        if (filtered.length > prevCountRef.current && prefs.notificationsEnabled) {
+          audioRef.current?.play().catch(() => {
+            // Браузер может блокировать автовоспроизведение без взаимодействия
+            console.log('Audio playback blocked');
+          });
+        }
+        
+        prevCountRef.current = filtered.length;
+        setNotifications(filtered);
       }
     };
     load();
