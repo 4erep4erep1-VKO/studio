@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Order, OrderStatus } from '@/lib/types';
 import { useInstallers } from '@/hooks/use-installers';
+import { ImagePlus, X, Camera } from 'lucide-react';
 
 const orderSchema = z.object({
   objectName: z.string().min(1, 'Название объекта обязательно'),
@@ -28,6 +29,7 @@ interface OrderFormProps {
 
 export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
   const { installers } = useInstallers();
+  const [images, setImages] = useState<string[]>(initialData?.imageUrls || []);
 
   const { register, handleSubmit, formState: { errors }, setValue } = useForm({
     resolver: zodResolver(orderSchema),
@@ -46,13 +48,30 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
     }
   });
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    Array.from(files).forEach(file => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImages(prev => [...prev, reader.result as string]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const removeImage = (index: number) => {
+    setImages(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleFormSubmit = (data: any) => {
-    onSubmit(data);
+    onSubmit({ ...data, imageUrls: images });
   };
 
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="objectName">Название объекта</Label>
@@ -83,6 +102,29 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
             </Select>
             {errors.installerId && <p className="text-xs text-destructive">{errors.installerId.message as string}</p>}
           </div>
+
+          <div className="space-y-2">
+            <Label>Фотографии объекта</Label>
+            <div className="grid grid-cols-3 gap-2 mt-2">
+              {images.map((url, idx) => (
+                <div key={idx} className="relative aspect-square rounded-md overflow-hidden border border-border group">
+                  <img src={url} alt={`Photo ${idx}`} className="w-full h-full object-cover" />
+                  <button 
+                    type="button"
+                    onClick={() => removeImage(idx)}
+                    className="absolute top-1 right-1 bg-destructive text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+              <label className="aspect-square flex flex-col items-center justify-center border-2 border-dashed border-muted-foreground/25 rounded-md cursor-pointer hover:bg-secondary/50 transition-colors">
+                <ImagePlus className="w-6 h-6 text-muted-foreground" />
+                <span className="text-[10px] mt-1 text-muted-foreground">Добавить</span>
+                <input type="file" className="hidden" accept="image/*" multiple onChange={handleFileChange} />
+              </label>
+            </div>
+          </div>
         </div>
 
         <div className="space-y-4">
@@ -92,7 +134,7 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
               id="workDescription" 
               {...register('workDescription')} 
               placeholder="Детальное описание того, что нужно сделать..."
-              className="min-h-[120px]"
+              className="min-h-[150px]"
             />
             {errors.workDescription && <p className="text-xs text-destructive">{errors.workDescription.message as string}</p>}
           </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { Calendar, User, MoreVertical, Edit2, CheckCircle2, Clock, MapPin, XCircle } from 'lucide-react';
+import { Calendar, User, MoreVertical, Edit2, CheckCircle2, Clock, MapPin, XCircle, ImageIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,7 +26,7 @@ export function OrderCard({ order, onEdit, onStatusChange, role, currentUserName
   const isCompleted = order.status === 'Завершен';
   const isDeclined = order.status === 'Отклонен';
   const isAdmin = role === 'admin';
-  const isAssignedToMe = true; // Visibility is handled by hook filter, but can double check
+  const hasImages = order.imageUrls && order.imageUrls.length > 0;
 
   const getStatusBadge = () => {
     switch (order.status) {
@@ -38,29 +38,43 @@ export function OrderCard({ order, onEdit, onStatusChange, role, currentUserName
 
   return (
     <Card className={cn(
-      "group overflow-hidden border-border/50 hover:border-primary/50 transition-all duration-300 shadow-md",
+      "group overflow-hidden border-border/50 hover:border-primary/50 transition-all duration-300 shadow-md flex flex-col h-full",
       (isCompleted || isDeclined) && "opacity-80"
     )}>
-      <div className="relative h-48 w-full bg-secondary/50">
-        <div className="w-full h-full flex items-center justify-center text-muted-foreground/30">
-          <MapPin className="h-12 w-12" />
-        </div>
+      <div className="relative h-48 w-full bg-secondary/50 overflow-hidden">
+        {hasImages ? (
+          <img 
+            src={order.imageUrls![0]} 
+            alt={order.objectName} 
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground/30">
+            <ImageIcon className="h-12 w-12 mb-2" />
+            <span className="text-[10px] uppercase tracking-tighter">Без фото</span>
+          </div>
+        )}
         <div className="absolute top-3 right-3">
           <Badge className={cn("shadow-lg backdrop-blur-md border-none", getStatusBadge())}>
             {order.status}
           </Badge>
         </div>
+        {order.imageUrls && order.imageUrls.length > 1 && (
+          <div className="absolute bottom-2 right-2 bg-black/50 text-white text-[10px] px-1.5 py-0.5 rounded backdrop-blur-sm">
+            +{order.imageUrls.length - 1}
+          </div>
+        )}
       </div>
 
       <CardHeader className="p-4 pb-2 space-y-1">
         <div className="flex items-start justify-between">
-          <h3 className="font-headline font-semibold text-lg leading-tight truncate pr-2" title={order.objectName}>
+          <h3 className="font-headline font-semibold text-base leading-tight truncate pr-2" title={order.objectName}>
             {order.objectName}
           </h3>
           {isAdmin ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 -mt-1 -mr-1">
+                <Button variant="ghost" size="icon" className="h-8 w-8 -mt-1 -mr-1 shrink-0">
                   <MoreVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -75,8 +89,8 @@ export function OrderCard({ order, onEdit, onStatusChange, role, currentUserName
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            isAssignedToMe && order.status === 'В работе' && (
-              <div className="flex gap-1">
+            order.status === 'В работе' && (
+              <div className="flex gap-1 shrink-0">
                 <Button 
                   variant="ghost" 
                   size="icon" 
@@ -99,17 +113,15 @@ export function OrderCard({ order, onEdit, onStatusChange, role, currentUserName
             )
           )}
         </div>
-        <p className="text-sm text-muted-foreground line-clamp-2 h-10">
+        <p className="text-xs text-muted-foreground line-clamp-3 min-h-[3rem]">
           {order.workDescription}
         </p>
       </CardHeader>
 
-      <CardContent className="p-4 pt-0 space-y-4">
-        <div className="flex flex-wrap gap-y-2 gap-x-4 pt-4 border-t border-border/50 text-xs font-medium">
-          <div className="flex items-center text-muted-foreground">
-            <Calendar className="mr-1.5 h-3.5 w-3.5 text-accent" />
-            До {new Date(order.dueDate).toLocaleDateString('ru-RU')}
-          </div>
+      <CardContent className="p-4 pt-0 mt-auto">
+        <div className="flex items-center pt-4 border-t border-border/50 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          <Calendar className="mr-1.5 h-3 w-3 text-accent" />
+          Срок: {new Date(order.dueDate).toLocaleDateString('ru-RU')}
         </div>
       </CardContent>
     </Card>
