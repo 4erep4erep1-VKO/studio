@@ -27,7 +27,7 @@ export function NotificationCenter({ currentUserId }: NotificationCenterProps) {
   const { user: firebaseUser } = useUser();
 
   const notificationsQuery = useMemoFirebase(() => {
-    // Используем ID монтажника или UID Firebase для админа
+    // Используем ID монтажника (currentUserId) или UID для админа
     const targetId = currentUserId || firebaseUser?.uid;
     
     if (!db || !targetId || !firebaseUser) return null;
@@ -117,7 +117,7 @@ export function NotificationCenter({ currentUserId }: NotificationCenterProps) {
             <div className="py-12 text-center space-y-2">
               <Bell className="w-10 h-10 text-muted-foreground/30 mx-auto" />
               <p className="text-sm text-muted-foreground">
-                {error ? 'Нет новых уведомлений' : 'Уведомлений пока нет'}
+                Уведомлений пока нет
               </p>
             </div>
           )}

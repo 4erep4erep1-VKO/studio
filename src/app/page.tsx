@@ -35,7 +35,6 @@ function MainApp() {
   
   const { user: firebaseUser, isUserLoading } = useUser();
 
-  // Handle persistence
   useEffect(() => {
     const storedUser = localStorage.getItem('creative_dispatch_user');
     if (storedUser) {
@@ -158,7 +157,6 @@ function Dashboard({
 
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden">
-      {/* Sidebar */}
       <aside className="w-64 border-r border-border hidden md:flex flex-col bg-card/30 backdrop-blur-xl">
         <div className="p-6 border-b border-border flex items-center gap-3">
           <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white shadow-lg shadow-primary/20">
@@ -228,9 +226,7 @@ function Dashboard({
         </div>
       </aside>
 
-      {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 bg-background/95">
-        {/* Header */}
         <header className="h-20 border-b border-border flex items-center justify-between px-6 bg-background/50 backdrop-blur-md sticky top-0 z-10 gap-4">
           <div className="flex items-center gap-4 flex-1 max-w-xl">
             <div className="relative w-full">
@@ -264,7 +260,6 @@ function Dashboard({
           </div>
         </header>
 
-        {/* Scrollable Area */}
         <div className="flex-1 overflow-y-auto p-6 lg:p-10">
           <div className="max-w-[1400px] mx-auto space-y-8">
             {activeTab === 'orders' ? (
@@ -329,7 +324,6 @@ function Dashboard({
         </div>
       </main>
 
-      {/* Order Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-4xl p-0 overflow-hidden border-border bg-card">
           <div className="p-8">

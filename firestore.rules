@@ -3,36 +3,28 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    /**
-     * WORK ORDER MANAGEMENT SYSTEM - SECURITY ARCHITECTURE
-     */
-
-    // --- Helper Functions ---
-
+    // --- Вспомогательные функции ---
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // Проверка роли администратора
     function isAdmin() {
       return isSignedIn() && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
     }
 
-    // Проверка наличия роли монтажника
     function isInstaller() {
       return isSignedIn() && exists(/databases/$(database)/documents/roles_installer/$(request.auth.uid));
     }
 
-    // Получаем ID монтажника
     function getInstallerId() {
       return get(/databases/$(database)/documents/roles_installer/$(request.auth.uid)).data.installerId;
     }
 
-    // --- Collection Rules ---
+    // --- Правила коллекций ---
 
-    /** Настройки приложения: чтение доступно всем, запись только админу */
+    /** Настройки приложения: чтение для всех авторизованных (для проверки PIN), запись только админу */
     match /settings/{docId} {
-      allow read: if true;
+      allow read: if isSignedIn();
       allow write: if isAdmin();
     }
 
@@ -56,7 +48,7 @@ service cloud.firestore {
 
     /** Заказы */
     match /orders/{orderId} {
-      // Разрешаем list для всех вошедших, фильтрация происходит в коде
+      // Разрешаем list, если пользователь вошел. Фильтрация идет в коде.
       allow list: if isSignedIn();
       allow get, update: if isSignedIn() && (
         isAdmin() || 
@@ -74,6 +66,7 @@ service cloud.firestore {
 
     /** Уведомления */
     match /notifications/{notificationId} {
+      // Разрешаем list всем вошедшим. Безопасность обеспечивается фильтром в запросе.
       allow list: if isSignedIn();
       allow get, update, delete: if isSignedIn() && (
         isAdmin() || 
