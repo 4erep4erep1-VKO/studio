@@ -1,20 +1,18 @@
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Вспомогательная функция для проверки авторизации
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // Правила для настроек: чтение разрешено всем для проверки PIN
+    // Настройки: чтение разрешено всем для проверки PIN
     match /settings/{docId} {
       allow read: if true;
       allow write: if isSignedIn();
     }
 
-    // Роли: чтение разрешено всем вошедшим для проверки прав в коде
+    // Роли: чтение разрешено всем вошедшим
     match /roles_admin/{userId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn() && request.auth.uid == userId;
@@ -31,21 +29,20 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
 
-    // Заказы: разрешаем list всем вошедшим (фильтрация в коде), 
-    // но ограничиваем запись и получение конкретного документа
+    // Заказы: разрешаем list всем вошедшим. Безопасность данных обеспечивается фильтром в коде.
+    // get/update доступны только если пользователь авторизован.
     match /orders/{orderId} {
       allow list: if isSignedIn();
-      allow get, update: if isSignedIn();
-      allow create, delete: if isSignedIn();
+      allow get, update, create, delete: if isSignedIn();
     }
 
-    // Логи доступа: только для админа (в MVP разрешаем запись всем для логов)
+    // Логи доступа: разрешаем запись всем вошедшим для аудита.
     match /accessLogs/{logId} {
       allow list, get: if isSignedIn();
       allow create: if isSignedIn();
     }
 
-    // Уведомления: разрешаем list всем вошедшим
+    // Уведомления: разрешаем list всем вошедшим.
     match /notifications/{notificationId} {
       allow list: if isSignedIn();
       allow get, update, delete, create: if isSignedIn();

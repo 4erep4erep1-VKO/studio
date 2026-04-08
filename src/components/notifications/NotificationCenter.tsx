@@ -1,4 +1,3 @@
-
 "use client";
 
 import React from 'react';
@@ -27,8 +26,7 @@ export function NotificationCenter({ currentUserId }: NotificationCenterProps) {
   const { user: firebaseUser } = useUser();
 
   const notificationsQuery = useMemoFirebase(() => {
-    // ВАЖНО: Мы используем currentUserId (ID монтажника или админа), 
-    // чтобы запросы были стабильными даже при смене анонимного UID Firebase.
+    // ВАЖНО: Мы используем ID из сессии, чтобы запрос был стабильным.
     if (!db || !firebaseUser || !currentUserId) return null;
     
     return query(
