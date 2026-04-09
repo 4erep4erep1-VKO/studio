@@ -12,8 +12,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Order, OrderStatus } from '@/lib/types';
 import { useInstallers } from '@/hooks/use-installers';
-import { ImagePlus, X, Users, Clipboard } from 'lucide-react';
+import { ImagePlus, X, Users, Clipboard, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { uploadImage } from '@/lib/api';
 
 const orderSchema = z.object({
   objectName: z.string().min(1, 'Название объекта обязательно'),
@@ -29,9 +30,12 @@ interface OrderFormProps {
   onCancel: () => void;
 }
 
+type FileWithPreview = File & { preview?: string };
+
 export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
   const { installers } = useInstallers();
-  const [images, setImages] = useState<string[]>(initialData?.imageUrls || []);
+  const [files, setFiles] = useState<FileWithPreview[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
 
   const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm({
@@ -53,6 +57,37 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
 
   const currentInstallerId = watch('installerId');
 
+  // Создаём URL preview для File объектов
+  useEffect(() => {
+    const previews: { [key: number]: string } = {};
+    let count = 0;
+
+    files.forEach((file, idx) => {
+      if (file.preview) {
+        previews[idx] = file.preview;
+        count++;
+      } else {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          file.preview = reader.result as string;
+          count++;
+          if (count === files.length) {
+            setFiles([...files]);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    return () => {
+      files.forEach(file => {
+        if (file.preview) {
+          URL.revokeObjectURL(file.preview);
+        }
+      });
+    };
+  }, []);
+
   // Обработка вставки из буфера обмена (Ctrl+V)
   useEffect(() => {
     const handleGlobalPaste = (e: ClipboardEvent) => {
@@ -63,12 +98,9 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
         if (items[i].type.indexOf('image') !== -1) {
           const blob = items[i].getAsFile();
           if (blob) {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-              setImages(prev => [...prev, event.target?.result as string]);
-              toast({ title: "Изображение вставлено", description: "Скриншот добавлен к заказу." });
-            };
-            reader.readAsDataURL(blob);
+            const file = new File([blob], `screenshot-${Date.now()}.png`, { type: 'image/png' });
+            setFiles(prev => [...prev, file]);
+            toast({ title: "Изображение вставлено", description: "Скриншот добавлен к заказу." });
           }
         }
       }
@@ -79,24 +111,61 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
   }, [toast]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
+    const newFiles = e.target.files;
+    if (!newFiles) return;
 
-    Array.from(files).forEach(file => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImages(prev => [...prev, reader.result as string]);
-      };
-      reader.readAsDataURL(file);
+    Array.from(newFiles).forEach(file => {
+      setFiles(prev => [...prev, file as FileWithPreview]);
     });
   };
 
   const removeImage = (index: number) => {
-    setImages(prev => prev.filter((_, i) => i !== index));
+    setFiles(prev => {
+      const updated = prev.filter((_, i) => i !== index);
+      // Очищаем blob URL старого файла
+      if (prev[index].preview) {
+        URL.revokeObjectURL(prev[index].preview!);
+      }
+      return updated;
+    });
   };
 
-  const handleFormSubmit = (data: any) => {
-    onSubmit({ ...data, imageUrls: images });
+  const handleFormSubmit = async (data: any) => {
+    try {
+      setIsUploading(true);
+
+      if (files.length === 0) {
+        onSubmit({ ...data, imageUrls: [] });
+        return;
+      }
+
+      // Загружаем все файлы параллельно
+      const uploadPromises = files.map(async (file) => {
+        try {
+          return await uploadImage(file);
+        } catch (err: any) {
+          throw new Error(`Файл "${file.name}": ${err.message}`);
+        }
+      });
+
+      const imageUrls = await Promise.all(uploadPromises);
+
+      // Отправляем данные формы с URL изображений
+      onSubmit({ ...data, imageUrls });
+    } catch (error: any) {
+      const errorMsg = error.message || 'Не удалось загрузить изображения.';
+      const isNetworkError = !navigator.onLine || errorMsg.includes('network');
+      
+      toast({
+        title: isNetworkError ? 'Нет интернета' : 'Ошибка загрузки',
+        description: isNetworkError 
+          ? 'Проверьте соединение и повторите попытку.'
+          : errorMsg,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return (
@@ -148,9 +217,11 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
               </div>
             </div>
             <div className="grid grid-cols-3 gap-2 mt-2">
-              {images.map((url, idx) => (
+              {files.map((file, idx) => (
                 <div key={idx} className="relative aspect-square rounded-md overflow-hidden border border-border group">
-                  <img src={url} alt={`Photo ${idx}`} className="w-full h-full object-cover" />
+                  {file.preview && (
+                    <img src={file.preview} alt={`Photo ${idx}`} className="w-full h-full object-cover" />
+                  )}
                   <button 
                     type="button"
                     onClick={() => removeImage(idx)}
@@ -163,7 +234,7 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
               <label className="aspect-square flex flex-col items-center justify-center border-2 border-dashed border-muted-foreground/25 rounded-md cursor-pointer hover:bg-secondary/50 transition-colors">
                 <ImagePlus className="w-6 h-6 text-muted-foreground" />
                 <span className="text-[10px] mt-1 text-muted-foreground">Добавить</span>
-                <input type="file" className="hidden" accept="image/*" multiple onChange={handleFileChange} />
+                <input type="file" className="hidden" accept="image/*" multiple onChange={handleFileChange} disabled={isUploading} />
               </label>
             </div>
           </div>
@@ -201,11 +272,19 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
       </div>
 
       <div className="flex justify-end gap-3 pt-6 border-t">
-        <Button type="button" variant="ghost" onClick={onCancel}>Отмена</Button>
-        <Button type="submit" className="bg-primary hover:bg-primary/90 text-white min-w-[140px]">
-          {initialData ? 'Сохранить изменения' : 'Создать заказ'}
+        <Button type="button" variant="ghost" onClick={onCancel} disabled={isUploading}>Отмена</Button>
+        <Button type="submit" disabled={isUploading} className="bg-primary hover:bg-primary/90 text-white min-w-[140px] disabled:opacity-50">
+          {isUploading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Загрузка...
+            </>
+          ) : (
+            initialData ? 'Сохранить изменения' : 'Создать заказ'
+          )}
         </Button>
       </div>
     </form>
   );
 }
+

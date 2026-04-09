@@ -1,39 +1,70 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, LayoutGrid, LogOut, Settings, Briefcase, Filter, HardHat, Shield, User, Loader2, Menu, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Plus, Search, LayoutGrid, LogOut, Settings, Briefcase, Filter, HardHat, Shield, User, Loader2, Menu, X, AlertCircle, BarChart3, CheckCircle, Clock, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useOrders } from '@/hooks/use-orders';
+import { useAuth } from '@/hooks/use-auth';
+import { OrderCardSkeleton } from '@/components/orders/OrderCardSkeleton';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { OrderCard } from '@/components/orders/OrderCard';
 import { OrderForm } from '@/components/orders/OrderForm';
-import { Order, UserRole, Theme, UserPreferences } from '@/lib/types';
+import { Order, Theme, UserPreferences } from '@/lib/types';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { LoginScreen } from '@/components/auth/LoginScreen';
 import { AdminSettings } from '@/components/settings/AdminSettings';
 import { UserSettings } from '@/components/settings/UserSettings';
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { signOut } from '@/lib/auth';
+import { ConnectionStatus } from '@/components/ConnectionStatus';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useInstallers } from '@/hooks/use-installers';
 
 export default function App() {
-  const [sessionUser, setSessionUser] = useState<{ role: UserRole; id: string; name: string } | null>(null);
+  const router = useRouter();
+  const { user, isLoading: isAuthLoading, getRole } = useAuth();
   const [isReady, setIsReady] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
   const [preferences, setPreferences] = useState<UserPreferences>({
     theme: 'system',
     notificationsEnabled: true
   });
 
+  const role = getRole();
+  const isAdmin = role === 'admin';
+
   useEffect(() => {
-    const storedUser = localStorage.getItem('local_session_user');
-    if (storedUser) {
-      try {
-        setSessionUser(JSON.parse(storedUser));
-      } catch (e) {
-        localStorage.removeItem('local_session_user');
+    // Проверяем начальное состояние интернета
+    setIsOnline(navigator.onLine);
+
+    // Слушаем события online/offline
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthLoading) {
+      if (!user) {
+        router.push('/login');
+      } else {
+        setIsReady(true);
       }
     }
+  }, [user, isAuthLoading, router]);
 
+  useEffect(() => {
     const storedPrefs = localStorage.getItem('local_preferences');
     if (storedPrefs) {
       try {
@@ -44,7 +75,6 @@ export default function App() {
     } else {
       applyTheme('system');
     }
-    setIsReady(true);
   }, []);
 
   const applyTheme = (theme: Theme) => {
@@ -63,18 +93,16 @@ export default function App() {
     applyTheme(newPrefs.theme);
   };
 
-  const handleLogin = (role: UserRole, id: string, name: string) => {
-    const userData = { role, id, name };
-    setSessionUser(userData);
-    localStorage.setItem('local_session_user', JSON.stringify(userData));
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      router.push('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
-  const handleLogout = () => {
-    setSessionUser(null);
-    localStorage.removeItem('local_session_user');
-  };
-
-  if (!isReady) {
+  if (isAuthLoading || !isReady) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
@@ -82,18 +110,19 @@ export default function App() {
     );
   }
 
-  if (!sessionUser) {
-    return <LoginScreen onLogin={handleLogin} />;
+  if (!user) {
+    return null;
   }
 
   return (
     <Dashboard 
-      role={sessionUser.role} 
-      userId={sessionUser.id}
-      userName={sessionUser.name} 
+      role={role}
+      userId={user.id}
+      userName={user.email || 'Пользователь'}
       preferences={preferences}
       onUpdatePreferences={handleUpdatePreferences}
-      onLogout={handleLogout} 
+      onLogout={handleLogout}
+      isOnline={isOnline}
     />
   );
 }
@@ -105,7 +134,7 @@ function SidebarContent({
   setActiveTab, 
   onLogout 
 }: { 
-  role: UserRole, 
+  role: 'admin' | 'installer' | null, 
   userName: string, 
   activeTab: string, 
   setActiveTab: (tab: any) => void,
@@ -140,6 +169,16 @@ function SidebarContent({
         >
           <User className="w-4 h-4" /> Кабинет
         </Button>
+        
+        {isAdmin && (
+          <Button 
+            variant={activeTab === 'admin-dashboard' ? 'secondary' : 'ghost'} 
+            className={`w-full justify-start gap-3 transition-all ${activeTab === 'admin-dashboard' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-primary/5'}`}
+            onClick={() => window.location.href = '/admin'}
+          >
+            <BarChart3 className="w-4 h-4" /> Панель управления
+          </Button>
+        )}
         
         {isAdmin && (
           <Button 
@@ -181,28 +220,44 @@ function Dashboard({
   userName, 
   preferences,
   onUpdatePreferences,
-  onLogout 
+  onLogout,
+  isOnline
 }: { 
-  role: UserRole, 
+  role: 'admin' | 'installer' | null, 
   userId: string,
   userName: string, 
   preferences: UserPreferences,
   onUpdatePreferences: (prefs: UserPreferences) => void,
-  onLogout: () => void 
+  onLogout: () => void,
+  isOnline: boolean
 }) {
-  const { orders, addOrder, updateOrder } = useOrders(userId, role || '');
+  const { orders, isLoading, error, addOrder, updateOrder } = useOrders(userId, role || '');
+  const { installers } = useInstallers();
   const [activeTab, setActiveTab] = useState<'orders' | 'admin-settings' | 'user-settings'>('orders');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | undefined>();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'В работе' | 'Завершен' | 'Отклонен'>('all');
+  const [filterInstaller, setFilterInstaller] = useState<string>('all');
 
   const isAdmin = role === 'admin';
 
+  // Расчет статистики для админа
+  const stats = isAdmin ? {
+    total: orders.length,
+    inProgress: orders.filter(o => o.status === 'В работе').length,
+    completedToday: orders.filter(o => {
+      const today = new Date().toDateString();
+      const orderDate = new Date(o.updatedAt).toDateString();
+      return o.status === 'Завершен' && orderDate === today;
+    }).length
+  } : null;
+
   const filteredOrders = orders.filter(order => {
     const matchesSearch = order.objectName.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFilter = filterStatus === 'all' || order.status === filterStatus;
-    return matchesSearch && matchesFilter;
+    const matchesStatus = filterStatus === 'all' || order.status === filterStatus;
+    const matchesInstaller = filterInstaller === 'all' || order.installerId === filterInstaller;
+    return matchesSearch && matchesStatus && matchesInstaller;
   });
 
   const handleOpenCreate = () => {
@@ -240,6 +295,7 @@ function Dashboard({
 
       {/* Main content area */}
       <main className="flex-1 flex flex-col min-w-0 bg-background/95 relative">
+        <ConnectionStatus isOnline={isOnline} />
         <header className="h-20 border-b border-border flex items-center justify-between px-4 sm:px-6 bg-background/50 backdrop-blur-md sticky top-0 z-30 gap-4">
           <div className="flex items-center gap-3 md:hidden">
             <Sheet>
@@ -300,6 +356,50 @@ function Dashboard({
           <div className="max-w-[1400px] mx-auto space-y-8 pb-20">
             {activeTab === 'orders' ? (
               <>
+                {/* Статистика для админа */}
+                {isAdmin && stats && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+                    <Card className="border-border/50 hover:shadow-md transition-shadow">
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Всего заказов</CardTitle>
+                        <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">{stats.total}</div>
+                        <p className="text-xs text-muted-foreground">
+                          За все время
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border-border/50 hover:shadow-md transition-shadow">
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">В работе</CardTitle>
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">{stats.inProgress}</div>
+                        <p className="text-xs text-muted-foreground">
+                          Активных объектов
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border-border/50 hover:shadow-md transition-shadow">
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Выполнено сегодня</CardTitle>
+                        <CheckCircle className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">{stats.completedToday}</div>
+                        <p className="text-xs text-muted-foreground">
+                          Завершенных заказов
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                   <div className="space-y-1">
                     <h2 className="text-2xl sm:text-3xl font-headline font-bold">
@@ -312,17 +412,51 @@ function Dashboard({
                     </p>
                   </div>
                   
-                  <Tabs defaultValue="all" className="w-full sm:w-auto" onValueChange={(val: any) => setFilterStatus(val)}>
-                    <TabsList className="bg-secondary/30 p-1 h-auto w-full sm:w-auto flex flex-nowrap overflow-x-auto no-scrollbar scroll-smooth">
-                      <TabsTrigger value="all" className="flex-1 sm:flex-none px-4 py-2 text-[10px] sm:text-xs uppercase tracking-wider font-semibold whitespace-nowrap">Все</TabsTrigger>
-                      <TabsTrigger value="В работе" className="flex-1 sm:flex-none px-4 py-2 text-[10px] sm:text-xs uppercase tracking-wider font-semibold whitespace-nowrap">В работе</TabsTrigger>
-                      <TabsTrigger value="Завершен" className="flex-1 sm:flex-none px-4 py-2 text-[10px] sm:text-xs uppercase tracking-wider font-semibold whitespace-nowrap">Завершенные</TabsTrigger>
-                      <TabsTrigger value="Отклонен" className="flex-1 sm:flex-none px-4 py-2 text-[10px] sm:text-xs uppercase tracking-wider font-semibold whitespace-nowrap">Отклоненные</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    {/* Фильтр по исполнителю (только для админа) */}
+                    {isAdmin && (
+                      <Select value={filterInstaller} onValueChange={setFilterInstaller}>
+                        <SelectTrigger className="w-full sm:w-[200px] bg-secondary/30 border-none">
+                          <SelectValue placeholder="Все исполнители" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Все исполнители</SelectItem>
+                          <SelectItem value="general">Общие заказы</SelectItem>
+                          {installers.map(installer => (
+                            <SelectItem key={installer.id} value={installer.id}>
+                              {installer.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+
+                    {/* Фильтр по статусу */}
+                    <Tabs defaultValue="all" className="w-full sm:w-auto" onValueChange={(val: any) => setFilterStatus(val)}>
+                      <TabsList className="bg-secondary/30 p-1 h-auto w-full sm:w-auto flex flex-nowrap overflow-x-auto no-scrollbar scroll-smooth">
+                        <TabsTrigger value="all" className="flex-1 sm:flex-none px-4 py-2 text-[10px] sm:text-xs uppercase tracking-wider font-semibold whitespace-nowrap">Все</TabsTrigger>
+                        <TabsTrigger value="В работе" className="flex-1 sm:flex-none px-4 py-2 text-[10px] sm:text-xs uppercase tracking-wider font-semibold whitespace-nowrap">В работе</TabsTrigger>
+                        <TabsTrigger value="Завершен" className="flex-1 sm:flex-none px-4 py-2 text-[10px] sm:text-xs uppercase tracking-wider font-semibold whitespace-nowrap">Завершенные</TabsTrigger>
+                        <TabsTrigger value="Отклонен" className="flex-1 sm:flex-none px-4 py-2 text-[10px] sm:text-xs uppercase tracking-wider font-semibold whitespace-nowrap">Отклоненные</TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                  </div>
                 </div>
 
-                {filteredOrders.length > 0 ? (
+                {isLoading ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+                    {[...Array(8)].map((_, idx) => (
+                      <OrderCardSkeleton key={idx} />
+                    ))}
+                  </div>
+                ) : error ? (
+                  <Alert variant="destructive" className="mt-4">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      {error} Попребую соединение, заказы загрузятся автоматически.
+                    </AlertDescription>
+                  </Alert>
+                ) : filteredOrders.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 animate-in fade-in duration-700">
                     {filteredOrders.map(order => (
                       <OrderCard 

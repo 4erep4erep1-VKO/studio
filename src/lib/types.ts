@@ -45,3 +45,12 @@ export interface AppNotification {
   createdAt: string;
   read: boolean;
 }
+
+export interface Comment {
+  id: string;
+  orderId: string;
+  userId: string;
+  userName: string;
+  message: string;
+  createdAt: string;
+}

@@ -15,6 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { CommentsSection } from './CommentsSection';
 
 interface OrderCardProps {
   order: Order;
@@ -167,9 +168,11 @@ export function OrderCard({ order, onEdit, onStatusChange, role, currentUserName
           </p>
           
           {isAdmin && (
-            <div className="flex items-center gap-1.5 pt-1 text-[11px] font-medium text-primary">
-              <User className="h-3 w-3" />
-              <span className="truncate" title={installerName}>{installerName}</span>
+            <div className="flex items-center gap-1.5 pt-1">
+              <User className="h-3 w-3 text-muted-foreground" />
+              <Badge variant="secondary" className="text-[10px] font-medium px-2 py-0.5">
+                {installerName}
+              </Badge>
             </div>
           )}
         </CardHeader>
@@ -192,6 +195,16 @@ export function OrderCard({ order, onEdit, onStatusChange, role, currentUserName
             )}
           </div>
         </CardContent>
+
+        {/* Комментарии */}
+        <div className="px-4 pb-4">
+          <CommentsSection
+            orderId={order.id}
+            currentUserId={currentUserId}
+            currentUserName={currentUserName}
+            className="border-t border-border/50 pt-4"
+          />
+        </div>
       </Card>
 
       {/* Просмотр изображения */}

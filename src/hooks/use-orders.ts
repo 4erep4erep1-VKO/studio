@@ -1,39 +1,102 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Order } from '@/lib/types';
 import { useToast } from './use-toast';
+import { playNotificationSound } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
+import {
+  getOrders as fetchOrders,
+  createOrder as createOrderApi,
+  updateOrder as updateOrderApi,
+  deleteOrder as deleteOrderApi,
+} from '@/lib/api';
 
 export function useOrders(userId?: string, role?: string) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+  const orderEventRef = useRef({ lastCreatedOrderId: '', lastUpdatedOrderId: '' });
+
+  const loadOrders = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const allOrders = await fetchOrders();
+      const visibleOrders = role === 'installer' && userId
+        ? allOrders.filter(o => o.installerId === userId || o.installerId === 'general')
+        : allOrders;
+
+      setOrders(visibleOrders);
+    } catch (error: any) {
+      const errorMsg = error.message || 'Не удалось загрузить заказы.';
+      const isNetworkError = !navigator.onLine || errorMsg.includes('network');
+      
+      setError(errorMsg);
+      toast({
+        title: isNetworkError ? 'Нет интернета' : 'Ошибка загрузки',
+        description: isNetworkError 
+          ? 'Проверьте соединение. Заказы обновятся автоматически.'
+          : errorMsg,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [role, userId, toast]);
 
   useEffect(() => {
-    const loadOrders = () => {
-      const stored = localStorage.getItem('local_orders');
-      let allOrders: Order[] = stored ? JSON.parse(stored) : [];
-      
-      if (role === 'installer' && userId) {
-        // Монтажник видит свои заказы И общие заказы
-        allOrders = allOrders.filter(o => o.installerId === userId || o.installerId === 'general');
-      }
-      
-      setOrders(allOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-      setIsLoading(false);
+    loadOrders();
+
+    const channel = supabase
+      .channel('orders-realtime')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, (payload: any) => {
+        if (payload.new?.id === orderEventRef.current.lastCreatedOrderId) {
+          orderEventRef.current.lastCreatedOrderId = ''
+          return
+        }
+
+        toast({
+          title: 'Новый заказ',
+          description: `Поступил объект: ${payload.new?.title || 'новый заказ'}`,
+        })
+        playNotificationSound()
+        loadOrders()
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, (payload: any) => {
+        if (payload.new?.id === orderEventRef.current.lastUpdatedOrderId) {
+          orderEventRef.current.lastUpdatedOrderId = ''
+          return
+        }
+
+        const oldStatus = payload.old?.status
+        const newStatus = payload.new?.status
+        if (oldStatus && newStatus && oldStatus !== newStatus) {
+          toast({
+            title: 'Статус заказа изменен',
+            description: `Объект ${payload.new?.title || ''} теперь ${newStatus}`,
+          })
+          playNotificationSound()
+        }
+        loadOrders()
+      })
+      .subscribe();
+
+    // Добавляем слушатель для восстановления соединения
+    const handleOnline = () => {
+      loadOrders();
+      toast({ title: 'Соединение восстановлено', description: 'Загружаю обновления...' });
     };
 
-    loadOrders();
-    window.addEventListener('storage', loadOrders);
-    return () => window.removeEventListener('storage', loadOrders);
-  }, [userId, role]);
+    window.addEventListener('online', handleOnline);
 
-  const saveOrders = (newOrders: Order[]) => {
-    localStorage.setItem('local_orders', JSON.stringify(newOrders));
-    setOrders(newOrders);
-    window.dispatchEvent(new Event('storage'));
-  };
+    return () => {
+      channel.unsubscribe();
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [loadOrders, toast]);
 
   const sendNotification = (toUserId: string, title: string, message: string) => {
     const now = new Date().toISOString();
@@ -45,88 +108,102 @@ export function useOrders(userId?: string, role?: string) {
       title,
       message,
       createdAt: now,
-      read: false
+      read: false,
     };
     localStorage.setItem('local_notifications', JSON.stringify([newNotif, ...allNotifs]));
     window.dispatchEvent(new Event('storage'));
   };
 
-  const addOrder = (orderData: Partial<Order>) => {
-    const stored = localStorage.getItem('local_orders');
-    const allOrders: Order[] = stored ? JSON.parse(stored) : [];
-    
-    const now = new Date().toISOString();
-    const newOrder: Order = {
-      id: Math.random().toString(36).substr(2, 9),
-      objectName: orderData.objectName || '',
-      workDescription: orderData.workDescription || '',
-      imageUrls: orderData.imageUrls || [],
-      dueDate: orderData.dueDate || now,
-      installerId: orderData.installerId || 'general',
-      status: orderData.status || 'В работе',
-      createdAt: now,
-      updatedAt: now,
-    };
-    
-    saveOrders([newOrder, ...allOrders]);
+  const addOrder = async (orderData: Partial<Order>) => {
+    try {
+      const newOrder = await createOrderApi(orderData);
+      toast({ title: 'Заказ создан', description: `Объект "${newOrder.objectName}" успешно добавлен.` });
+      playNotificationSound()
+      orderEventRef.current.lastCreatedOrderId = newOrder.id
+      await loadOrders();
 
-    // Уведомление исполнителю
-    if (newOrder.installerId && newOrder.installerId !== 'general') {
-      sendNotification(newOrder.installerId, 'Новый заказ', `Вам назначен объект: ${newOrder.objectName}`);
-    } else if (newOrder.installerId === 'general') {
-      // Можно было бы уведомить всех монтажников, но для простоты опустим или уведомим "общего"
-      // sendNotification('all', 'Общий заказ', `Доступен новый объект: ${newOrder.objectName}`);
-    }
-
-    toast({ title: "Заказ создан", description: `Объект "${newOrder.objectName}" успешно добавлен.` });
-  };
-
-  const updateOrder = (orderId: string, updates: Partial<Order>, currentUserName?: string) => {
-    const stored = localStorage.getItem('local_orders');
-    const allOrders: Order[] = stored ? JSON.parse(stored) : [];
-    
-    const now = new Date().toISOString();
-    const orderToUpdate = allOrders.find(o => o.id === orderId);
-    
-    if (!orderToUpdate) return;
-
-    // Логика взятия общего заказа монтажником
-    const isClaimingGeneral = orderToUpdate.installerId === 'general' && updates.installerId && updates.installerId !== 'general';
-
-    const updatedOrders = allOrders.map(o => 
-      o.id === orderId ? { ...o, ...updates, updatedAt: now } : o
-    );
-    
-    saveOrders(updatedOrders);
-
-    // Уведомление админу при различных действиях монтажника
-    if (role === 'installer') {
-      if (isClaimingGeneral) {
-        sendNotification('admin-id', 'Заказ принят', `Монтажник ${currentUserName || 'Кто-то'} взял общий заказ: ${orderToUpdate.objectName}`);
-        toast({ title: "Заказ принят", description: "Теперь этот объект закреплен за вами." });
-      } else if (updates.status === 'Отклонен' || updates.status === 'Завершен') {
-        const statusText = updates.status === 'Отклонен' ? 'отклонил' : 'завершил';
-        sendNotification('admin-id', updates.status === 'Отклонен' ? 'Заказ отклонен' : 'Заказ выполнен', 
-          `Монтажник ${currentUserName || ''} ${statusText} объект: ${orderToUpdate.objectName}`);
-        toast({ title: updates.status === 'Завершен' ? "Заказ выполнен" : "Заказ отклонен" });
+      if (newOrder.installerId && newOrder.installerId !== 'general') {
+        sendNotification(newOrder.installerId, 'Новый заказ', `Вам назначен объект: ${newOrder.objectName}`);
       }
-    } 
-    
-    // Уведомление монтажнику при действиях админа
-    if (role === 'admin' && updates.status) {
-       if (orderToUpdate.installerId !== 'general') {
-         sendNotification(orderToUpdate.installerId, 'Статус заказа изменен', `Администратор изменил статус объекта "${orderToUpdate.objectName}" на "${updates.status}"`);
-       }
-       toast({ title: "Заказ обновлен" });
+    } catch (error: any) {
+      const errorMsg = error.message || 'Не удалось создать заказ.';
+      const isNetworkError = !navigator.onLine;
+      
+      toast({
+        title: isNetworkError ? 'Нет интернета' : 'Ошибка создания',
+        description: isNetworkError 
+          ? 'Проверьте соединение и повторите попытку.'
+          : errorMsg,
+        variant: 'destructive',
+      });
     }
   };
 
-  const deleteOrder = (id: string) => {
-    const stored = localStorage.getItem('local_orders');
-    const allOrders: Order[] = stored ? JSON.parse(stored) : [];
-    saveOrders(allOrders.filter(o => o.id !== id));
-    toast({ title: "Заказ удален", variant: "destructive" });
+  const updateOrder = async (orderId: string, updates: Partial<Order>, currentUserName?: string) => {
+    try {
+      const orderToUpdate = orders.find(o => o.id === orderId);
+      if (!orderToUpdate) return;
+
+      const isClaimingGeneral = orderToUpdate.installerId === 'general' && updates.installerId && updates.installerId !== 'general';
+      const updatedOrder = await updateOrderApi(orderId, updates);
+      orderEventRef.current.lastUpdatedOrderId = updatedOrder.id;
+      await loadOrders();
+
+      if (role === 'installer') {
+        if (isClaimingGeneral) {
+          sendNotification('admin-id', 'Заказ принят', `Монтажник ${currentUserName || 'Кто-то'} взял общий заказ: ${orderToUpdate.objectName}`);
+          toast({ title: 'Заказ принят', description: 'Теперь этот объект закреплен за вами.' });
+          playNotificationSound();
+        } else if (updates.status === 'Отклонен' || updates.status === 'Завершен') {
+          const statusText = updates.status === 'Отклонен' ? 'отклонил' : 'завершил';
+          sendNotification('admin-id', updates.status === 'Отклонен' ? 'Заказ отклонен' : 'Заказ выполнен',
+            `Монтажник ${currentUserName || ''} ${statusText} объект: ${orderToUpdate.objectName}`);
+          toast({ title: updates.status === 'Завершен' ? 'Заказ выполнен' : 'Заказ отклонен' });
+          playNotificationSound();
+        }
+      }
+
+      if (role === 'admin' && updates.status) {
+        if (orderToUpdate.installerId !== 'general') {
+          sendNotification(orderToUpdate.installerId, 'Статус заказа изменен', `Администратор изменил статус объекта "${orderToUpdate.objectName}" на "${updates.status}"`);
+        }
+        toast({ title: 'Заказ обновлен' });
+        playNotificationSound();
+      }
+
+      return updatedOrder;
+    } catch (error: any) {
+      const errorMsg = error.message || 'Не удалось обновить заказ.';
+      const isNetworkError = !navigator.onLine;
+
+      toast({
+        title: isNetworkError ? 'Нет интернета' : 'Ошибка обновления',
+        description: isNetworkError
+          ? 'Проверьте соединение и повторите попытку.'
+          : errorMsg,
+        variant: 'destructive',
+      });
+    }
   };
 
-  return { orders, isLoading, addOrder, updateOrder, deleteOrder };
+  const deleteOrder = async (id: string) => {
+    try {
+      await deleteOrderApi(id);
+      toast({ title: 'Заказ удален', variant: 'destructive' });
+      await loadOrders();
+    } catch (error: any) {
+      const errorMsg = error.message || 'Не удалось удалить заказ.';
+      const isNetworkError = !navigator.onLine;
+      
+      toast({
+        title: isNetworkError ? 'Нет интернета' : 'Ошибка удаления',
+        description: isNetworkError
+          ? 'Проверьте соединение и повторите попытку.'
+          : errorMsg,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  return { orders, isLoading, error, addOrder, updateOrder, deleteOrder };
 }
