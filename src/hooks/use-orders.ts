@@ -98,22 +98,6 @@ export function useOrders(userId?: string, role?: string) {
     };
   }, [loadOrders, toast]);
 
-  const sendNotification = (toUserId: string, title: string, message: string) => {
-    const now = new Date().toISOString();
-    const notifStored = localStorage.getItem('local_notifications');
-    const allNotifs = notifStored ? JSON.parse(notifStored) : [];
-    const newNotif = {
-      id: Math.random().toString(36).substr(2, 9),
-      userId: toUserId,
-      title,
-      message,
-      createdAt: now,
-      read: false,
-    };
-    localStorage.setItem('local_notifications', JSON.stringify([newNotif, ...allNotifs]));
-    window.dispatchEvent(new Event('storage'));
-  };
-
   const addOrder = async (orderData: Partial<Order>) => {
     try {
       const newOrder = await createOrderApi(orderData);
@@ -121,10 +105,6 @@ export function useOrders(userId?: string, role?: string) {
       playNotificationSound()
       orderEventRef.current.lastCreatedOrderId = newOrder.id
       await loadOrders();
-
-      if (newOrder.installerId && newOrder.installerId !== 'general') {
-        sendNotification(newOrder.installerId, 'Новый заказ', `Вам назначен объект: ${newOrder.objectName}`);
-      }
     } catch (error: any) {
       const errorMsg = error.message || 'Не удалось создать заказ.';
       const isNetworkError = !navigator.onLine;
@@ -151,22 +131,15 @@ export function useOrders(userId?: string, role?: string) {
 
       if (role === 'installer') {
         if (isClaimingGeneral) {
-          sendNotification('admin-id', 'Заказ принят', `Монтажник ${currentUserName || 'Кто-то'} взял общий заказ: ${orderToUpdate.objectName}`);
           toast({ title: 'Заказ принят', description: 'Теперь этот объект закреплен за вами.' });
           playNotificationSound();
         } else if (updates.status === 'Отклонен' || updates.status === 'Завершен') {
-          const statusText = updates.status === 'Отклонен' ? 'отклонил' : 'завершил';
-          sendNotification('admin-id', updates.status === 'Отклонен' ? 'Заказ отклонен' : 'Заказ выполнен',
-            `Монтажник ${currentUserName || ''} ${statusText} объект: ${orderToUpdate.objectName}`);
           toast({ title: updates.status === 'Завершен' ? 'Заказ выполнен' : 'Заказ отклонен' });
           playNotificationSound();
         }
       }
 
       if (role === 'admin' && updates.status) {
-        if (orderToUpdate.installerId !== 'general') {
-          sendNotification(orderToUpdate.installerId, 'Статус заказа изменен', `Администратор изменил статус объекта "${orderToUpdate.objectName}" на "${updates.status}"`);
-        }
         toast({ title: 'Заказ обновлен' });
         playNotificationSound();
       }

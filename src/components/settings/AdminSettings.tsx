@@ -22,16 +22,6 @@ export function AdminSettings() {
   const [newPin, setNewPin] = useState('');
   const [isChangingPin, setIsChangingPin] = useState(false);
 
-  useEffect(() => {
-    const loadLogs = () => {
-      const stored = localStorage.getItem('local_access_logs');
-      if (stored) setLogs(JSON.parse(stored));
-    };
-    loadLogs();
-    window.addEventListener('storage', loadLogs);
-    return () => window.removeEventListener('storage', loadLogs);
-  }, []);
-
   const handleAddInstaller = (e: React.FormEvent) => {
     e.preventDefault();
     if (newInstaller.trim()) {

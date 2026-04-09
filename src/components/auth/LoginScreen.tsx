@@ -29,15 +29,6 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
     if (pin === (settings?.adminPin || '1234')) {
       setIsLoggingIn(true);
       setTimeout(() => {
-        const logId = Math.random().toString(36).substr(2, 9);
-        const logs = JSON.parse(localStorage.getItem('local_access_logs') || '[]');
-        logs.unshift({
-          id: logId,
-          timestamp: new Date().toISOString(),
-          accessedByRole: 'Administrator',
-          userName: 'Администратор'
-        });
-        localStorage.setItem('local_access_logs', JSON.stringify(logs.slice(0, 50)));
         onLogin('admin', 'admin-id', 'Администратор');
         setIsLoggingIn(false);
       }, 500);
@@ -50,15 +41,6 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   const handleInstallerLogin = (installer: Installer) => {
     setIsLoggingIn(true);
     setTimeout(() => {
-      const logId = Math.random().toString(36).substr(2, 9);
-      const logs = JSON.parse(localStorage.getItem('local_access_logs') || '[]');
-      logs.unshift({
-        id: logId,
-        timestamp: new Date().toISOString(),
-        accessedByRole: 'Installer',
-        userName: installer.name
-      });
-      localStorage.setItem('local_access_logs', JSON.stringify(logs.slice(0, 50)));
       onLogin('installer', installer.id, installer.name);
       setIsLoggingIn(false);
     }, 500);

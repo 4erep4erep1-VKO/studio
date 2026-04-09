@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { Bell, Check, Trash2, Info } from 'lucide-react';
 import {
   Popover,
@@ -20,75 +20,25 @@ interface NotificationCenterProps {
   currentUserId?: string;
 }
 
-// Базовый звук уведомления (короткий бип)
-const BEEP_SOUND = "data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YTdvT18AZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQ==";
-
 export function NotificationCenter({ currentUserId }: NotificationCenterProps) {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const prevCountRef = useRef(0);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3');
-    }
-  }, []);
-
-  useEffect(() => {
-    const load = () => {
-      const stored = localStorage.getItem('local_notifications');
-      if (stored && currentUserId) {
-        const all: AppNotification[] = JSON.parse(stored);
-        const filtered = all.filter(n => n.userId === currentUserId);
-        
-        // Звуковое сопровождение при новых уведомлениях
-        const prefs = JSON.parse(localStorage.getItem('local_preferences') || '{}');
-        if (filtered.length > prevCountRef.current && prefs.notificationsEnabled) {
-          audioRef.current?.play().catch(() => {
-            // Браузер может блокировать автовоспроизведение без взаимодействия
-            console.log('Audio playback blocked');
-          });
-        }
-        
-        prevCountRef.current = filtered.length;
-        setNotifications(filtered);
-      }
-    };
-    load();
-    window.addEventListener('storage', load);
-    return () => window.removeEventListener('storage', load);
-  }, [currentUserId]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const markAllRead = () => {
-    const stored = localStorage.getItem('local_notifications');
-    if (!stored || !currentUserId) return;
-    const all: AppNotification[] = JSON.parse(stored);
-    const updated = all.map(n => n.userId === currentUserId ? { ...n, read: true } : n);
-    localStorage.setItem('local_notifications', JSON.stringify(updated));
-    setNotifications(updated.filter(n => n.userId === currentUserId));
-    window.dispatchEvent(new Event('storage'));
+    setNotifications(prev =>
+      prev.map(n => ({ ...n, read: true }))
+    );
   };
 
   const clearAll = () => {
-    const stored = localStorage.getItem('local_notifications');
-    if (!stored || !currentUserId) return;
-    const all: AppNotification[] = JSON.parse(stored);
-    const updated = all.filter(n => n.userId !== currentUserId);
-    localStorage.setItem('local_notifications', JSON.stringify(updated));
     setNotifications([]);
-    window.dispatchEvent(new Event('storage'));
   };
 
   const markAsRead = (id: string) => {
-    const stored = localStorage.getItem('local_notifications');
-    if (!stored) return;
-    const all: AppNotification[] = JSON.parse(stored);
-    const updated = all.map(n => n.id === id ? { ...n, read: true } : n);
-    localStorage.setItem('local_notifications', JSON.stringify(updated));
-    setNotifications(updated.filter(n => n.userId === currentUserId));
-    window.dispatchEvent(new Event('storage'));
+    setNotifications(prev =>
+      prev.map(n => n.id === id ? { ...n, read: true } : n)
+    );
   };
 
   return (

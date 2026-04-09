@@ -65,16 +65,7 @@ export default function App() {
   }, [user, isAuthLoading, router]);
 
   useEffect(() => {
-    const storedPrefs = localStorage.getItem('local_preferences');
-    if (storedPrefs) {
-      try {
-        const parsed = JSON.parse(storedPrefs);
-        setPreferences(parsed);
-        applyTheme(parsed.theme);
-      } catch (e) {}
-    } else {
-      applyTheme('system');
-    }
+    applyTheme('system');
   }, []);
 
   const applyTheme = (theme: Theme) => {
@@ -89,7 +80,6 @@ export default function App() {
 
   const handleUpdatePreferences = (newPrefs: UserPreferences) => {
     setPreferences(newPrefs);
-    localStorage.setItem('local_preferences', JSON.stringify(newPrefs));
     applyTheme(newPrefs.theme);
   };
 

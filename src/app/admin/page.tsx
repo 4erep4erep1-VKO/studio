@@ -62,16 +62,7 @@ export default function AdminDashboard() {
   }, [user, isAuthLoading, isAdmin, router]);
 
   useEffect(() => {
-    const storedPrefs = localStorage.getItem('local_preferences');
-    if (storedPrefs) {
-      try {
-        const parsed = JSON.parse(storedPrefs);
-        setPreferences(parsed);
-        applyTheme(parsed.theme);
-      } catch (e) {}
-    } else {
-      applyTheme('system');
-    }
+    applyTheme('system');
   }, []);
 
   const applyTheme = (theme: UserPreferences['theme']) => {

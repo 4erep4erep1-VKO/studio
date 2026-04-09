@@ -2,9 +2,9 @@
 
 ## Core Features:
 
-- Order Creation Form: Administrator can create new orders with details like object name, work description, due date, and assign an installer. Supports drag-and-drop for image uploads, file selection, and direct paste from clipboard. All order data is persisted locally using localStorage.
-- Order Listing & Editing: Display a dynamic list of orders in a clean, card-based or tabular format. Each order includes an 'Edit' button to modify its details via a modal interface. Data is persisted using localStorage.
-- Order Status Management: Ability to change an order's status between 'В работе' (In Progress) and 'Завершен' (Completed). The status changes are saved to localStorage.
+- Order Creation Form: Administrator can create new orders with details like object name, work description, due date, and assign an installer. Supports drag-and-drop for image uploads, file selection, and direct paste from clipboard. All order data is persisted in Supabase.
+- Order Listing & Editing: Display a dynamic list of orders in a clean, card-based or tabular format. Each order includes an 'Edit' button to modify its details via a modal interface. Data is persisted in Supabase.
+- Order Status Management: Ability to change an order's status between 'В работе' (In Progress) and 'Завершен' (Completed). The status changes are saved to Supabase.
 - AI Visual Work Estimator: Utilize generative AI as a tool to analyze uploaded photos and work descriptions for new orders. The AI provides suggestions for potential complexities, required tools, or estimated work duration.
 - Toast Notification System: Implement a subtle, non-intrusive push notification (Toast) system within the interface to inform administrators and installers about new order creation or updates.
 
