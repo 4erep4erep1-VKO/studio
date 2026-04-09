@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Calendar, MoreVertical, Edit2, CheckCircle2, Clock, XCircle, ImageIcon, User, ChevronLeft, ChevronRight, ZoomIn } from 'lucide-react';
+import Image from 'next/image';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -87,10 +88,11 @@ export function OrderCard({ order, onEdit, onStatusChange, role, currentUserName
           onClick={() => hasImages && openPreview(0)}
         >
           {hasImages ? (
-            <img 
+            <Image 
               src={order.imageUrls![0]} 
               alt={order.objectName} 
-              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+              fill
+              className="object-cover transition-transform duration-500 group-hover:scale-105"
             />
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground/30">
@@ -214,11 +216,16 @@ export function OrderCard({ order, onEdit, onStatusChange, role, currentUserName
           <div className="relative w-full h-full flex items-center justify-center p-4">
             {order.imageUrls && (
               <>
-                <img 
-                  src={order.imageUrls[currentImgIndex]} 
-                  alt={`${order.objectName} - фото ${currentImgIndex + 1}`}
-                  className="max-w-full max-h-[85vh] object-contain shadow-2xl"
-                />
+                <div className="relative max-w-full max-h-[85vh] w-auto h-auto">
+                  <Image 
+                    src={order.imageUrls[currentImgIndex]} 
+                    alt={`${order.objectName} - фото ${currentImgIndex + 1}`}
+                    width={800}
+                    height={600}
+                    className="max-w-full max-h-[85vh] object-contain shadow-2xl"
+                    style={{ width: 'auto', height: 'auto' }}
+                  />
+                </div>
                 
                 {order.imageUrls.length > 1 && (
                   <>
