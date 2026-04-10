@@ -481,6 +481,7 @@ function Dashboard({
                 userName={userName}
                 orders={orders}
                 userId={userId}
+                role={role}
               />
             )}
           </div>

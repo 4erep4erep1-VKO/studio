@@ -51,7 +51,11 @@ export function CommentsSection({
   // Подписка на realtime обновления
   useEffect(() => {
     const unsubscribe = subscribeToComments(orderId, (newComment) => {
-      setComments(prev => [...prev, newComment]);
+      setComments((prev) =>
+        prev.some((comment) => comment.id === newComment.id)
+          ? prev
+          : [...prev, newComment]
+      );
     });
 
     return unsubscribe;
@@ -69,7 +73,8 @@ export function CommentsSection({
 
     try {
       setIsSubmitting(true);
-      await addComment(orderId, newComment);
+      const comment = await addComment(orderId, newComment);
+      setComments((prev) => [...prev, comment]);
       setNewComment('');
       toast({ title: 'Комментарий добавлен' });
       playNotificationSound();

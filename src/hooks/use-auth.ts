@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { getInstallerSession } from '@/lib/auth'
 import type { User } from '@supabase/supabase-js'
 
 export function useAuth() {
@@ -15,7 +16,12 @@ export function useAuth() {
       try {
         const { data: { user }, error } = await supabase.auth.getUser()
         if (error) throw error
-        setUser(user)
+        if (user) {
+          setUser(user)
+        } else {
+          const installerSession = getInstallerSession()
+          setUser(installerSession)
+        }
       } catch (err: any) {
         setError(err.message)
         setUser(null)
@@ -28,7 +34,12 @@ export function useAuth() {
 
     // Подписываемся на изменения состояния авторизации
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user || null)
+      if (session?.user) {
+        setUser(session.user)
+      } else {
+        const installerSession = getInstallerSession()
+        setUser(installerSession)
+      }
       setIsLoading(false)
     })
 

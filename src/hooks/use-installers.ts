@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Installer } from '@/lib/types';
+import { useEffect, useState } from 'react';
+import { getProfiles } from '@/lib/api';
+import type { Installer } from '@/lib/types';
 
 const DEFAULT_INSTALLERS: Installer[] = [
   { id: '1', name: 'Иванов Иван' },
@@ -12,6 +13,28 @@ const DEFAULT_INSTALLERS: Installer[] = [
 export function useInstallers() {
   const [installers, setInstallers] = useState<Installer[]>(DEFAULT_INSTALLERS);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const loadInstallers = async () => {
+      setIsLoading(true);
+      try {
+        const profiles = await getProfiles();
+        const installerProfiles = profiles
+          .filter(profile => profile.role === 'installer')
+          .map(({ id, name }) => ({ id, name }));
+
+        if (installerProfiles.length > 0) {
+          setInstallers(installerProfiles);
+        }
+      } catch (error) {
+        setInstallers(DEFAULT_INSTALLERS);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadInstallers();
+  }, []);
 
   const addInstaller = (name: string) => {
     const newInst = { id: Math.random().toString(36).substr(2, 9), name };

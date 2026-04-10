@@ -2,20 +2,23 @@
 
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Mail, Lock, Briefcase, HardHat, Loader2, Eye, EyeOff, AlertCircle } from 'lucide-react'
+import { Mail, Lock, Briefcase, HardHat, Loader2, Eye, EyeOff, AlertCircle, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { signIn, signUp, getCurrentUser } from '@/lib/auth'
+import { signIn, signUp, getCurrentUser, saveInstallerSession, getInstallerSession } from '@/lib/auth'
+import { createProfile, getProfileByEmail } from '@/lib/api'
 
 export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [name, setName] = useState('')
+  const [pin, setPin] = useState('')
   const [role, setRole] = useState<'admin' | 'installer'>('installer')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
@@ -28,7 +31,9 @@ export default function LoginPage() {
     const checkAuth = async () => {
       try {
         const user = await getCurrentUser()
-        if (user) {
+        const installerSession = getInstallerSession()
+
+        if (user || installerSession) {
           router.push('/')
         }
       } catch (err) {
@@ -47,10 +52,31 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      await signIn(email, password)
-      router.push('/')
+      if (role === 'installer') {
+        const profile = await getProfileByEmail(email.trim().toLowerCase())
+
+        if (!profile || profile.role !== 'installer') {
+          throw new Error('Монтажник не найден. Проверьте email.')
+        }
+
+        if (profile.pin !== pin) {
+          throw new Error('Неверный PIN-код')
+        }
+
+        saveInstallerSession({
+          id: profile.id,
+          email: profile.email,
+          user_metadata: { role: 'installer' },
+          name: profile.name,
+        })
+
+        router.push('/')
+      } else {
+        await signIn(email, password)
+        router.push('/')
+      }
     } catch (err: any) {
-      setError(err.message || 'Ошибка входа. Проверьте email и пароль.')
+      setError(err.message || 'Ошибка входа. Проверьте данные и повторите попытку.')
     } finally {
       setIsLoading(false)
     }
@@ -70,18 +96,31 @@ export default function LoginPage() {
       return
     }
 
+    if (!name.trim()) {
+      setError('Укажите имя пользователя')
+      return
+    }
+
     setIsLoading(true)
 
     try {
-      await signUp(email, password, role)
+      await signUp(email.trim().toLowerCase(), password, role)
+      if (role === 'installer') {
+        await createProfile({
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
+          role: 'installer',
+          pin: '0000',
+        })
+      }
+
       setError('')
       setEmail('')
       setPassword('')
       setConfirmPassword('')
+      setName('')
       setTab('signin')
-      // Показываем сообщение об успехе
-      setError('') // Очищаем ошибки
-      alert('Аккаунт создан! Теперь войдите с помощью email и пароля.')
+      alert('Аккаунт создан! Теперь войдите с помощью email и пароля или PIN-кода.')
     } catch (err: any) {
       setError(err.message || 'Ошибка регистрации.')
     } finally {
@@ -130,6 +169,26 @@ export default function LoginPage() {
                   )}
 
                   <div className="space-y-2">
+                    <Label>Роль входа</Label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        className={`py-3 rounded-lg border ${role === 'installer' ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background text-muted-foreground'}`}
+                        onClick={() => setRole('installer')}
+                      >
+                        Монтажник
+                      </button>
+                      <button
+                        type="button"
+                        className={`py-3 rounded-lg border ${role === 'admin' ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background text-muted-foreground'}`}
+                        onClick={() => setRole('admin')}
+                      >
+                        Администратор
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
                     <Label htmlFor="email-signin">Email</Label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -146,29 +205,49 @@ export default function LoginPage() {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="password-signin">Пароль</Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <input
-                        id="password-signin"
-                        type={showPassword ? 'text' : 'password'}
-                        placeholder="••••••••"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="w-full pl-10 pr-10 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
-                        required
-                        disabled={isLoading}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
+                  {role === 'installer' ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="pin-signin">PIN-код</Label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="pin-signin"
+                          type="password"
+                          placeholder="0000"
+                          value={pin}
+                          onChange={(e) => setPin(e.target.value)}
+                          className="pl-10"
+                          required
+                          disabled={isLoading}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground">Для монтажника вход выполняется по email и PIN-коду.</p>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Label htmlFor="password-signin">Пароль</Label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <input
+                          id="password-signin"
+                          type={showPassword ? 'text' : 'password'}
+                          placeholder="••••••••"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="w-full pl-10 pr-10 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+                          required
+                          disabled={isLoading}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? (
@@ -210,6 +289,23 @@ export default function LoginPage() {
                         placeholder="your@email.com"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
+                        className="pl-10"
+                        required
+                        disabled={isLoading}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="name-signup">Имя</Label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="name-signup"
+                        type="text"
+                        placeholder="Иван Иванов"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
                         className="pl-10"
                         required
                         disabled={isLoading}

@@ -21,6 +21,14 @@ export interface Installer {
   phone?: string;
 }
 
+export interface Profile {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'installer';
+  pin: string;
+}
+
 export interface AccessLog {
   id: string;
   timestamp: string;

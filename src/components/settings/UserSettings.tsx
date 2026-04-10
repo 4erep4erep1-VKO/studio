@@ -1,14 +1,16 @@
-
 "use client";
 
-import React from 'react';
-import { Moon, Sun, Monitor, Bell, BellOff, User, Palette } from 'lucide-react';
+import React, { useState } from 'react';
+import { Moon, Sun, Monitor, Bell, BellOff, User, Palette, Lock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Theme, UserPreferences, Order } from '@/lib/types';
+import { Theme, UserPreferences, Order, UserRole } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
+import { updateProfilePin, getProfileById } from '@/lib/api';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 interface UserSettingsProps {
   preferences: UserPreferences;
@@ -16,10 +18,15 @@ interface UserSettingsProps {
   userName: string;
   orders: Order[];
   userId: string;
+  role: UserRole;
 }
 
-export function UserSettings({ preferences, onUpdatePreferences, userName, orders, userId }: UserSettingsProps) {
+export function UserSettings({ preferences, onUpdatePreferences, userName, orders, userId, role }: UserSettingsProps) {
   const { toast } = useToast();
+  const [newPin, setNewPin] = useState('')
+  const [pinError, setPinError] = useState('')
+  const [isChangingPin, setIsChangingPin] = useState(false)
+  const [isUpdatingPin, setIsUpdatingPin] = useState(false)
 
   // Фильтруем заказы именно этого пользователя (исключая общие, если он их не взял)
   const myOrders = orders.filter(o => o.installerId === userId);
@@ -40,6 +47,37 @@ export function UserSettings({ preferences, onUpdatePreferences, userName, order
       title: enabled ? "Уведомления включены" : "Уведомления выключены",
       description: enabled ? "Вы будете получать сообщения о новых задачах." : "Звуковые сигналы и пуши отключены.",
     });
+  };
+
+  const handleUpdatePin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPinError('');
+
+    if (newPin.trim().length < 4) {
+      setPinError('PIN должен содержать минимум 4 цифры');
+      return;
+    }
+
+    setIsUpdatingPin(true);
+
+    try {
+      const profile = await getProfileById(userId);
+      if (!profile) {
+        throw new Error('Профиль не найден. Попробуйте позже.');
+      }
+
+      await updateProfilePin(profile.id, newPin.trim());
+      setNewPin('');
+      setIsChangingPin(false);
+      toast({
+        title: 'PIN-код изменён',
+        description: 'Новый PIN успешно сохранён.',
+      });
+    } catch (err: any) {
+      setPinError(err.message || 'Не удалось обновить PIN.');
+    } finally {
+      setIsUpdatingPin(false);
+    }
   };
 
   return (
@@ -98,6 +136,44 @@ export function UserSettings({ preferences, onUpdatePreferences, userName, order
           </div>
         </CardContent>
       </Card>
+
+      {role === 'installer' && (
+        <Card className="border-border/50 overflow-hidden">
+          <CardHeader className="bg-secondary/10 pb-6">
+            <div className="flex items-center gap-3">
+              <Lock className="w-5 h-5 text-primary" />
+              <div>
+                <CardTitle className="text-xl font-headline">Смена PIN-кода</CardTitle>
+                <CardDescription>Измените PIN, который используется для входа монтажника.</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-6 space-y-4">
+            <form onSubmit={handleUpdatePin} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="new-pin">Новый PIN</Label>
+                <Input
+                  id="new-pin"
+                  type="password"
+                  placeholder="••••"
+                  value={newPin}
+                  onChange={(e) => {
+                    setNewPin(e.target.value)
+                    setPinError('')
+                  }}
+                  disabled={isUpdatingPin}
+                />
+                {pinError && <p className="text-xs text-destructive">{pinError}</p>}
+              </div>
+              <div className="flex justify-end">
+                <Button type="submit" disabled={isUpdatingPin || newPin.trim().length < 4}>
+                  {isUpdatingPin ? 'Сохраняем...' : 'Сохранить PIN'}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="border-border/50 bg-primary/5">
         <CardContent className="p-6">

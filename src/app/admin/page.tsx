@@ -171,6 +171,13 @@ function AdminDashboardContent({
             >
               <BarChart3 className="w-4 h-4" /> Панель управления
             </Button>
+            <Button
+              variant="secondary"
+              className="w-full justify-start gap-3 bg-secondary/10 text-foreground"
+              onClick={() => window.location.href = '/admin/team'}
+            >
+              <Users className="w-4 h-4" /> Управление командой
+            </Button>
           </nav>
 
           <div className="p-4 border-t border-border mt-auto">

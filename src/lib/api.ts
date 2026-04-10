@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Order as AppOrder, Comment } from '@/lib/types'
+import type { Order as AppOrder, Comment, Profile } from '@/lib/types'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -85,6 +85,102 @@ export async function createOrder(order: Partial<AppOrder>): Promise<AppOrder> {
     throw new Error(
       err.message || 'Не удалось создать заказ. Проверьте данные и повторите попытку.'
     )
+  }
+}
+
+export async function getProfiles(): Promise<Profile[]> {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      console.warn('Profiles table unavailable or error:', error.message)
+      return []
+    }
+
+    return (data as Profile[]) || []
+  } catch (err: any) {
+    console.warn('Ошибка получения профилей:', err.message)
+    return []
+  }
+}
+
+export async function createProfile(profile: Omit<Profile, 'id'>): Promise<Profile> {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .insert({ ...profile, created_at: new Date().toISOString() })
+      .select()
+      .single()
+
+    if (error) {
+      throw new Error(error.message || 'Ошибка создания профиля')
+    }
+
+    return data as Profile
+  } catch (err: any) {
+    throw new Error(err.message || 'Не удалось создать профиль. Проверьте данные и повторите попытку.')
+  }
+}
+
+export async function updateProfilePin(id: string, pin: string): Promise<Profile> {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ pin })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) {
+      throw new Error(error.message || 'Ошибка обновления PIN-кода')
+    }
+
+    return data as Profile
+  } catch (err: any) {
+    throw new Error(err.message || 'Не удалось обновить PIN-код. Попробуйте еще раз.')
+  }
+}
+
+export async function getProfileByEmail(email: string): Promise<Profile | null> {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('email', email)
+      .single()
+
+    if (error) {
+      if (error.details?.includes('Не найдено')) return null
+      throw error
+    }
+
+    return data as Profile
+  } catch (err: any) {
+    console.warn('Ошибка поиска профиля по email:', err.message)
+    return null
+  }
+}
+
+export async function getProfileById(id: string): Promise<Profile | null> {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    if (error) {
+      if (error.details?.includes('Не найдено')) return null
+      throw error
+    }
+
+    return data as Profile
+  } catch (err: any) {
+    console.warn('Ошибка поиска профиля по id:', err.message)
+    return null
   }
 }
 

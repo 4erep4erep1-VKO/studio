@@ -57,36 +57,16 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
 
   const currentInstallerId = watch('installerId');
 
-  // Создаём URL preview для File объектов
+  // Cleanup blob URLs on unmount
   useEffect(() => {
-    const previews: { [key: number]: string } = {};
-    let count = 0;
-
-    files.forEach((file, idx) => {
-      if (file.preview) {
-        previews[idx] = file.preview;
-        count++;
-      } else {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          file.preview = reader.result as string;
-          count++;
-          if (count === files.length) {
-            setFiles([...files]);
-          }
-        };
-        reader.readAsDataURL(file);
-      }
-    });
-
     return () => {
       files.forEach(file => {
-        if (file.preview) {
+        if (file.preview && file.preview.startsWith('blob:')) {
           URL.revokeObjectURL(file.preview);
         }
       });
     };
-  }, []);
+  }, [files]);
 
   // Обработка вставки из буфера обмена (Ctrl+V)
   useEffect(() => {
@@ -98,7 +78,8 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
         if (items[i].type.indexOf('image') !== -1) {
           const blob = items[i].getAsFile();
           if (blob) {
-            const file = new File([blob], `screenshot-${Date.now()}.png`, { type: 'image/png' });
+            const file = new File([blob], `screenshot-${Date.now()}.png`, { type: 'image/png' }) as FileWithPreview;
+            file.preview = URL.createObjectURL(file);
             setFiles(prev => [...prev, file]);
             toast({ title: "Изображение вставлено", description: "Скриншот добавлен к заказу." });
           }
@@ -114,18 +95,25 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
     const newFiles = e.target.files;
     if (!newFiles) return;
 
-    Array.from(newFiles).forEach(file => {
-      setFiles(prev => [...prev, file as FileWithPreview]);
+    const filesWithPreview: FileWithPreview[] = Array.from(newFiles).map((file) => {
+      const fileWithPreview = file as FileWithPreview;
+      fileWithPreview.preview = URL.createObjectURL(file);
+      return fileWithPreview;
     });
+
+    setFiles((prev) => [...prev, ...filesWithPreview]);
+    e.target.value = '';
   };
 
   const removeImage = (index: number) => {
-    setFiles(prev => {
+    setFiles((prev) => {
+      const fileToRemove = prev[index];
       const updated = prev.filter((_, i) => i !== index);
-      // Очищаем blob URL старого файла
-      if (prev[index].preview) {
-        URL.revokeObjectURL(prev[index].preview!);
+
+      if (fileToRemove?.preview && fileToRemove.preview.startsWith('blob:')) {
+        URL.revokeObjectURL(fileToRemove.preview);
       }
+
       return updated;
     });
   };
@@ -149,6 +137,15 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
       });
 
       const imageUrls = await Promise.all(uploadPromises);
+
+      // Обновляем превью на реальные URL и очищаем blob URLs
+      files.forEach((file, idx) => {
+        if (file.preview) {
+          URL.revokeObjectURL(file.preview);
+        }
+        file.preview = imageUrls[idx];
+      });
+      setFiles([...files]);
 
       // Отправляем данные формы с URL изображений
       onSubmit({ ...data, imageUrls });

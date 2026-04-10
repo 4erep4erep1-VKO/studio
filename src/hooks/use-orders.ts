@@ -125,8 +125,8 @@ export function useOrders(userId?: string, role?: string) {
       if (!orderToUpdate) return;
 
       const isClaimingGeneral = orderToUpdate.installerId === 'general' && updates.installerId && updates.installerId !== 'general';
+      orderEventRef.current.lastUpdatedOrderId = orderId;
       const updatedOrder = await updateOrderApi(orderId, updates);
-      orderEventRef.current.lastUpdatedOrderId = updatedOrder.id;
       await loadOrders();
 
       if (role === 'installer') {
