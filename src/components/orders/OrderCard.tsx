@@ -92,6 +92,7 @@ export function OrderCard({ order, onEdit, onStatusChange, role, currentUserName
               src={order.imageUrls![0]} 
               alt={order.objectName} 
               fill
+              sizes="(max-width: 768px) 100vw, 33vw"
               className="object-cover transition-transform duration-500 group-hover:scale-105"
             />
           ) : (
@@ -222,6 +223,7 @@ export function OrderCard({ order, onEdit, onStatusChange, role, currentUserName
                     alt={`${order.objectName} - фото ${currentImgIndex + 1}`}
                     width={800}
                     height={600}
+                    sizes="(max-width: 768px) 100vw, 33vw"
                     className="max-w-full max-h-[85vh] object-contain shadow-2xl"
                     style={{ width: 'auto', height: 'auto' }}
                   />

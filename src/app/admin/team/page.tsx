@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { useAuth } from '@/hooks/use-auth'
 import { useProfiles } from '@/hooks/use-profiles'
 import { createProfile, updateProfilePin } from '@/lib/api'
+import { createUserWithAdmin } from '@/lib/auth'
 import { useToast } from '@/hooks/use-toast'
 
 export default function AdminTeamPage() {
@@ -49,7 +50,15 @@ export default function AdminTeamPage() {
 
     setIsSubmitting(true)
     try {
+      const authResult = await createUserWithAdmin(email.trim().toLowerCase(), '000000', name.trim(), role)
+      const userId = authResult.user?.id
+
+      if (!userId) {
+        throw new Error('Не удалось получить ID пользователя после создания.')
+      }
+
       await createProfile({
+        id: userId,
         name: name.trim(),
         email: email.trim().toLowerCase(),
         role,
@@ -65,7 +74,10 @@ export default function AdminTeamPage() {
       })
       await refresh()
     } catch (err: any) {
-      setError(err.message || 'Не удалось создать профиль.')
+      console.error('Ошибка при создании пользователя команды:', err)
+      const message = err.message || 'Не удалось создать пользователя.'
+
+      setError(message)
     } finally {
       setIsSubmitting(false)
     }

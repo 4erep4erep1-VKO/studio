@@ -1,16 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
+import { supabase } from '@/lib/supabase'
 import type { Order as AppOrder, Comment, Profile } from '@/lib/types'
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    'Missing Supabase environment variables: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY'
-  )
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 export type Order = AppOrder
 
@@ -22,6 +11,7 @@ type SupabaseOrderRow = {
   image_urls: string[]
   assigned_to: string
   created_at: string
+  due_date: string | null
 }
 
 const mapRowToOrder = (row: SupabaseOrderRow): AppOrder => ({
@@ -33,7 +23,7 @@ const mapRowToOrder = (row: SupabaseOrderRow): AppOrder => ({
   installerId: row.assigned_to || 'general',
   createdAt: row.created_at,
   updatedAt: row.created_at,
-  dueDate: row.created_at,
+  dueDate: row.due_date || row.created_at,
 })
 
 const mapOrderToRow = (order: Partial<AppOrder>) => ({
@@ -42,6 +32,7 @@ const mapOrderToRow = (order: Partial<AppOrder>) => ({
   status: order.status || 'В работе',
   image_urls: order.imageUrls || [],
   assigned_to: order.installerId || 'general',
+  due_date: order.dueDate || null,
 })
 
 export async function getOrders(): Promise<AppOrder[]> {
@@ -92,7 +83,7 @@ export async function getProfiles(): Promise<Profile[]> {
   try {
     const { data, error } = await supabase
       .from('profiles')
-      .select('*')
+      .select('id, name, email, role, pin, created_at, updated_at')
       .order('created_at', { ascending: true })
 
     if (error) {
@@ -107,7 +98,7 @@ export async function getProfiles(): Promise<Profile[]> {
   }
 }
 
-export async function createProfile(profile: Omit<Profile, 'id'>): Promise<Profile> {
+export async function createProfile(profile: Omit<Profile, 'created_at' | 'updated_at'>): Promise<Profile> {
   try {
     const { data, error } = await supabase
       .from('profiles')
@@ -166,20 +157,32 @@ export async function getProfileByEmail(email: string): Promise<Profile | null> 
 
 export async function getProfileById(id: string): Promise<Profile | null> {
   try {
+    console.log('🔍 getProfileById called for ID:', id);
+
     const { data, error } = await supabase
       .from('profiles')
-      .select('*')
+      .select('id, name, email, role, pin, created_at, updated_at')
       .eq('id', id)
       .single()
 
     if (error) {
-      if (error.details?.includes('Не найдено')) return null
+      console.warn('⚠️ getProfileById error:', error);
+      console.warn('⚠️ Error details:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
+      if (error.details?.includes('Не найдено') || error.code === 'PGRST116') return null
       throw error
     }
 
+    console.log('✅ getProfileById success:', data);
+    console.log('✅ Profile role:', data?.role);
     return data as Profile
   } catch (err: any) {
-    console.warn('Ошибка поиска профиля по id:', err.message)
+    console.error('❌ getProfileById exception:', err.message)
+    console.error('❌ Exception details:', err)
     return null
   }
 }
@@ -221,6 +224,7 @@ export async function updateOrder(
     if (updates.status !== undefined) payload.status = updates.status
     if (updates.imageUrls !== undefined) payload.image_urls = updates.imageUrls
     if (updates.installerId !== undefined) payload.assigned_to = updates.installerId
+    if (updates.dueDate !== undefined) payload.due_date = updates.dueDate
 
     if (Object.keys(payload).length === 0) {
       throw new Error('Не внесены изменения.')

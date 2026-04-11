@@ -4,10 +4,18 @@ import { Toaster } from "@/components/ui/toaster";
 import PWARegister from '@/components/PWARegister';
 
 export const metadata: Metadata = {
-  title: 'MontazhkaPRO v 3.0 | Система управления рекламным монтажом',
-  description: 'Профессиональное решение для управления заказами, монтажниками и отчетностью. Локальная версия с поддержкой фото и уведомлений.',
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0',
+  title: 'Монтажка ПРО',
 };
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+}
+
+export const metadata = {
+  title: 'Монтажка ПРО',
+  // ... остальные настройки
+}
 
 export default function RootLayout({
   children,
@@ -15,7 +23,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ru">
+    <html lang="ru" data-scroll-behavior="smooth">
       <head>
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#0f172a" />

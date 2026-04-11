@@ -1,20 +1,59 @@
-import { supabase } from './supabase'
+import { supabase, supabaseAdmin } from './supabase'
 
-const INSTALLER_SESSION_KEY = 'installer-session'
+export async function signUp(email: string, password: string, name: string, role: 'admin' | 'installer' = 'installer') {
+  console.log('🔍 signUp called with:', { email, name, role });
 
-export async function signUp(email: string, password: string, role: 'admin' | 'installer' = 'installer') {
-  const { data, error } = await supabase.auth.signUp({
+  const signUpData = {
     email,
     password,
     options: {
       data: {
+        name,
         role,
       },
     },
-  })
+  };
 
-  if (error) throw error
-  return data
+  console.log('📤 Sending to Supabase:', JSON.stringify(signUpData, null, 2));
+
+  const { data, error } = await supabase.auth.signUp(signUpData);
+
+  if (error) {
+    console.error('❌ Supabase signUp error:', error);
+    throw error;
+  }
+
+  console.log('✅ Supabase signUp success:', data);
+  console.log('👤 User metadata:', data.user?.user_metadata);
+
+  return data;
+}
+
+export async function createUserWithAdmin(email: string, password: string, name: string, role: 'admin' | 'installer' = 'installer') {
+  if (!supabaseAdmin) {
+    throw new Error('Admin client not configured. Please set SUPABASE_SERVICE_ROLE_KEY environment variable.')
+  }
+
+  console.log('🔍 createUserWithAdmin called with:', { email, name, role });
+
+  const { data, error } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password,
+    user_metadata: {
+      name,
+      role,
+    },
+    email_confirm: true, // Автоматически подтверждаем email
+  });
+
+  if (error) {
+    console.error('❌ Admin createUser error:', error);
+    throw error;
+  }
+
+  console.log('✅ Admin createUser success:', data);
+
+  return data;
 }
 
 export async function signIn(email: string, password: string) {
@@ -28,8 +67,6 @@ export async function signIn(email: string, password: string) {
 }
 
 export async function signOut() {
-  clearInstallerSession()
-
   const { error } = await supabase.auth.signOut()
   if (error) throw error
 }
@@ -38,28 +75,6 @@ export async function getCurrentUser() {
   const { data: { user }, error } = await supabase.auth.getUser()
   if (error) throw error
   return user
-}
-
-export function saveInstallerSession(session: any) {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(INSTALLER_SESSION_KEY, JSON.stringify(session))
-}
-
-export function getInstallerSession() {
-  if (typeof window === 'undefined') return null
-  const raw = window.localStorage.getItem(INSTALLER_SESSION_KEY)
-  if (!raw) return null
-
-  try {
-    return JSON.parse(raw)
-  } catch {
-    return null
-  }
-}
-
-export function clearInstallerSession() {
-  if (typeof window === 'undefined') return
-  window.localStorage.removeItem(INSTALLER_SESSION_KEY)
 }
 
 export async function updateUserRole(role: 'admin' | 'installer') {

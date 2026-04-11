@@ -1,15 +1,17 @@
 {
   "entities": {
-    "Installer": {
-      "title": "Installer",
+    "Profile": {
+      "title": "Profile",
       "type": "object",
-      "description": "Represents an individual installer.",
+      "description": "User profile with role information",
       "properties": {
         "id": { "type": "string" },
         "name": { "type": "string" },
-        "email": { "type": "string", "format": "email" }
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["admin", "installer"] },
+        "pin": { "type": "string" }
       },
-      "required": ["id", "name"]
+      "required": ["id", "name", "email", "role"]
     },
     "Order": {
       "title": "Order",
@@ -17,24 +19,38 @@
       "description": "Represents a single work order.",
       "properties": {
         "id": { "type": "string" },
-        "objectName": { "type": "string" },
-        "workDescription": { "type": "string" },
-        "imageUrls": { "type": "array", "items": { "type": "string" } },
-        "dueDate": { "type": "string", "format": "date" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "image_urls": { "type": "array", "items": { "type": "string" } },
+        "due_date": { "type": "string", "format": "date", "nullable": true },
         "status": { "type": "string" },
-        "installerId": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "updatedAt": { "type": "string", "format": "date-time" }
+        "assigned_to": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
       },
-      "required": ["id", "objectName", "workDescription", "dueDate", "status", "installerId", "createdAt"]
+      "required": ["id", "title", "description", "status", "assigned_to", "created_at"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "type": "object",
+      "description": "Comment on a work order",
+      "properties": {
+        "id": { "type": "string" },
+        "order_id": { "type": "string" },
+        "user_id": { "type": "string" },
+        "user_name": { "type": "string" },
+        "message": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "order_id", "user_id", "user_name", "message", "created_at"]
     }
   },
+  "database": "Supabase (PostgreSQL)",
   "auth": {
-    "providers": ["anonymous", "password"]
+    "provider": "Supabase Auth",
+    "methods": ["email/password", "roles from profiles table"]
   },
-  "firestore": {
-    "/installers/{id}": { "schema": "Installer", "description": "Installer profiles" },
-    "/orders/{id}": { "schema": "Order", "description": "Work orders" },
-    "/notifications/{id}": { "schema": "Notification", "description": "User notifications" }
+  "storage": {
+    "order_photos": "Supabase Storage bucket for order images",
+    "public_url_pattern": "https://yourproject.supabase.co/storage/v1/object/public/order-photos/{filename}"
   }
 }

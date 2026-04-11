@@ -27,6 +27,8 @@ export interface Profile {
   email: string;
   role: 'admin' | 'installer';
   pin: string;
+  created_at?: string;  // Добавлено поле created_at
+  updated_at?: string;  // Добавлено поле updated_at
 }
 
 export interface AccessLog {
