@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = 'https://ehrfzwhawnqyocbthjmb.supabase.co';
-const supabaseAnonKey = 'sb_publishable_moDelfX657G_mZF4l5BiFw_em5STZQP';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 // 1. Обычный клиент с нашими настройками против зависаний сессии
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
