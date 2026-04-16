@@ -1,49 +1,90 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getProfiles } from '@/lib/api';
-import type { Installer } from '@/lib/types';
-
-const DEFAULT_INSTALLERS: Installer[] = [
-  { id: '1', name: 'Иванов Иван' },
-  { id: '2', name: 'Петров Петр' },
-  { id: '3', name: 'Сидоров Сидор' }
-];
+import { supabase } from '@/lib/supabase';
 
 export function useInstallers() {
-  const [installers, setInstallers] = useState<Installer[]>(DEFAULT_INSTALLERS);
+  const [installers, setInstallers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  // 1. Загрузка списка монтажников
+  const loadInstallers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('role', 'installer')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setInstallers(data || []);
+    } catch (error: any) {
+      console.error('Ошибка при загрузке списка:', error.message);
+    }
+  };
+
   useEffect(() => {
-    const loadInstallers = async () => {
-      setIsLoading(true);
-      try {
-        const profiles = await getProfiles();
-        const installerProfiles = profiles
-          .filter(profile => profile.role === 'installer')
-          .map(({ id, name }) => ({ id, name }));
-
-        if (installerProfiles.length > 0) {
-          setInstallers(installerProfiles);
-        }
-      } catch (error) {
-        setInstallers(DEFAULT_INSTALLERS);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     loadInstallers();
   }, []);
 
-  const addInstaller = (name: string) => {
-    const newInst = { id: Math.random().toString(36).substr(2, 9), name };
-    setInstallers(prev => [...prev, newInst]);
+  // 2. Добавление нового монтажника
+  const addInstaller = async (formData: any) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/admin/create-installer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Ошибка при создании');
+      }
+
+      alert(`Монтажник ${formData.name} успешно добавлен!`);
+      await loadInstallers();
+      return { success: true };
+    } catch (error: any) {
+      alert('Ошибка: ' + error.message);
+      return { success: false };
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const removeInstaller = (id: string) => {
-    setInstallers(prev => prev.filter(i => i.id !== id));
+  // 3. Удаление монтажника
+  const removeInstaller = async (id: string) => {
+    if (!confirm('Удалить этого сотрудника из системы?')) return;
+
+    setIsLoading(true);
+    try {
+      // Отправляем запрос на наш новый API роут для удаления
+      const response = await fetch(`/api/admin/delete-installer?id=${id}`, {
+        method: 'DELETE',
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Ошибка при удалении');
+      }
+
+      alert('Монтажник полностью удален из системы');
+      await loadInstallers(); // Обновляем список на экране
+    } catch (error: any) {
+      console.error('Ошибка удаления:', error.message);
+      alert('Не удалось удалить: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  return { installers, isLoading, addInstaller, removeInstaller };
+  return { 
+    installers, 
+    isLoading, 
+    addInstaller, 
+    removeInstaller 
+  };
 }

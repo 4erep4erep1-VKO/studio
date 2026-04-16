@@ -31,8 +31,19 @@ const mapOrderToRow = (order: Partial<AppOrder>) => ({
   description: order.workDescription || '',
   status: order.status || 'В работе',
   image_urls: order.imageUrls || [],
-  assigned_to: order.installerId || 'general',
+  assigned_to: (!order.installerId || order.installerId === 'general') ? null : order.installerId,
   due_date: order.dueDate || null,
+})
+
+// Специальный переводчик для профилей (спасает от NULL и разных названий колонок)
+const mapRowToProfile = (row: any): Profile => ({
+  id: row.id,
+  name: row.full_name || 'Без имени', // БД: full_name -> Фронт: name
+  email: row.email || '',
+  role: row.role || 'installer',
+  pin: row.pin_code || '', // БД: pin_code -> Фронт: pin
+  created_at: row.created_at || new Date().toISOString(),
+  updated_at: row.updated_at || new Date().toISOString()
 })
 
 export async function getOrders(): Promise<AppOrder[]> {
@@ -81,9 +92,10 @@ export async function createOrder(order: Partial<AppOrder>): Promise<AppOrder> {
 
 export async function getProfiles(): Promise<Profile[]> {
   try {
+    // Берем все колонки (*), чтобы избежать ошибки несовпадения имен
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, name, email, role, pin, created_at, updated_at')
+      .select('*')
       .order('created_at', { ascending: true })
 
     if (error) {
@@ -91,7 +103,7 @@ export async function getProfiles(): Promise<Profile[]> {
       return []
     }
 
-    return (data as Profile[]) || []
+    return (data || []).map(mapRowToProfile)
   } catch (err: any) {
     console.warn('Ошибка получения профилей:', err.message)
     return []
@@ -100,9 +112,17 @@ export async function getProfiles(): Promise<Profile[]> {
 
 export async function createProfile(profile: Omit<Profile, 'created_at' | 'updated_at'>): Promise<Profile> {
   try {
+    const rowToInsert = {
+      id: profile.id,
+      full_name: profile.name,
+      email: profile.email,
+      role: profile.role,
+      pin_code: profile.pin,
+      created_at: new Date().toISOString()
+    }
     const { data, error } = await supabase
       .from('profiles')
-      .insert({ ...profile, created_at: new Date().toISOString() })
+      .insert(rowToInsert)
       .select()
       .single()
 
@@ -110,7 +130,7 @@ export async function createProfile(profile: Omit<Profile, 'created_at' | 'updat
       throw new Error(error.message || 'Ошибка создания профиля')
     }
 
-    return data as Profile
+    return mapRowToProfile(data)
   } catch (err: any) {
     throw new Error(err.message || 'Не удалось создать профиль. Проверьте данные и повторите попытку.')
   }
@@ -120,7 +140,7 @@ export async function updateProfilePin(id: string, pin: string): Promise<Profile
   try {
     const { data, error } = await supabase
       .from('profiles')
-      .update({ pin })
+      .update({ pin_code: pin })
       .eq('id', id)
       .select()
       .single()
@@ -129,7 +149,7 @@ export async function updateProfilePin(id: string, pin: string): Promise<Profile
       throw new Error(error.message || 'Ошибка обновления PIN-кода')
     }
 
-    return data as Profile
+    return mapRowToProfile(data)
   } catch (err: any) {
     throw new Error(err.message || 'Не удалось обновить PIN-код. Попробуйте еще раз.')
   }
@@ -148,7 +168,7 @@ export async function getProfileByEmail(email: string): Promise<Profile | null> 
       throw error
     }
 
-    return data as Profile
+    return mapRowToProfile(data)
   } catch (err: any) {
     console.warn('Ошибка поиска профиля по email:', err.message)
     return null
@@ -157,32 +177,20 @@ export async function getProfileByEmail(email: string): Promise<Profile | null> 
 
 export async function getProfileById(id: string): Promise<Profile | null> {
   try {
-    console.log('🔍 getProfileById called for ID:', id);
-
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, name, email, role, pin, created_at, updated_at')
+      .select('*')
       .eq('id', id)
       .single()
 
     if (error) {
-      console.warn('⚠️ getProfileById error:', error);
-      console.warn('⚠️ Error details:', {
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code
-      });
       if (error.details?.includes('Не найдено') || error.code === 'PGRST116') return null
       throw error
     }
 
-    console.log('✅ getProfileById success:', data);
-    console.log('✅ Profile role:', data?.role);
-    return data as Profile
+    return mapRowToProfile(data)
   } catch (err: any) {
     console.error('❌ getProfileById exception:', err.message)
-    console.error('❌ Exception details:', err)
     return null
   }
 }
@@ -303,7 +311,7 @@ export async function uploadImage(file: File): Promise<string> {
     )
   }
 }
-// Comments API
+
 export async function getComments(orderId: string): Promise<Comment[]> {
   try {
     const { data, error } = await supabase

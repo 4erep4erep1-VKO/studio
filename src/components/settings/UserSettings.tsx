@@ -1,193 +1,68 @@
-"use client";
+'use client';
 
-import React, { useState } from 'react';
-import { Moon, Sun, Monitor, Bell, BellOff, User, Palette, Lock } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Theme, UserPreferences, Order, UserRole } from '@/lib/types';
-import { useToast } from '@/hooks/use-toast';
-import { updateProfilePin, getProfileById } from '@/lib/api';
-import { Input } from '@/components/ui/input';
+import { useState } from 'react';
+import { useProfile } from '@/hooks/use-profile';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Lock, ShieldCheck } from 'lucide-react';
 
-interface UserSettingsProps {
-  preferences: UserPreferences;
-  onUpdatePreferences: (prefs: UserPreferences) => void;
-  userName: string;
-  orders: Order[];
-  userId: string;
-  role: UserRole;
-}
+export function UserSettings({ userName, userId, role }: any) {
+  const [newPin, setNewPin] = useState('');
+  const { updatePinCode, isUpdating } = useProfile();
 
-export function UserSettings({ preferences, onUpdatePreferences, userName, orders, userId, role }: UserSettingsProps) {
-  const { toast } = useToast();
-  const [newPin, setNewPin] = useState('')
-  const [pinError, setPinError] = useState('')
-  const [isChangingPin, setIsChangingPin] = useState(false)
-  const [isUpdatingPin, setIsUpdatingPin] = useState(false)
-
-  // Фильтруем заказы именно этого пользователя (исключая общие, если он их не взял)
-  const myOrders = orders.filter(o => o.installerId === userId);
-  const completedCount = myOrders.filter(o => o.status === 'Завершен').length;
-  const inProgressCount = myOrders.filter(o => o.status === 'В работе').length;
-
-  const handleThemeChange = (theme: Theme) => {
-    onUpdatePreferences({ ...preferences, theme });
-    toast({
-      title: "Тема изменена",
-      description: `Выбрана ${theme === 'dark' ? 'темная' : theme === 'light' ? 'светлая' : 'системная'} тема.`,
-    });
-  };
-
-  const handleNotificationsToggle = (enabled: boolean) => {
-    onUpdatePreferences({ ...preferences, notificationsEnabled: enabled });
-    toast({
-      title: enabled ? "Уведомления включены" : "Уведомления выключены",
-      description: enabled ? "Вы будете получать сообщения о новых задачах." : "Звуковые сигналы и пуши отключены.",
-    });
-  };
-
-  const handleUpdatePin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPinError('');
-
-    if (newPin.trim().length < 4) {
-      setPinError('PIN должен содержать минимум 4 цифры');
-      return;
-    }
-
-    setIsUpdatingPin(true);
-
-    try {
-      const profile = await getProfileById(userId);
-      if (!profile) {
-        throw new Error('Профиль не найден. Попробуйте позже.');
-      }
-
-      await updateProfilePin(profile.id, newPin.trim());
-      setNewPin('');
-      setIsChangingPin(false);
-      toast({
-        title: 'PIN-код изменён',
-        description: 'Новый PIN успешно сохранён.',
-      });
-    } catch (err: any) {
-      setPinError(err.message || 'Не удалось обновить PIN.');
-    } finally {
-      setIsUpdatingPin(false);
-    }
+  const handleSavePin = async () => {
+    if (!userId) return;
+    const result = await updatePinCode(userId, newPin);
+    if (result.success) setNewPin('');
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center gap-4 mb-2">
-        <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center text-white shadow-xl shadow-primary/20">
-          <User className="w-8 h-8" />
-        </div>
-        <div>
-          <h2 className="text-3xl font-headline font-bold">{userName}</h2>
-          <p className="text-muted-foreground">Личный кабинет сотрудника</p>
-        </div>
-      </div>
+    <div className="max-w-2xl mx-auto space-y-6 pt-4">
+      <h2 className="text-2xl font-bold mb-6">Настройки профиля</h2>
 
-      <Card className="border-border/50 overflow-hidden">
-        <CardHeader className="bg-secondary/10 pb-6">
-          <div className="flex items-center gap-3">
-            <Palette className="w-5 h-5 text-primary" />
-            <div>
-              <CardTitle className="text-xl font-headline">Интерфейс</CardTitle>
-              <CardDescription>Настройте внешний вид приложения под себя</CardDescription>
-            </div>
-          </div>
+      {/* Карточка данных аккаунта */}
+      <Card className="bg-card shadow-sm border-border">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <ShieldCheck className="text-green-500 w-5 h-5" /> Данные аккаунта
+          </CardTitle>
         </CardHeader>
-        <CardContent className="pt-6 space-y-8">
-          <div className="space-y-4">
-            <Label className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Тема оформления</Label>
-            <Tabs value={preferences.theme} onValueChange={(val) => handleThemeChange(val as Theme)}>
-              <TabsList className="grid grid-cols-3 w-full h-12 bg-secondary/30 p-1">
-                <TabsTrigger value="light" className="gap-2 data-[state=active]:bg-background">
-                  <Sun className="w-4 h-4" /> <span className="hidden sm:inline">Светлая</span>
-                </TabsTrigger>
-                <TabsTrigger value="dark" className="gap-2 data-[state=active]:bg-background">
-                  <Moon className="w-4 h-4" /> <span className="hidden sm:inline">Темная</span>
-                </TabsTrigger>
-                <TabsTrigger value="system" className="gap-2 data-[state=active]:bg-background">
-                  <Monitor className="w-4 h-4" /> <span className="hidden sm:inline">Система</span>
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-
-          <div className="flex items-center justify-between pt-4 border-t border-border/50">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                {preferences.notificationsEnabled ? <Bell className="w-4 h-4 text-primary" /> : <BellOff className="w-4 h-4 text-muted-foreground" />}
-                <Label className="text-base font-medium">Уведомления</Label>
-              </div>
-              <p className="text-sm text-muted-foreground">Получать оповещения о назначенных заказах</p>
-            </div>
-            <Switch 
-              checked={preferences.notificationsEnabled} 
-              onCheckedChange={handleNotificationsToggle}
-              className="data-[state=checked]:bg-primary"
-            />
-          </div>
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p>Пользователь: <span className="text-foreground font-medium">{userName || 'Не указано'}</span></p>
+          <p>Роль: <span className="text-foreground font-medium inline-flex px-2 py-1 bg-blue-500/10 text-blue-500 rounded text-xs mt-1">
+            {role === 'admin' ? 'Администратор' : 'Монтажник'}
+          </span></p>
         </CardContent>
       </Card>
 
-      {role === 'installer' && (
-        <Card className="border-border/50 overflow-hidden">
-          <CardHeader className="bg-secondary/10 pb-6">
-            <div className="flex items-center gap-3">
-              <Lock className="w-5 h-5 text-primary" />
-              <div>
-                <CardTitle className="text-xl font-headline">Смена PIN-кода</CardTitle>
-                <CardDescription>Измените PIN, который используется для входа монтажника.</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-6 space-y-4">
-            <form onSubmit={handleUpdatePin} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="new-pin">Новый PIN</Label>
-                <Input
-                  id="new-pin"
-                  type="password"
-                  placeholder="••••"
-                  value={newPin}
-                  onChange={(e) => {
-                    setNewPin(e.target.value)
-                    setPinError('')
-                  }}
-                  disabled={isUpdatingPin}
-                />
-                {pinError && <p className="text-xs text-destructive">{pinError}</p>}
-              </div>
-              <div className="flex justify-end">
-                <Button type="submit" disabled={isUpdatingPin || newPin.trim().length < 4}>
-                  {isUpdatingPin ? 'Сохраняем...' : 'Сохранить PIN'}
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
-      <Card className="border-border/50 bg-primary/5">
-        <CardContent className="p-6">
-          <h4 className="font-headline font-bold mb-2">Ваша статистика</h4>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-4 bg-background rounded-xl border border-border/50 shadow-sm">
-              <p className="text-xs text-muted-foreground uppercase">Выполнено заказов</p>
-              <p className="text-2xl font-bold text-primary">{completedCount}</p>
-            </div>
-            <div className="p-4 bg-background rounded-xl border border-border/50 shadow-sm">
-              <p className="text-xs text-muted-foreground uppercase">В работе</p>
-              <p className="text-2xl font-bold text-accent">{inProgressCount}</p>
-            </div>
+      {/* Карточка смены ПИН-кода */}
+      <Card className="bg-card shadow-sm border-border">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Lock className="text-yellow-500 w-5 h-5" /> Безопасность
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div>
+            <label className="text-sm text-muted-foreground mb-2 block">Новый ПИН-код (6 цифр)</label>
+            <input
+              type="text"
+              maxLength={6}
+              value={newPin}
+              onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
+              className="w-full bg-background border border-input rounded-xl p-4 text-center text-3xl font-mono outline-none focus:ring-2 focus:ring-primary transition-all"
+              placeholder="000000"
+              disabled={isUpdating}
+            />
           </div>
+          
+          <Button
+            onClick={handleSavePin}
+            disabled={isUpdating || newPin.length < 6}
+            className="w-full py-6 text-base font-bold transition-all active:scale-95"
+          >
+            {isUpdating ? 'СОХРАНЯЕМ...' : 'ОБНОВИТЬ ПИН-КОД'}
+          </Button>
         </CardContent>
       </Card>
     </div>

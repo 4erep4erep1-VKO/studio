@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -57,7 +56,6 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
 
   const currentInstallerId = watch('installerId');
 
-  // Cleanup blob URLs on unmount
   useEffect(() => {
     return () => {
       files.forEach(file => {
@@ -68,7 +66,6 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
     };
   }, [files]);
 
-  // Обработка вставки из буфера обмена (Ctrl+V)
   useEffect(() => {
     const handleGlobalPaste = (e: ClipboardEvent) => {
       const items = e.clipboardData?.items;
@@ -124,31 +121,27 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
 
       if (files.length === 0) {
         onSubmit({ ...data, imageUrls: [] });
-        return;
+      } else {
+        const uploadPromises = files.map(async (file) => {
+          try {
+            return await uploadImage(file);
+          } catch (err: any) {
+            throw new Error(`Файл "${file.name}": ${err.message}`);
+          }
+        });
+
+        const imageUrls = await Promise.all(uploadPromises);
+
+        files.forEach((file, idx) => {
+          if (file.preview) {
+            URL.revokeObjectURL(file.preview);
+          }
+          file.preview = imageUrls[idx];
+        });
+        setFiles([...files]);
+
+        onSubmit({ ...data, imageUrls });
       }
-
-      // Загружаем все файлы параллельно
-      const uploadPromises = files.map(async (file) => {
-        try {
-          return await uploadImage(file);
-        } catch (err: any) {
-          throw new Error(`Файл "${file.name}": ${err.message}`);
-        }
-      });
-
-      const imageUrls = await Promise.all(uploadPromises);
-
-      // Обновляем превью на реальные URL и очищаем blob URLs
-      files.forEach((file, idx) => {
-        if (file.preview) {
-          URL.revokeObjectURL(file.preview);
-        }
-        file.preview = imageUrls[idx];
-      });
-      setFiles([...files]);
-
-      // Отправляем данные формы с URL изображений
-      onSubmit({ ...data, imageUrls });
     } catch (error: any) {
       const errorMsg = error.message || 'Не удалось загрузить изображения.';
       const isNetworkError = !navigator.onLine || errorMsg.includes('network');
@@ -284,4 +277,3 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
     </form>
   );
 }
-
