@@ -1,36 +1,52 @@
 'use client';
-import { useState } from 'react';
 
-export function useProfile() {
+import { useState, useEffect, useCallback } from 'react';
+import { useToast } from '@/hooks/use-toast';
+import { getProfile, updateProfile } from '@/lib/api';
+import type { Profile } from '@/lib/api';
+
+export function useProfile(userId: string) {
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
-  const updatePinCode = async (userId: string, newPin: string) => {
-    if (!newPin || newPin.length < 6) {
-      alert('Ошибка: ПИН должен быть 6 цифр!');
-      return { success: false };
+  const fetchProfile = useCallback(async () => {
+    if (!userId) return;
+    setIsLoading(true);
+    try {
+      const fetchedProfile = await getProfile(userId);
+      setProfile(fetchedProfile);
+      setError(null);
+    } catch (err: any) {
+      const errorMsg = err.message || 'Не удалось загрузить профиль.';
+      setError(errorMsg);
+      toast({ title: 'Ошибка загрузки', description: errorMsg, variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
     }
+  }, [userId, toast]);
 
+  useEffect(() => {
+    fetchProfile();
+  }, [fetchProfile]);
+
+  const updatePinCode = useCallback(async (pin: string) => {
+    if (!userId) return;
     setIsUpdating(true);
     try {
-      // Отправляем запрос на наш серверный API
-      const response = await fetch('/api/user/update-pin', { 
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, newPin }),
-      });
-
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Ошибка');
-
-      alert('ПИН-код изменен успешно!');
-      return { success: true };
-    } catch (error: any) {
-      alert('Ошибка: ' + error.message);
-      return { success: false };
-    } finally {
+      const updatedProfile = await updateProfile(userId, { pin });
+      setProfile(updatedProfile);
+      toast({ title: 'Успех', description: 'Ваш PIN-код успешно обновлен.' });
+    } catch (err: any) {
+      toast({ title: 'Ошибка обновления', description: err.message, variant: 'destructive' });
+      throw err; // Пробрасываем для обработки в форме
+    }
+    finally {
       setIsUpdating(false);
     }
-  };
+  }, [userId, toast]);
 
-  return { updatePinCode, isUpdating };
+  return { profile, isLoading, isUpdating, error, updatePinCode, refetchProfile: fetchProfile };
 }

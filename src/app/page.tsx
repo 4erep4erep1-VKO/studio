@@ -1,57 +1,35 @@
-"use client";
+'use client';
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
-  Plus, Search, LayoutGrid, LogOut, Settings, Briefcase, Filter, 
-  HardHat, Shield, User, Loader2, Menu, X, AlertCircle, 
-  BarChart3, CheckCircle, Clock, Users 
+  Plus, Search, LayoutGrid, LogOut, Settings, Briefcase, 
+  HardHat, Shield, User, Loader2, WifiOff, RefreshCw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useOrders } from '@/hooks/use-orders';
 import { useAuth } from '@/hooks/use-auth';
 import { OrderCardSkeleton } from '@/components/orders/OrderCardSkeleton';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { OrderCard } from '@/components/orders/OrderCard';
 import { OrderForm } from '@/components/orders/OrderForm';
-import { Order, Theme, UserPreferences } from '@/lib/types';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Order } from '@/lib/types';
 import { AdminSettings } from '@/components/settings/AdminSettings';
 import { UserSettings } from '@/components/settings/UserSettings';
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { signOut } from '@/lib/auth';
-import { ConnectionStatus } from '@/components/ConnectionStatus';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useInstallers } from '@/hooks/use-installers';
+
+// ##################################################################
+// ##                   Компонент-обертка App                      ##
+// ##################################################################
 
 export default function App() {
   const router = useRouter();
   const { user, isLoading: isAuthLoading, getRole } = useAuth();
   const [isReady, setIsReady] = useState(false);
-  const [isOnline, setIsOnline] = useState(true);
-  const [preferences, setPreferences] = useState<UserPreferences>({
-    theme: 'system',
-    notificationsEnabled: true
-  });
-
+  
   const role = getRole();
-  const isAdmin = role === 'admin';
-
-  useEffect(() => {
-    setIsOnline(navigator.onLine);
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
 
   useEffect(() => {
     if (!isAuthLoading) {
@@ -62,27 +40,6 @@ export default function App() {
       }
     }
   }, [user, isAuthLoading, router]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const root = window.document.documentElement;
-      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-      root.classList.remove("light", "dark");
-      root.classList.add(systemTheme);
-    }
-  }, []);
-
-  const handleUpdatePreferences = (newPrefs: UserPreferences) => {
-    setPreferences(newPrefs);
-    if (typeof window !== 'undefined') {
-      const root = window.document.documentElement;
-      const actualTheme = newPrefs.theme === 'system' 
-        ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
-        : newPrefs.theme;
-      root.classList.remove("light", "dark");
-      root.classList.add(actualTheme);
-    }
-  };
 
   const handleLogout = async () => {
     try {
@@ -108,12 +65,157 @@ export default function App() {
       role={role}
       userId={user.id}
       userName={user.email || 'Пользователь'}
-      preferences={preferences}
-      onUpdatePreferences={handleUpdatePreferences}
       onLogout={handleLogout}
-      isOnline={isOnline}
     />
   );
+}
+
+// ##################################################################
+// ##                     Основной Dashboard                       ##
+// ##################################################################
+
+function Dashboard({ role, userId, userName, onLogout }: any) {
+  const { orders, isLoading, error, refetchOrders, addOrder, updateOrder } = useOrders(userId, role);
+  const [activeTab, setActiveTab] = useState<'orders' | 'admin-settings' | 'user-settings'>('orders');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<Order | undefined>();
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredOrders = orders.filter(order => 
+    order.objectName.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleFormSubmit = async (data: Partial<Order>) => {
+    try {
+      if (editingOrder) {
+        await updateOrder(editingOrder.id, data);
+      } else {
+        await addOrder(data);
+      }
+      setIsModalOpen(false); // Просто закрываем, real-time сделает остальное
+      setEditingOrder(undefined);
+    } catch (error) {
+      // Ошибки уже обработаны и показаны в виде тоста в хуке useOrders
+      // Оставляем модальное окно открытым для исправления
+    }
+  };
+
+  const openCreateModal = () => {
+    setEditingOrder(undefined);
+    setIsModalOpen(true);
+  }
+
+  const openEditModal = (order: Order) => {
+    setEditingOrder(order);
+    setIsModalOpen(true);
+  }
+
+  return (
+    <div className="flex min-h-screen bg-background">
+      <aside className="w-64 border-r border-border hidden md:flex flex-col bg-card/30 sticky top-0 h-screen">
+        <SidebarContent role={role} userName={userName} activeTab={activeTab} setActiveTab={setActiveTab} onLogout={onLogout} />
+      </aside>
+
+      <main className="flex-1 flex flex-col min-w-0 relative">
+        <header className="h-20 border-b border-border flex items-center justify-between px-6 bg-background/50 sticky top-0 z-30">
+          <div className="relative w-full max-w-xl">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Поиск объектов..." className="pl-10 h-10 bg-secondary/30 border-none w-full" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+          </div>
+          <div className="flex items-center gap-3">
+            <NotificationCenter currentUserId={userId} role={role} orders={orders} />
+            {role === 'admin' && activeTab === 'orders' && (
+              <Button onClick={openCreateModal} className="gap-2">
+                <Plus className="h-4 w-4" /> Создать
+              </Button>
+            )}
+          </div>
+        </header>
+
+        <div className="flex-1 p-6">
+            {isLoading ? (
+                <OrderGridSkeleton />
+            ) : error ? (
+                <ErrorState message={error} onRetry={() => refetchOrders(true)} />
+            ) : (
+                <TabContent 
+                    activeTab={activeTab} 
+                    orders={filteredOrders} 
+                    role={role} 
+                    userId={userId}
+                    userName={userName}
+                    onEditOrder={openEditModal}
+                    onStatusChange={(...args) => updateOrder(args[0], args[1])}
+                />
+            )}
+        </div>
+      </main>
+
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="max-w-4xl p-8">
+          <DialogHeader><DialogTitle>{editingOrder ? 'Редактировать заказ' : 'Создать заказ'}</DialogTitle></DialogHeader>
+          <OrderForm initialData={editingOrder} onSubmit={handleFormSubmit} onCancel={() => setIsModalOpen(false)} />
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ##################################################################
+// ##                   Вспомогательные компоненты                 ##
+// ##################################################################
+
+function TabContent({ activeTab, ...props }: any) {
+    switch (activeTab) {
+        case 'orders':
+            return <OrderGrid {...props} />;
+        case 'admin-settings':
+            return <AdminSettings />;
+        case 'user-settings':
+            return <UserSettings userId={props.userId} userName={props.userName} role={props.role} orders={props.orders} />;
+        default:
+            return null;
+    }
+}
+
+function OrderGrid({ orders, role, onEditOrder, onStatusChange, userId, userName }: any) {
+    return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {orders.map(order => (
+                <OrderCard 
+                    key={order.id} 
+                    order={order} 
+                    role={role} 
+                    onEdit={onEditOrder} 
+                    onStatusChange={(...args) => onStatusChange(order.id, ...args)} 
+                    currentUserId={userId} 
+                    currentUserName={userName} 
+                />
+            ))}
+        </div>
+    );
+}
+
+function OrderGridSkeleton() {
+    return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {[...Array(8)].map((_, i) => <OrderCardSkeleton key={i} />)}
+        </div>
+    );
+}
+
+function ErrorState({ message, onRetry }: { message: string, onRetry: () => void }) {
+    return (
+        <div className="flex flex-col items-center justify-center h-full text-center">
+            <WifiOff className="w-16 h-16 text-destructive mb-4" />
+            <h3 className="text-xl font-semibold mb-2">Ошибка при загрузке данных</h3>
+            <p className="text-muted-foreground mb-6 max-w-sm">{message}</p>
+            <Button onClick={onRetry} className="gap-2">
+                <RefreshCw className="w-4 h-4" />
+                Повторить
+            </Button>
+        </div>
+    );
 }
 
 function SidebarContent({ role, userName, activeTab, setActiveTab, onLogout }: any) {
@@ -151,72 +253,6 @@ function SidebarContent({ role, userName, activeTab, setActiveTab, onLogout }: a
           <Button variant="ghost" size="icon" onClick={onLogout}><LogOut className="w-4 h-4" /></Button>
         </div>
       </div>
-    </div>
-  );
-}
-
-function Dashboard({ role, userId, userName, preferences, onUpdatePreferences, onLogout, isOnline }: any) {
-  const { orders, isLoading, error, addOrder, updateOrder } = useOrders(userId, role || '');
-  const [activeTab, setActiveTab] = useState<'orders' | 'admin-settings' | 'user-settings'>('orders');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingOrder, setEditingOrder] = useState<Order | undefined>();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
-
-  const filteredOrders = orders.filter(order => {
-    const matchesSearch = order.objectName.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || order.status === filterStatus;
-    return matchesSearch && matchesStatus;
-  });
-
-  const handleFormSubmit = async (data: Partial<Order>) => {
-    if (editingOrder) {
-      await updateOrder(editingOrder.id, data);
-    } else {
-      await addOrder(data);
-    }
-    setIsModalOpen(false);
-  };
-
-  return (
-    <div className="flex min-h-screen bg-background">
-      <aside className="w-64 border-r border-border hidden md:flex flex-col bg-card/30 sticky top-0 h-screen">
-        <SidebarContent role={role} userName={userName} activeTab={activeTab} setActiveTab={setActiveTab} onLogout={onLogout} />
-      </aside>
-      <main className="flex-1 flex flex-col min-w-0 relative">
-        <ConnectionStatus isOnline={isOnline} />
-        <header className="h-20 border-b border-border flex items-center justify-between px-6 bg-background/50 sticky top-0 z-30">
-          <div className="relative w-full max-w-xl">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Поиск объектов..." className="pl-10 h-10 bg-secondary/30 border-none w-full" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-          </div>
-          <div className="flex items-center gap-3">
-            {/* ПЕРЕДАЕМ ДАННЫЕ В КОЛОКОЛЬЧИК */}
-            <NotificationCenter currentUserId={userId} role={role} orders={orders} />
-            
-            {role === 'admin' && activeTab === 'orders' && (
-              <Button onClick={() => { setEditingOrder(undefined); setIsModalOpen(true); }} className="gap-2">
-                <Plus className="h-4 w-4" /> Создать
-              </Button>
-            )}
-          </div>
-        </header>
-        <div className="flex-1 p-6">
-          {activeTab === 'orders' ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {isLoading ? <OrderCardSkeleton /> : filteredOrders.map(order => (
-                <OrderCard key={order.id} order={order} role={role} onEdit={(ord) => { setEditingOrder(ord); setIsModalOpen(true); }} onStatusChange={(ord) => updateOrder(order.id, ord, userName)} currentUserId={userId} currentUserName={userName} />
-              ))}
-            </div>
-          ) : activeTab === 'admin-settings' ? <AdminSettings /> : <UserSettings preferences={preferences} onUpdatePreferences={onUpdatePreferences} userName={userName} orders={orders} userId={userId} role={role} />}
-        </div>
-      </main>
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="max-w-4xl p-8">
-          <DialogHeader><DialogTitle>{editingOrder ? 'Редактировать заказ' : 'Создать заказ'}</DialogTitle></DialogHeader>
-          <OrderForm initialData={editingOrder} onSubmit={handleFormSubmit} onCancel={() => setIsModalOpen(false)} />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
