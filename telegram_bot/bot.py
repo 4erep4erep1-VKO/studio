@@ -7,12 +7,10 @@ from supabase import create_client, Client
 # ##                    КОНФИГУРАЦИЯ БОТА                         ##
 # ##################################################################
 
-# ВАЖНО: Замени эти значения на реальные ключи
 TELEGRAM_TOKEN = '8534792728:AAGYtCW0pMo4Z_nu4ulRmzKUZgWPar8Xxhw'
 SUPABASE_URL = 'https://ehrfzwhawnqyocbthjmb.supabase.co'
-SUPABASE_KEY = 'ТВОЙ_ANON_KEY_ОТ_SUPABASE'
+SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVocmZ6d2hhd25xeW9jYnRoam1iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3MzYzNjIsImV4cCI6MjA5MTMxMjM2Mn0.0iQ7ZNoWFyGbmblkN4O5gwo6x8FWC0msbEsCPo1ghyo'
 
-# Инициализация клиентов
 bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher()
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)

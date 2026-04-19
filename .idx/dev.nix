@@ -7,6 +7,8 @@
   packages = [
     pkgs.nodejs_22
     pkgs.zulu
+    pkgs.python3
+    pkgs.python311Packages.pip # Добавляем PIP для управления пакетами
   ];
   # Sets environment variables in the workspace
   env = {};
