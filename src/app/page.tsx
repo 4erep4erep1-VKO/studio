@@ -122,7 +122,7 @@ function Dashboard({ role, userId, userName, onLogout, isOnline }: DashboardProp
       setIsModalOpen(false);
       setEditingOrder(undefined);
     } catch (error) {
-      // Errors are handled by the useOrders hook
+      console.error("Error submitting form:", error);
     }
   };
 
@@ -163,7 +163,7 @@ function Dashboard({ role, userId, userName, onLogout, isOnline }: DashboardProp
             {isLoading && !error ? (
                 <OrderGridSkeleton />
             ) : error ? (
-                <ErrorState message={error} onRetry={() => refetchOrders(true)} />
+                <ErrorState message={error as string} onRetry={() => refetchOrders(true)} />
             ) : (
                 <TabContent 
                     activeTab={activeTab} 
@@ -172,7 +172,7 @@ function Dashboard({ role, userId, userName, onLogout, isOnline }: DashboardProp
                     userId={userId}
                     userName={userName}
                     onEditOrder={openEditModal}
-                    onStatusChange={(...args) => updateOrder(args[0], args[1])}
+                    onStatusChange={(...args: any[]) => updateOrder(args[0], args[1])}
                 />
             )}
         </div>
@@ -190,7 +190,17 @@ function Dashboard({ role, userId, userName, onLogout, isOnline }: DashboardProp
 
 // ... (rest of the components are unchanged)
 
-function TabContent({ activeTab, ...props }: any) {
+interface TabContentProps {
+    activeTab: 'orders' | 'admin-settings' | 'user-settings';
+    orders: Order[];
+    role: string;
+    userId: string;
+    userName: string;
+    onEditOrder: (order: Order) => void;
+    onStatusChange: (id: string, status: string) => void;
+}
+
+function TabContent({ activeTab, ...props }: TabContentProps) {
     switch (activeTab) {
         case 'orders':
             return <OrderGrid {...props} />;
@@ -203,7 +213,16 @@ function TabContent({ activeTab, ...props }: any) {
     }
 }
 
-function OrderGrid({ orders, role, onEditOrder, onStatusChange, userId, userName }: any) {
+interface OrderGridProps {
+    orders: Order[];
+    role: string;
+    onEditOrder: (order: Order) => void;
+    onStatusChange: (id: string, status: string) => void;
+    userId: string;
+    userName: string;
+}
+
+function OrderGrid({ orders, role, onEditOrder, onStatusChange, userId, userName }: OrderGridProps) {
     return (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {orders.map(order => (
@@ -212,7 +231,7 @@ function OrderGrid({ orders, role, onEditOrder, onStatusChange, userId, userName
                     order={order} 
                     role={role} 
                     onEdit={onEditOrder} 
-                    onStatusChange={(...args) => onStatusChange(order.id, ...args)} 
+                    onStatusChange={(status: string) => onStatusChange(order.id, status)} 
                     currentUserId={userId} 
                     currentUserName={userName} 
                 />
@@ -243,7 +262,15 @@ function ErrorState({ message, onRetry }: { message: string, onRetry: () => void
     );
 }
 
-function SidebarContent({ role, userName, activeTab, setActiveTab, onLogout }: any) {
+interface SidebarContentProps {
+    role: string;
+    userName: string;
+    activeTab: 'orders' | 'admin-settings' | 'user-settings';
+    setActiveTab: (tab: 'orders' | 'admin-settings' | 'user-settings') => void;
+    onLogout: () => void;
+}
+
+function SidebarContent({ role, userName, activeTab, setActiveTab, onLogout }: SidebarContentProps) {
   const isAdmin = role === 'admin';
   return (
     <div className="flex flex-col h-full">
