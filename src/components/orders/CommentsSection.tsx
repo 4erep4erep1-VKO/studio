@@ -82,7 +82,7 @@ export function CommentsSection({
       console.error('Ошибка добавления комментария:', error);
       toast({
         title: 'Ошибка добавления комментария',
-        description: error?.message || 'Попробуйте ещё раз.',
+        description: error?.message || 'Попробуйте снова.',
         variant: 'destructive',
       });
     } finally {
@@ -163,7 +163,7 @@ export function CommentsSection({
             <Textarea
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}
-              placeholder="Напишите комментарий..."
+              placeholder="Ваш комментарий..."
               className="min-h-[60px] resize-none"
               disabled={isSubmitting}
             />

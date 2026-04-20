@@ -11,7 +11,7 @@ import { useInstallers } from '@/hooks/use-installers';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface LoginScreenProps {
-  onLogin: (role: UserRole, id: string, name: string) => void;
+  onLogin: (role: UserRole, id: string, name:string) => void;
 }
 
 export function LoginScreen({ onLogin }: LoginScreenProps) {
@@ -64,7 +64,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
         <div className="max-w-md w-full space-y-8 text-center">
           <div className="space-y-2">
             <h1 className="text-4xl font-headline font-bold text-primary">MontazhkaPRO v 3.0</h1>
-            <p className="text-muted-foreground uppercase tracking-widest text-xs">Профессиональная система управления монтажом</p>
+            <p className="text-muted-foreground uppercase tracking-widest text-xs">Профессиональная система для управления монтажными работами</p>
           </div>
 
           <div className="grid grid-cols-1 gap-4">
@@ -75,7 +75,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                 </div>
                 <div className="text-left flex-1">
                   <h3 className="font-headline font-bold text-lg">Администратор</h3>
-                  <p className="text-sm text-muted-foreground">Управление заказами и персоналом</p>
+                  <p className="text-sm text-muted-foreground">Управление заказами и командой</p>
                 </div>
                 <ChevronRight className="w-5 h-5 text-muted-foreground" />
               </CardContent>
@@ -88,7 +88,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                 </div>
                 <div className="text-left flex-1">
                   <h3 className="font-headline font-bold text-lg">Монтажник</h3>
-                  <p className="text-sm text-muted-foreground">Просмотр и выполнение задач</p>
+                  <p className="text-sm text-muted-foreground">Просмотр и выполнение заказов</p>
                 </div>
                 <ChevronRight className="w-5 h-5 text-muted-foreground" />
               </CardContent>
@@ -104,8 +104,8 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <Card className="max-w-md w-full shadow-2xl">
           <CardHeader className="text-center">
-            <CardTitle className="font-headline text-2xl">Выберите аккаунт</CardTitle>
-            <CardDescription>Выберите ваше имя из списка для входа</CardDescription>
+            <CardTitle className="font-headline text-2xl">Вход для монтажника</CardTitle>
+            <CardDescription>Выберите своё имя из списка, чтобы продолжить</CardDescription>
           </CardHeader>
           <div className="px-6 pb-4">
             <div className="relative">

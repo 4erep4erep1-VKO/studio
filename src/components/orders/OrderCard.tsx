@@ -72,7 +72,7 @@ export function OrderCard({ order, onEdit, onStatusChange, role, currentUserName
                 <DueDateDisplay dueDate={order.dueDate} />
                 {!isAdmin && isGeneral && !isCompleted && !isDeclined && (
                     <Button size="sm" className="h-7 text-[10px] font-bold gap-1.5 px-3" onClick={handleClaim}>
-                        ВЗЯТЬ ЗАКАЗ
+                        Взять заказ
                     </Button>
                 )}
             </div>
@@ -179,7 +179,7 @@ const OrderTitle = ({ order, isAdmin, onEdit, onStatusChange }: { order: Order, 
             <Button variant="ghost" size="icon" className="h-8 w-8 text-green-500 hover:text-green-600 hover:bg-green-500/10" onClick={() => onStatusChange({ status: 'Завершен' })} title="Завершить">
               <CheckCircle2 className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => onStatusChange({ status: 'Отклонен' })} title="Отказаться">
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => onStatusChange({ status: 'Отклонен' })} title="Отклонить заказ">
               <XCircle className="h-4 w-4" />
             </Button>
           </div>
