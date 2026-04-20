@@ -93,7 +93,15 @@ export default function App() {
 // ##                     Основной Dashboard                       ##
 // ##################################################################
 
-function Dashboard({ role, userId, userName, onLogout, isOnline }: any) {
+interface DashboardProps {
+  role: string;
+  userId: string;
+  userName: string;
+  onLogout: () => void;
+  isOnline: boolean;
+}
+
+function Dashboard({ role, userId, userName, onLogout, isOnline }: DashboardProps) {
   const { orders, isLoading, error, refetchOrders, addOrder, updateOrder } = useOrders(userId, role);
   const [activeTab, setActiveTab] = useState<'orders' | 'admin-settings' | 'user-settings'>('orders');
   const [isModalOpen, setIsModalOpen] = useState(false);
