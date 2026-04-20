@@ -15,6 +15,7 @@ CREATE TABLE profiles (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   name TEXT NOT NULL,
   email TEXT NOT NULL,
+  telegram_id BIGINT UNIQUE,
   role TEXT NOT NULL DEFAULT 'installer' CHECK (role IN ('admin', 'installer')),
   pin TEXT DEFAULT '0000',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

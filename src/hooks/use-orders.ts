@@ -10,8 +10,10 @@ import {
   deleteOrder as deleteOrderApi,
 } from '@/lib/api';
 
+const OFFLINE_ERROR = 'Нет интернет-соединения. Проверьте подключение и попробуйте снова.';
+
 /**
- * Хук для управления заказами. 
+ * Хук для управления заказами.
  * Упрощенная версия: без Realtime-подписок, только явные запросы.
  */
 export function useOrders(userId?: string, role?: string) {
@@ -20,14 +22,18 @@ export function useOrders(userId?: string, role?: string) {
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Основная функция загрузки данных
   const fetchAndSetOrders = useCallback(async (showLoading = false) => {
     if (showLoading) setIsLoading(true);
     setError(null);
+
+    if (typeof window !== 'undefined' && !navigator.onLine) {
+        setError(OFFLINE_ERROR);
+        if (showLoading) setIsLoading(false);
+        return;
+    }
+
     try {
       const allOrders = await fetchOrdersApi();
-      
-      // Фильтрация (на случай если монтажник все же зайдет через web)
       const visibleOrders = role === 'installer' && userId
         ? allOrders.filter(o => o.installerId === userId || o.installerId === 'general')
         : allOrders;
@@ -36,12 +42,11 @@ export function useOrders(userId?: string, role?: string) {
     } catch (err: any) {
       const errorMsg = err.message || 'Не удалось загрузить заказы.';
       setError(errorMsg);
-      // Показываем тост только если это была явная загрузка со спиннером
       if (showLoading) {
-        toast({ 
-          title: 'Ошибка загрузки', 
-          description: errorMsg, 
-          variant: 'destructive' 
+        toast({
+          title: 'Ошибка загрузки',
+          description: errorMsg,
+          variant: 'destructive'
         });
       }
     } finally {
@@ -49,54 +54,70 @@ export function useOrders(userId?: string, role?: string) {
     }
   }, [role, userId, toast]);
 
-  // Загружаем данные только при монтировании компонента
   useEffect(() => {
     fetchAndSetOrders(true);
-  }, [fetchAndSetOrders]);
 
-  // СОЗДАНИЕ: API -> Обновление списка -> Тост
+    const handleOnline = () => {
+        toast({ title: 'Соединение восстановлено', description: 'Данные автоматически обновляются.' });
+        fetchAndSetOrders(true);
+    };
+    const handleOffline = () => {
+        setError(OFFLINE_ERROR);
+        toast({ title: 'Нет интернет-соединения', description: 'Вы перешли в оффлайн-режим.', variant: 'destructive' });
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
+    };
+  }, [fetchAndSetOrders, toast]);
+
   const addOrder = async (orderData: Partial<Order>) => {
+    if (typeof window !== 'undefined' && !navigator.onLine) throw new Error(OFFLINE_ERROR);
     try {
       await createOrderApi(orderData);
       toast({ title: 'Успешно', description: 'Заказ создан' });
-      await fetchAndSetOrders(false); // "Тихое" обновление данных
+      await fetchAndSetOrders(false);
     } catch (err: any) {
       toast({ title: 'Ошибка', description: err.message, variant: 'destructive' });
-      throw err; 
+      throw err;
     }
   };
 
-  // ОБНОВЛЕНИЕ: API -> Обновление списка -> Тост
   const updateOrder = async (orderId: string, updates: Partial<Order>) => {
+    if (typeof window !== 'undefined' && !navigator.onLine) throw new Error(OFFLINE_ERROR);
     try {
       await updateOrderApi(orderId, updates);
       toast({ title: 'Успешно', description: 'Заказ обновлен' });
-      await fetchAndSetOrders(false); // "Тихое" обновление данных
+      await fetchAndSetOrders(false);
     } catch (err: any) {
       toast({ title: 'Ошибка', description: err.message, variant: 'destructive' });
       throw err;
     }
   };
 
-  // УДАЛЕНИЕ: API -> Обновление списка -> Тост
   const deleteOrder = async (id: string) => {
+    if (typeof window !== 'undefined' && !navigator.onLine) throw new Error(OFFLINE_ERROR);
     try {
       await deleteOrderApi(id);
       toast({ title: 'Успешно', description: 'Заказ удален', variant: 'destructive' });
-      await fetchAndSetOrders(false); // "Тихое" обновление данных
+      await fetchAndSetOrders(false);
     } catch (err: any) {
       toast({ title: 'Ошибка', description: err.message, variant: 'destructive' });
       throw err;
     }
   };
 
-  return { 
-    orders, 
-    isLoading, 
-    error, 
-    addOrder, 
-    updateOrder, 
-    deleteOrder, 
-    refetchOrders: fetchAndSetOrders 
+  return {
+    orders,
+    isLoading,
+    error,
+    addOrder,
+    updateOrder,
+    deleteOrder,
+    refetchOrders: fetchAndSetOrders
   };
 }

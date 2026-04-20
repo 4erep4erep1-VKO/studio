@@ -19,6 +19,7 @@ import { AdminSettings } from '@/components/settings/AdminSettings';
 import { UserSettings } from '@/components/settings/UserSettings';
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import { signOut } from '@/lib/auth';
+import { ConnectionStatus } from '@/components/ConnectionStatus';
 
 // ##################################################################
 // ##                   Компонент-обертка App                      ##
@@ -28,10 +29,20 @@ export default function App() {
   const router = useRouter();
   const { user, isLoading: isAuthLoading, getRole } = useAuth();
   const [isReady, setIsReady] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
   
   const role = getRole();
 
   useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    if (typeof window !== 'undefined') {
+      setIsOnline(navigator.onLine);
+      window.addEventListener('online', handleOnline);
+      window.addEventListener('offline', handleOffline);
+    }
+
     if (!isAuthLoading) {
       if (!user) {
         router.push('/login');
@@ -39,6 +50,13 @@ export default function App() {
         setIsReady(true);
       }
     }
+    
+    return () => {
+      if (typeof window !== 'undefined') {
+          window.removeEventListener('online', handleOnline);
+          window.removeEventListener('offline', handleOffline);
+      }
+    };
   }, [user, isAuthLoading, router]);
 
   const handleLogout = async () => {
@@ -66,6 +84,7 @@ export default function App() {
       userId={user.id}
       userName={user.email || 'Пользователь'}
       onLogout={handleLogout}
+      isOnline={isOnline}
     />
   );
 }
@@ -74,7 +93,7 @@ export default function App() {
 // ##                     Основной Dashboard                       ##
 // ##################################################################
 
-function Dashboard({ role, userId, userName, onLogout }: any) {
+function Dashboard({ role, userId, userName, onLogout, isOnline }: any) {
   const { orders, isLoading, error, refetchOrders, addOrder, updateOrder } = useOrders(userId, role);
   const [activeTab, setActiveTab] = useState<'orders' | 'admin-settings' | 'user-settings'>('orders');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -92,11 +111,10 @@ function Dashboard({ role, userId, userName, onLogout }: any) {
       } else {
         await addOrder(data);
       }
-      setIsModalOpen(false); // Просто закрываем, real-time сделает остальное
+      setIsModalOpen(false);
       setEditingOrder(undefined);
     } catch (error) {
-      // Ошибки уже обработаны и показаны в виде тоста в хуке useOrders
-      // Оставляем модальное окно открытым для исправления
+      // Errors are handled by the useOrders hook
     }
   };
 
@@ -117,6 +135,7 @@ function Dashboard({ role, userId, userName, onLogout }: any) {
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 relative">
+         <ConnectionStatus isOnline={isOnline} />
         <header className="h-20 border-b border-border flex items-center justify-between px-6 bg-background/50 sticky top-0 z-30">
           <div className="relative w-full max-w-xl">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -133,7 +152,7 @@ function Dashboard({ role, userId, userName, onLogout }: any) {
         </header>
 
         <div className="flex-1 p-6">
-            {isLoading ? (
+            {isLoading && !error ? (
                 <OrderGridSkeleton />
             ) : error ? (
                 <ErrorState message={error} onRetry={() => refetchOrders(true)} />
@@ -154,16 +173,14 @@ function Dashboard({ role, userId, userName, onLogout }: any) {
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-4xl p-8">
           <DialogHeader><DialogTitle>{editingOrder ? 'Редактировать заказ' : 'Создать заказ'}</DialogTitle></DialogHeader>
-          <OrderForm initialData={editingOrder} onSubmit={handleFormSubmit} onCancel={() => setIsModalOpen(false)} />
+          <OrderForm initialData={editingOrder} onSubmit={handleFormSubmit} onCancel={() => setIsModalOpen(false)} isOnline={isOnline} />
         </DialogContent>
       </Dialog>
     </div>
   );
 }
 
-// ##################################################################
-// ##                   Вспомогательные компоненты                 ##
-// ##################################################################
+// ... (rest of the components are unchanged)
 
 function TabContent({ activeTab, ...props }: any) {
     switch (activeTab) {
