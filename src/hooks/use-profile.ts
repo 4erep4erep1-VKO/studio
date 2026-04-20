@@ -1,9 +1,9 @@
-'use client';
+''''use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { getProfile, updateProfile } from '@/lib/api';
-import type { Profile } from '@/lib/api';
+import { getProfile, updateProfile, getUsers } from '@/lib/api';
+import type { Profile, User } from '@/lib/api';
 
 export function useProfile(userId: string) {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -50,3 +50,31 @@ export function useProfile(userId: string) {
 
   return { profile, isLoading, isUpdating, error, updatePinCode, refetchProfile: fetchProfile };
 }
+
+export function useProfiles() {
+    const [profiles, setProfiles] = useState<User[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const { toast } = useToast();
+
+    const fetchProfiles = useCallback(async () => {
+        setIsLoading(true);
+        try {
+            const users = await getUsers();
+            setProfiles(users);
+        } catch (err: any) {
+            const errorMsg = err.message || 'Не удалось загрузить профили.';
+            setError(errorMsg);
+            toast({ title: 'Ошибка загрузки', description: errorMsg, variant: 'destructive' });
+        } finally {
+            setIsLoading(false);
+        }
+    }, [toast]);
+
+    useEffect(() => {
+        fetchProfiles();
+    }, [fetchProfiles]);
+
+    return { profiles, isLoading, error, refetchProfiles: fetchProfiles };
+}
+'''

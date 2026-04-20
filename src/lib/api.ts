@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+'''import { supabase } from '@/lib/supabase';
 import type { Order, Comment, User, UserRole } from '@/lib/types';
 
 // ##################################################################
@@ -167,6 +167,9 @@ export async function createUser(userData: { name: string; email: string; passwo
         throw new Error(err.message || 'Не удалось создать пользователя.');
     }
 }
+export async function createProfile(userData: { name: string; email: string; password?: string; role: UserRole; }): Promise<User> {
+    return createUser(userData);
+}
 
 export async function deleteUser(userId: string): Promise<void> {
     try {
@@ -191,6 +194,9 @@ export async function getProfile(userId: string): Promise<Profile | null> {
         throw new Error(err.message || 'Не удалось получить профиль.');
     }
 }
+export async function getProfileById(userId: string): Promise<Profile | null> {
+    return getProfile(userId);
+}
 
 export async function updateProfile(userId: string, updates: { name?: string; pin?: string }): Promise<Profile> {
     try {
@@ -208,6 +214,9 @@ export async function updateProfile(userId: string, updates: { name?: string; pi
     } catch (err: any) {
         throw new Error(err.message || 'Не удалось обновить профиль.');
     }
+}
+export async function updateProfilePin(userId: string, pin: string): Promise<Profile> {
+    return updateProfile(userId, { pin });
 }
 
 // ##################################################################
@@ -272,3 +281,32 @@ export async function addComment(orderId: string, content: string): Promise<Comm
     throw new Error(err.message || 'Не удалось добавить комментарий.');
   }
 }
+export function subscribeToComments(orderId: string, onComment: (comment: Comment) => void): () => void {
+    const channel = supabase.channel(`comments:${orderId}`);
+
+    channel.on(
+        'postgres_changes',
+        {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'order_comments',
+            filter: `order_id=eq.${orderId}`
+        },
+        (payload) => {
+            const newComment = payload.new as any;
+            onComment({
+                id: newComment.id,
+                orderId: newComment.order_id,
+                userId: newComment.user_id,
+                userName: newComment.user_name,
+                message: newComment.content,
+                createdAt: newComment.created_at,
+            });
+        }
+    ).subscribe();
+
+    return () => {
+        supabase.removeChannel(channel);
+    };
+}
+''
