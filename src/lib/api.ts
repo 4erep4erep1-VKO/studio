@@ -1,4 +1,4 @@
-'''import { supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import type { Order, Comment, User, UserRole } from '@/lib/types';
 
 // ##################################################################
@@ -64,7 +64,7 @@ const mapRowToProfile = (row: SupabaseProfileRow): Profile => ({
 });
 
 // ##################################################################
-// ##                 Централизованный обработчик ошибок           ##
+// ##                Централизованный обработчик ошибок            ##
 // ##################################################################
 
 async function handleApiError(error: any, defaultMessage: string) {
@@ -181,7 +181,7 @@ export async function deleteUser(userId: string): Promise<void> {
 }
 
 // ##################################################################
-// ##                        Profile API                           ##
+// ##                         Profile API                          ##
 // ##################################################################
 
 export async function getProfile(userId: string): Promise<Profile | null> {
@@ -309,4 +309,3 @@ export function subscribeToComments(orderId: string, onComment: (comment: Commen
         supabase.removeChannel(channel);
     };
 }
-''

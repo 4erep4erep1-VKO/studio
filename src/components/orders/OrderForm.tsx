@@ -1,131 +1,162 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Order, OrderStatus } from '@/lib/types';
-import { useInstallers } from '@/hooks/use-installers';
-import { ImagePlus, X, Users, Clipboard, Loader2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { uploadImage } from '@/lib/api';
-
-const OFFLINE_ERROR = 'Нет интернет-соединения. Проверьте подключение и попробуйте снова.';
-
-const orderFormSchema = z.object({
-  objectName: z.string().min(1, 'Название объекта обязательно'),
-  workDescription: z.string().min(1, 'Описание работ обязательно'),
-  dueDate: z.string().min(1, 'Срок выполнения обязателен'),
-  installerId: z.string().min(1, 'Выберите исполнителя'),
-  status: z.enum(['В работе', 'Завершен', 'Отклонен']).default('В работе'),
-});
-
-type OrderFormData = z.infer<typeof orderFormSchema>;
+import React, { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 
 interface OrderFormProps {
-  initialData?: Order;
-  onSubmit: (data: OrderFormData & { imageUrls: string[] }) => Promise<void>;
-  onCancel: () => void;
-  isOnline: boolean;
+  orderId: string | null;
+  onSave: () => void;
 }
 
-type FileWithPreview = File & { preview: string };
-
-export function OrderForm({ initialData, onSubmit, onCancel, isOnline }: OrderFormProps) {
-  const [existingImageUrls, setExistingImageUrls] = useState<string[]>(initialData?.imageUrls || []);
-  const [newFiles, setNewFiles] = useState<FileWithPreview[]>([]);
-  const [uploadErrors, setUploadErrors] = useState<string[]>([]);
-  const { toast } = useToast();
-
-  const form = useForm<OrderFormData>({
-    resolver: zodResolver(orderFormSchema),
-    defaultValues: {
-      objectName: initialData?.objectName || '',
-      workDescription: initialData?.workDescription || '',
-      dueDate: initialData?.dueDate || new Date().toISOString().split('T')[0],
-      installerId: initialData?.installerId || '',
-      status: initialData?.status || 'В работе',
-    }
+export default function OrderForm({ orderId, onSave }: OrderFormProps) {
+  const [loading, setLoading] = useState(false);
+  const [installers, setInstallers] = useState<any[]>([]);
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    deadline: '',
+    assigned_to: '',
+    is_general: false,
+    preview_url: ''
   });
 
-  const { handleSubmit, formState: { isSubmitting } } = form;
-
   useEffect(() => {
-    return () => {
-      newFiles.forEach(file => URL.revokeObjectURL(file.preview));
-    };
-  }, [newFiles]);
+    async function loadData() {
+      try {
+        // ДОБАВЛЕНО: Теперь мы запрашиваем еще и telegram_chat_id, чтобы знать, куда писать
+        const { data: inst } = await supabase
+          .from('profiles')
+          .select('id, full_name, telegram_chat_id')
+          .in('role', ['installer', 'admin']);
+          
+        if (inst) setInstallers(inst);
 
-  const handleFormSubmit = async (data: OrderFormData) => {
-    if (!isOnline) {
-        toast({ title: 'Ошибка', description: OFFLINE_ERROR, variant: 'destructive' });
-        return;
-    }
-    
-    setUploadErrors([]);
-    let uploadedImageUrls: string[] = [];
-
-    try {
-        if (newFiles.length > 0) {
-            const uploadPromises = newFiles.map(async (file) => {
-                try {
-                    return await uploadImage(file);
-                } catch (error: any) {
-                    setUploadErrors(prev => [...prev, `Файл "${file.name}": ${error.message}`]);
-                    return null;
-                }
+        if (orderId) {
+          const { data: order, error } = await supabase.from('orders').select('*').eq('id', orderId).single();
+          if (error) throw error;
+          if (order) {
+            setFormData({
+              title: String(order.title || ''),
+              description: String(order.description || ''),
+              deadline: order.deadline ? String(order.deadline).split('T')[0] : '',
+              assigned_to: String(order.assigned_to || ''),
+              is_general: Boolean(order.is_general),
+              preview_url: String(order.preview_url || '')
             });
-            
-            const results = await Promise.all(uploadPromises);
-            uploadedImageUrls = results.filter((url): url is string => url !== null);
-
-            if (uploadErrors.length > 0) {
-                 toast({ title: 'Ошибка загрузки файлов', description: 'Некоторые файлы не удалось загрузить.', variant: 'destructive' });
-                 return;
-            }
+          }
         }
+      } catch (err: any) {
+        console.error("Ошибка загрузки данных в форму:", err.message);
+      }
+    }
+    loadData();
+  }, [orderId]);
 
-        await onSubmit({ 
-            ...data, 
-            imageUrls: [...existingImageUrls, ...uploadedImageUrls] 
-        });
+  const uploadImage = async (file: File) => {
+    setLoading(true);
+    const fileExt = file.name.split('.').pop() || 'png';
+    const fileName = `${Math.random()}.${fileExt}`;
+    const filePath = `previews/${fileName}`;
+    const { error } = await supabase.storage.from('order-photos').upload(filePath, file);
+    if (!error) {
+      const { data } = supabase.storage.from('order-photos').getPublicUrl(filePath);
+      setFormData(prev => ({ ...prev, preview_url: data.publicUrl }));
+    } else {
+      alert('Ошибка хранилища: ' + error.message);
+    }
+    setLoading(false);
+  };
 
-    } catch (error: any) {
-      toast({ title: 'Ошибка отправки', description: error.message, variant: 'destructive' });
+  // ДОБАВЛЕНО: Функция отправки сообщения в Телеграм
+  const notifyTelegram = async (chatId: string, text: string) => {
+    const token = process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN;
+    if (!token || !chatId) return;
+    try {
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text: text, parse_mode: 'HTML' })
+      });
+    } catch (e) {
+      console.error("Не удалось отправить уведомление в ТГ", e);
     }
   };
-  
-  const handlePaste = useCallback((event: React.ClipboardEvent) => {
-    const items = event.clipboardData?.items;
-    if (!items) return;
 
-    const files: File[] = [];
-    for (let i = 0; i < items.length; i++) {
-        if (items[i].type.indexOf('image') !== -1) {
-            const file = items[i].getAsFile();
-            if(file) files.push(file);
-        }
-    }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
     
-    if (files.length > 0) {
-        event.preventDefault();
-        const filesWithPreview: FileWithPreview[] = files.map(file => Object.assign(file, { preview: URL.createObjectURL(file) }));
-        setNewFiles(prev => [...prev, ...filesWithPreview]);
-        toast({ title: 'Изображения вставлены', description: `Изображения из буфера обмена добавлены (${files.length} шт.)` });
+    const payload: any = {
+      title: formData.title,
+      description: formData.description,
+      deadline: formData.deadline || null,
+      is_general: formData.is_general,
+      assigned_to: formData.is_general ? null : (formData.assigned_to || null),
+      preview_url: formData.preview_url || null
+    };
+
+    const isNewOrder = !orderId; // Проверяем, новый ли это заказ
+
+    const { error } = orderId 
+      ? await supabase.from('orders').update(payload).eq('id', orderId)
+      : await supabase.from('orders').insert([payload]);
+
+    if (!error) {
+      // ДОБАВЛЕНО: Логика уведомлений при успешном сохранении
+      if (isNewOrder && !formData.is_general && formData.assigned_to) {
+        const installer = installers.find(i => i.id === formData.assigned_to);
+        if (installer && installer.telegram_chat_id) {
+          await notifyTelegram(
+            installer.telegram_chat_id,
+            `🚀 <b>Новый заказ!</b>\nАдмин назначил тебе объект: <b>${formData.title}</b>\n\nЖми «📦 Мои заказы», чтобы увидеть эскиз и детали.`
+          );
+        }
+      }
+      onSave(); // Закрываем модалку и обновляем список
+    } else {
+      alert('ОШИБКА БАЗЫ ДАННЫХ: ' + error.message);
+      console.error(error);
     }
-  }, [toast]);
+    setLoading(false);
+  };
 
   return (
-    <form onSubmit={handleSubmit(handleFormSubmit)} onPaste={handlePaste} className="space-y-6">
-        {/* ... rest of the form ... */}
-        <FormActions onCancel={onCancel} isSubmitting={isSubmitting} isEditing={!!initialData} />
-    </form>
+    <div className="p-6 bg-slate-900 text-white rounded-xl">
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div>
+          <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Объект</label>
+          <input required className="w-full p-2 bg-slate-950 border border-slate-800 rounded focus:border-blue-500 focus:outline-none transition" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Дедлайн</label>
+          <input type="date" className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-slate-300 focus:border-blue-500 focus:outline-none transition" value={formData.deadline} onChange={e => setFormData({...formData, deadline: e.target.value})} />
+        </div>
+        <div className="flex items-center gap-2 p-2 border border-slate-800 bg-slate-950/50 rounded">
+          <input type="checkbox" checked={formData.is_general} onChange={e => setFormData({...formData, is_general: e.target.checked})} className="w-5 h-5 accent-blue-600" />
+          <label className="font-bold text-sm">Общий заказ (увидят все)</label>
+        </div>
+        {!formData.is_general && (
+          <div>
+            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Исполнитель</label>
+            <select className="w-full p-2 bg-slate-950 border border-slate-800 rounded focus:border-blue-500 focus:outline-none transition" value={formData.assigned_to} onChange={e => setFormData({...formData, assigned_to: e.target.value})}>
+              <option value="">Не назначен...</option>
+              {installers.map(i => <option key={i.id} value={i.id}>{i.full_name}</option>)}
+            </select>
+          </div>
+        )}
+        <div>
+           <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Эскиз / Фото</label>
+           <input type="file" onChange={e => e.target.files && uploadImage(e.target.files[0])} className="text-sm w-full file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-700 transition" />
+           {formData.preview_url && <img src={formData.preview_url} alt="Превью" className="mt-2 w-20 h-20 object-cover rounded border border-slate-700" />}
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Описание / Задача</label>
+          <textarea rows={3} placeholder="Что нужно сделать..." className="w-full p-2 bg-slate-950 border border-slate-800 rounded focus:border-blue-500 focus:outline-none transition" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+        </div>
+        <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white p-3 rounded font-bold uppercase tracking-wider hover:bg-blue-700 transition disabled:bg-slate-700 disabled:text-slate-500">
+          {loading ? 'Сохранение...' : 'Записать заказ'}
+        </button>
+      </form>
+    </div>
   );
 }
-
-// ... (rest of the components remain the same)

@@ -1,4 +1,4 @@
-''''use client';
+'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
@@ -77,4 +77,3 @@ export function useProfiles() {
 
     return { profiles, isLoading, error, refetchProfiles: fetchProfiles };
 }
-'''

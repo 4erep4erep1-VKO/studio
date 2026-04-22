@@ -1,66 +1,20 @@
-export type OrderStatus = 'В работе' | 'Завершен' | 'Отклонен';
-export type UserRole = 'admin' | 'installer' | null;
-export type Theme = 'light' | 'dark' | 'system';
-
-export interface Order {
-  id: string;
-  objectName: string;
-  workDescription: string;
-  imageUrls?: string[];
-  dueDate: string;
-  installerId: string;
-  status: OrderStatus;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface Installer {
-  id: string;
-  name: string;
-  email?: string;
-  phone?: string;
-}
+export type OrderStatus = 'new' | 'in_progress' | 'completed' | 'cancelled';
 
 export interface Profile {
   id: string;
-  name: string;
+  full_name: string | null;
   email: string;
   role: 'admin' | 'installer';
-  pin: string;
-  created_at?: string;  // Добавлено поле created_at
-  updated_at?: string;  // Добавлено поле updated_at
+  pin_code: string | null;
+  telegram_chat_id: string | null;
 }
 
-export interface AccessLog {
+export interface Order {
   id: string;
-  timestamp: string;
-  accessedByRole: string;
-  userName?: string;
-}
-
-export interface UserPreferences {
-  theme: Theme;
-  notificationsEnabled: boolean;
-}
-
-export interface AppSettings {
-  adminPin: string;
-}
-
-export interface AppNotification {
-  id: string;
-  userId: string;
   title: string;
-  message: string;
-  createdAt: string;
-  read: boolean;
-}
-
-export interface Comment {
-  id: string;
-  orderId: string;
-  userId: string;
-  userName: string;
-  message: string;
-  createdAt: string;
+  description: string;
+  status: OrderStatus;
+  assigned_to: string; // ID монтажника из таблицы profiles
+  created_at: string;
+  updated_at: string;
 }
