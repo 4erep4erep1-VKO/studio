@@ -68,7 +68,9 @@ export default function OrderForm({ orderId, onSave }: OrderFormProps) {
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
       const filePath = `previews/${fileName}`;
       
-      const { error } = await supabase.storage.from('order-photos').upload(filePath, file);
+     const { error } = await supabase.storage.from('order-photos').upload(filePath, file, {
+        contentType: file.type || 'image/png'
+      });
       if (!error) {
         const { data } = supabase.storage.from('order-photos').getPublicUrl(filePath);
         newUrls.push(data.publicUrl);
