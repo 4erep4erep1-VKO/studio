@@ -155,7 +155,7 @@ export default function OrderForm({ orderId, onSave }: OrderFormProps) {
         <div>
            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Эскиз / Фото (можно несколько)</label>
            {/* ДОБАВЛЕН АТРИБУТ multiple */}
-           <input type="file" multiple onChange={e => e.target.files && uploadImages(e.target.files)} className="text-sm w-full file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-700 transition" />
+          <input type="file" accept="image/jpeg, image/png, image/jpg" multiple onChange={e => e.target.files && uploadImages(e.target.files)} className="text-sm w-full file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-700 transition" />
            
            {/* ВЫВОД ВСЕХ ЗАГРУЖЕННЫХ ФОТО */}
            {formData.image_urls.length > 0 && (
