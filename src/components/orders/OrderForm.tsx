@@ -17,13 +17,12 @@ export default function OrderForm({ orderId, onSave }: OrderFormProps) {
     deadline: '',
     assigned_to: '',
     is_general: false,
-    preview_url: ''
+    image_urls: [] as string[] // Изменено на массив для нескольких фото
   });
 
   useEffect(() => {
     async function loadData() {
       try {
-        // ДОБАВЛЕНО: Теперь мы запрашиваем еще и telegram_chat_id, чтобы знать, куда писать
         const { data: inst } = await supabase
           .from('profiles')
           .select('id, full_name, telegram_chat_id')
@@ -41,7 +40,7 @@ export default function OrderForm({ orderId, onSave }: OrderFormProps) {
               deadline: order.deadline ? String(order.deadline).split('T')[0] : '',
               assigned_to: String(order.assigned_to || ''),
               is_general: Boolean(order.is_general),
-              preview_url: String(order.preview_url || '')
+              image_urls: order.image_urls || [] // Загружаем массив фоток
             });
           }
         }
@@ -52,22 +51,32 @@ export default function OrderForm({ orderId, onSave }: OrderFormProps) {
     loadData();
   }, [orderId]);
 
-  const uploadImage = async (file: File) => {
+  // НОВАЯ ФУНКЦИЯ ДЛЯ МУЛЬТИЗАГРУЗКИ
+  const uploadImages = async (files: FileList) => {
     setLoading(true);
-    const fileExt = file.name.split('.').pop() || 'png';
-    const fileName = `${Math.random()}.${fileExt}`;
-    const filePath = `previews/${fileName}`;
-    const { error } = await supabase.storage.from('order-photos').upload(filePath, file);
-    if (!error) {
-      const { data } = supabase.storage.from('order-photos').getPublicUrl(filePath);
-      setFormData(prev => ({ ...prev, preview_url: data.publicUrl }));
-    } else {
-      alert('Ошибка хранилища: ' + error.message);
+    const newUrls: string[] = [];
+
+    // Прогоняем каждый файл через цикл
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const fileExt = file.name.split('.').pop() || 'png';
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `previews/${fileName}`;
+      
+      const { error } = await supabase.storage.from('order-photos').upload(filePath, file);
+      if (!error) {
+        const { data } = supabase.storage.from('order-photos').getPublicUrl(filePath);
+        newUrls.push(data.publicUrl);
+      } else {
+        alert(`Ошибка загрузки ${file.name}: ` + error.message);
+      }
     }
+
+    // Добавляем новые фотки к уже существующим
+    setFormData(prev => ({ ...prev, image_urls: [...prev.image_urls, ...newUrls] }));
     setLoading(false);
   };
 
-  // ДОБАВЛЕНО: Функция отправки сообщения в Телеграм
   const notifyTelegram = async (chatId: string, text: string) => {
     const token = process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN;
     if (!token || !chatId) return;
@@ -92,27 +101,26 @@ export default function OrderForm({ orderId, onSave }: OrderFormProps) {
       deadline: formData.deadline || null,
       is_general: formData.is_general,
       assigned_to: formData.is_general ? null : (formData.assigned_to || null),
-      preview_url: formData.preview_url || null
+      image_urls: formData.image_urls // Отправляем массив в базу
     };
 
-    const isNewOrder = !orderId; // Проверяем, новый ли это заказ
+    const isNewOrder = !orderId;
 
     const { error } = orderId 
       ? await supabase.from('orders').update(payload).eq('id', orderId)
       : await supabase.from('orders').insert([payload]);
 
     if (!error) {
-      // ДОБАВЛЕНО: Логика уведомлений при успешном сохранении
       if (isNewOrder && !formData.is_general && formData.assigned_to) {
         const installer = installers.find(i => i.id === formData.assigned_to);
         if (installer && installer.telegram_chat_id) {
           await notifyTelegram(
             installer.telegram_chat_id,
-            `🚀 <b>Новый заказ!</b>\nАдмин назначил тебе объект: <b>${formData.title}</b>\n\nЖми «📦 Мои заказы», чтобы увидеть эскиз и детали.`
+            `🚀 <b>Новый заказ!</b>\nАдмин назначил тебе объект: <b>${formData.title}</b>\n\nЖми «📦 Мои заказы», чтобы увидеть детали.`
           );
         }
       }
-      onSave(); // Закрываем модалку и обновляем список
+      onSave();
     } else {
       alert('ОШИБКА БАЗЫ ДАННЫХ: ' + error.message);
       console.error(error);
@@ -145,9 +153,18 @@ export default function OrderForm({ orderId, onSave }: OrderFormProps) {
           </div>
         )}
         <div>
-           <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Эскиз / Фото</label>
-           <input type="file" onChange={e => e.target.files && uploadImage(e.target.files[0])} className="text-sm w-full file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-700 transition" />
-           {formData.preview_url && <img src={formData.preview_url} alt="Превью" className="mt-2 w-20 h-20 object-cover rounded border border-slate-700" />}
+           <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Эскиз / Фото (можно несколько)</label>
+           {/* ДОБАВЛЕН АТРИБУТ multiple */}
+           <input type="file" multiple onChange={e => e.target.files && uploadImages(e.target.files)} className="text-sm w-full file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-700 transition" />
+           
+           {/* ВЫВОД ВСЕХ ЗАГРУЖЕННЫХ ФОТО */}
+           {formData.image_urls.length > 0 && (
+             <div className="flex gap-2 mt-3 flex-wrap">
+               {formData.image_urls.map((url, idx) => (
+                 <img key={idx} src={url} alt={`Превью ${idx + 1}`} className="w-20 h-20 object-cover rounded border border-slate-700 shadow-sm" />
+               ))}
+             </div>
+           )}
         </div>
         <div>
           <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Описание / Задача</label>
