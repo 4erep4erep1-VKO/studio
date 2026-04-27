@@ -17,7 +17,7 @@ export default function OrderForm({ orderId, onSave }: OrderFormProps) {
     deadline: '',
     assigned_to: '',
     is_general: false,
-    image_urls: [] as string[] // Изменено на массив для нескольких фото
+    image_urls: [] as string[]
   });
 
   useEffect(() => {
@@ -40,7 +40,7 @@ export default function OrderForm({ orderId, onSave }: OrderFormProps) {
               deadline: order.deadline ? String(order.deadline).split('T')[0] : '',
               assigned_to: String(order.assigned_to || ''),
               is_general: Boolean(order.is_general),
-              image_urls: order.image_urls || [] // Загружаем массив фоток
+              image_urls: order.image_urls || []
             });
           }
         }
@@ -51,15 +51,20 @@ export default function OrderForm({ orderId, onSave }: OrderFormProps) {
     loadData();
   }, [orderId]);
 
-  // НОВАЯ ФУНКЦИЯ ДЛЯ МУЛЬТИЗАГРУЗКИ
-  const uploadImages = async (files: FileList) => {
+  // Обновленная функция: теперь принимает и файлы из кнопки, и из буфера обмена
+  const uploadImages = async (files: FileList | File[]) => {
     setLoading(true);
     const newUrls: string[] = [];
 
-    // Прогоняем каждый файл через цикл
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const fileExt = file.name.split('.').pop() || 'png';
+      
+      // Если это скриншот из буфера, у него может не быть имени, по умолчанию ставим png
+      let fileExt = 'png';
+      if (file.name && file.name.includes('.')) {
+          fileExt = file.name.split('.').pop() || 'png';
+      }
+      
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
       const filePath = `previews/${fileName}`;
       
@@ -68,13 +73,27 @@ export default function OrderForm({ orderId, onSave }: OrderFormProps) {
         const { data } = supabase.storage.from('order-photos').getPublicUrl(filePath);
         newUrls.push(data.publicUrl);
       } else {
-        alert(`Ошибка загрузки ${file.name}: ` + error.message);
+        alert(`Ошибка загрузки: ` + error.message);
       }
     }
 
-    // Добавляем новые фотки к уже существующим
     setFormData(prev => ({ ...prev, image_urls: [...prev.image_urls, ...newUrls] }));
     setLoading(false);
+  };
+
+  // НОВАЯ ФУНКЦИЯ: Ловит вставку по Ctrl+V
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData.items;
+    const files: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        if (file) files.push(file);
+      }
+    }
+    if (files.length > 0) {
+      uploadImages(files);
+    }
   };
 
   const notifyTelegram = async (chatId: string, text: string) => {
@@ -101,7 +120,7 @@ export default function OrderForm({ orderId, onSave }: OrderFormProps) {
       deadline: formData.deadline || null,
       is_general: formData.is_general,
       assigned_to: formData.is_general ? null : (formData.assigned_to || null),
-      image_urls: formData.image_urls // Отправляем массив в базу
+      image_urls: formData.image_urls
     };
 
     const isNewOrder = !orderId;
@@ -129,7 +148,8 @@ export default function OrderForm({ orderId, onSave }: OrderFormProps) {
   };
 
   return (
-    <div className="p-6 bg-slate-900 text-white rounded-xl">
+    // Добавили обработчик onPaste на главный блок формы
+    <div className="p-6 bg-slate-900 text-white rounded-xl" onPaste={handlePaste}>
       <form onSubmit={handleSubmit} className="space-y-5">
         <div>
           <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Объект</label>
@@ -153,11 +173,12 @@ export default function OrderForm({ orderId, onSave }: OrderFormProps) {
           </div>
         )}
         <div>
-           <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Эскиз / Фото (можно несколько)</label>
-           {/* ДОБАВЛЕН АТРИБУТ multiple */}
-          <input type="file" accept="image/jpeg, image/png, image/jpg" multiple onChange={e => e.target.files && uploadImages(e.target.files)} className="text-sm w-full file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-700 transition" />
+           {/* Подсказка для менеджеров про Ctrl+V */}
+           <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Эскиз / Фото (Можно нажать Ctrl+V)</label>
            
-           {/* ВЫВОД ВСЕХ ЗАГРУЖЕННЫХ ФОТО */}
+           {/* Вернули расширения файлов вместо MIME-типов, так надежнее для Windows */}
+           <input type="file" accept=".jpg, .jpeg, .png" multiple onChange={e => e.target.files && uploadImages(e.target.files)} className="text-sm w-full file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-700 transition" />
+           
            {formData.image_urls.length > 0 && (
              <div className="flex gap-2 mt-3 flex-wrap">
                {formData.image_urls.map((url, idx) => (
