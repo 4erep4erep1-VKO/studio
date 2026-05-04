@@ -17,7 +17,10 @@ export default function OrderForm({ orderId, onSave }: OrderFormProps) {
     deadline: '',
     assigned_to: '',
     is_general: false,
-    image_urls: [] as string[]
+    image_urls: [] as string[],
+    source_link: '',
+    dimensions: '',
+    material: ''
   });
 
   useEffect(() => {
@@ -40,7 +43,10 @@ export default function OrderForm({ orderId, onSave }: OrderFormProps) {
               deadline: order.deadline ? String(order.deadline).split('T')[0] : '',
               assigned_to: String(order.assigned_to || ''),
               is_general: Boolean(order.is_general),
-              image_urls: order.image_urls || []
+              image_urls: order.image_urls || [],
+              source_link: String(order.source_link || ''),
+              dimensions: String(order.dimensions || ''),
+              material: String(order.material || '')
             });
           }
         }
@@ -51,7 +57,6 @@ export default function OrderForm({ orderId, onSave }: OrderFormProps) {
     loadData();
   }, [orderId]);
 
-  // Обновленная функция: теперь принимает и файлы из кнопки, и из буфера обмена
   const uploadImages = async (files: FileList | File[]) => {
     setLoading(true);
     const newUrls: string[] = [];
@@ -59,7 +64,6 @@ export default function OrderForm({ orderId, onSave }: OrderFormProps) {
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       
-      // Если это скриншот из буфера, у него может не быть имени, по умолчанию ставим png
       let fileExt = 'png';
       if (file.name && file.name.includes('.')) {
           fileExt = file.name.split('.').pop() || 'png';
@@ -83,7 +87,6 @@ export default function OrderForm({ orderId, onSave }: OrderFormProps) {
     setLoading(false);
   };
 
-  // НОВАЯ ФУНКЦИЯ: Ловит вставку по Ctrl+V
   const handlePaste = (e: React.ClipboardEvent) => {
     const items = e.clipboardData.items;
     const files: File[] = [];
@@ -122,7 +125,10 @@ export default function OrderForm({ orderId, onSave }: OrderFormProps) {
       deadline: formData.deadline || null,
       is_general: formData.is_general,
       assigned_to: formData.is_general ? null : (formData.assigned_to || null),
-      image_urls: formData.image_urls
+      image_urls: formData.image_urls,
+      source_link: formData.source_link,
+      dimensions: formData.dimensions,
+      material: formData.material
     };
 
     const isNewOrder = !orderId;
@@ -150,7 +156,6 @@ export default function OrderForm({ orderId, onSave }: OrderFormProps) {
   };
 
   return (
-    // Добавили обработчик onPaste на главный блок формы
     <div className="p-6 bg-slate-900 text-white rounded-xl" onPaste={handlePaste}>
       <form onSubmit={handleSubmit} className="space-y-5">
         <div>
@@ -174,13 +179,43 @@ export default function OrderForm({ orderId, onSave }: OrderFormProps) {
             </select>
           </div>
         )}
+
+        {/* НОВЫЙ БЛОК: Размеры и материал */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Размеры</label>
+            <input 
+              placeholder="Например: 3x6 м" 
+              className="w-full p-2 bg-slate-950 border border-slate-800 rounded focus:border-blue-500 text-white outline-none transition" 
+              value={formData.dimensions} 
+              onChange={e => setFormData({...formData, dimensions: e.target.value})} 
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Материал</label>
+            <input 
+              placeholder="Баннер, пленка..." 
+              className="w-full p-2 bg-slate-950 border border-slate-800 rounded focus:border-blue-500 text-white outline-none transition" 
+              value={formData.material} 
+              onChange={e => setFormData({...formData, material: e.target.value})} 
+            />
+          </div>
+        </div>
+
+        {/* НОВЫЙ БЛОК: Ссылка на исходник */}
         <div>
-           {/* Подсказка для менеджеров про Ctrl+V */}
+          <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Ссылка на исходник макета</label>
+          <input 
+            placeholder="Яндекс.Диск / Google Drive" 
+            className="w-full p-2 bg-slate-950 border border-slate-800 rounded focus:border-blue-500 text-white outline-none transition" 
+            value={formData.source_link} 
+            onChange={e => setFormData({...formData, source_link: e.target.value})} 
+          />
+        </div>
+
+        <div>
            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Эскиз / Фото (Можно нажать Ctrl+V)</label>
-           
-           {/* Вернули расширения файлов вместо MIME-типов, так надежнее для Windows */}
            <input type="file" accept=".jpg, .jpeg, .png" multiple onChange={e => e.target.files && uploadImages(e.target.files)} className="text-sm w-full file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-700 transition" />
-           
            {formData.image_urls.length > 0 && (
              <div className="flex gap-2 mt-3 flex-wrap">
                {formData.image_urls.map((url, idx) => (
