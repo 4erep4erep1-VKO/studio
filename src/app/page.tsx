@@ -34,7 +34,6 @@ export default function Dashboard() {
   
   const { toast } = useToast();
 
-  // Проверка сессии при загрузке
   useEffect(() => {
     const savedAuth = localStorage.getItem('adminAuth');
     if (savedAuth === 'true') {
@@ -141,7 +140,7 @@ export default function Dashboard() {
   };
 
   const handleBroadcast = async () => {
-    const msg = prompt("Введите текст объявления для всех монтажников:");
+    const msg = prompt("Введите текст объявления для всех сотрудников:");
     if (!msg) return;
     setLoading(true);
     profiles.forEach(p => p.telegram_chat_id && notifyTelegram(p.telegram_chat_id, `📢 <b>ОБЪЯВЛЕНИЕ:</b>\n\n${msg}`));
@@ -169,7 +168,7 @@ export default function Dashboard() {
     if (error) {
       alert("❌ ОШИБКА: " + error.message);
     } else {
-      toast({ title: role === 'admin' ? "Админ добавлен" : "Монтажник добавлен" });
+      toast({ title: role === 'admin' ? "Админ добавлен" : "Сотрудник добавлен" });
       fetchAllData();
     }
   };
@@ -181,8 +180,22 @@ export default function Dashboard() {
     }
   };
 
+  // НОВАЯ ФУНКЦИЯ ДЛЯ ПЕРЕКЛЮЧЕНИЯ ГАЛОЧЕК
+  const toggleRole = async (userId: string, field: string, currentValue: boolean) => {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ [field]: !currentValue })
+      .eq('id', userId);
+    
+    if (!error) {
+      fetchAllData(); // Перезагружаем данные после смены галочки
+      toast({ title: "Допуск обновлен" });
+    } else {
+      alert("Ошибка обновления прав: " + error.message);
+    }
+  };
+
   const filteredOrders = orders.filter((o: any) => {
-    // ИСПРАВЛЕННАЯ СТРОКА 245: добавляем проверку на наличие title
     const matchesSearch = (o.title || '').toLowerCase().includes(searchQuery.toLowerCase());
     
     if (!matchesSearch) return false;
@@ -222,7 +235,6 @@ export default function Dashboard() {
     <div className="p-6 bg-slate-950 min-h-screen text-white font-sans">
       <div className="max-w-7xl mx-auto">
         
-        {/* Панель статистики */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex items-center gap-4">
             <div className="p-3 bg-blue-600/20 rounded-lg"><BarChart3 className="text-blue-500" /></div>
@@ -266,7 +278,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Навигация */}
         <div className="flex flex-wrap justify-between items-center mb-8 gap-4">
           <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800">
             <button onClick={() => setView('orders')} className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition ${view === 'orders' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>
@@ -337,21 +348,58 @@ export default function Dashboard() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {profiles.map(p => (
-              <div key={p.id} className={`bg-slate-900 border ${p.role === 'admin' ? 'border-blue-500/50' : 'border-slate-800'} p-5 rounded-xl flex justify-between items-center hover:border-slate-600 transition`}>
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-bold">{p.full_name}</h3>
-                    {p.role === 'admin' && <ShieldCheck className="w-4 h-4 text-blue-500" />}
+              <div key={p.id} className={`bg-slate-900 border ${p.role === 'admin' ? 'border-blue-500/50' : 'border-slate-800'} p-5 rounded-xl flex flex-col justify-between hover:border-slate-600 transition`}>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-bold">{p.full_name}</h3>
+                      {p.role === 'admin' && <ShieldCheck className="w-4 h-4 text-blue-500" />}
+                    </div>
+                    <p className="text-xs text-slate-500 uppercase tracking-widest">{p.role === 'admin' ? 'Администратор' : 'Сотрудник'}</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <span className="text-[10px] bg-slate-950 px-2 py-1 rounded text-blue-400 font-mono border border-slate-800">PIN: {p.pin_code}</span>
+                      <span className={`text-[10px] px-2 py-1 rounded font-bold ${p.telegram_chat_id ? 'bg-green-900/20 text-green-400 border border-green-900/50' : 'bg-red-900/20 text-red-400 border border-red-900/50'}`}>
+                        {p.telegram_chat_id ? 'Бот активен' : 'Бот не привязан'}
+                      </span>
+                    </div>
                   </div>
-                  <p className="text-xs text-slate-500 uppercase tracking-widest">{p.role === 'admin' ? 'Администратор' : 'Монтажник'}</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <span className="text-[10px] bg-slate-950 px-2 py-1 rounded text-blue-400 font-mono border border-slate-800">PIN: {p.pin_code}</span>
-                    <span className={`text-[10px] px-2 py-1 rounded font-bold ${p.telegram_chat_id ? 'bg-green-900/20 text-green-400 border border-green-900/50' : 'bg-red-900/20 text-red-400 border border-red-900/50'}`}>
-                      {p.telegram_chat_id ? 'Бот активен' : 'Бот не привязан'}
-                    </span>
+                  <button onClick={() => deleteStaff(p.id)} className="p-2 text-slate-600 hover:text-red-500 transition"><Trash2 className="w-5 h-5" /></button>
+                </div>
+
+                {/* БЛОК С ГАЛОЧКАМИ ДОПУСКОВ */}
+                <div className="mt-4 pt-4 border-t border-slate-800">
+                  <p className="text-[10px] font-bold uppercase text-slate-500 mb-2">Права доступа:</p>
+                  <div className="flex flex-wrap gap-3 text-xs">
+                    <label className="flex items-center gap-1 text-slate-300 cursor-pointer hover:text-white">
+                      <input 
+                        type="checkbox" 
+                        checked={p.can_design || false} 
+                        onChange={() => toggleRole(p.id, 'can_design', p.can_design)} 
+                        className="accent-purple-500" 
+                      />
+                      🎨 Дизайн
+                    </label>
+                    <label className="flex items-center gap-1 text-slate-300 cursor-pointer hover:text-white">
+                      <input 
+                        type="checkbox" 
+                        checked={p.can_print || false} 
+                        onChange={() => toggleRole(p.id, 'can_print', p.can_print)} 
+                        className="accent-blue-500" 
+                      />
+                      🖨 Печать
+                    </label>
+                    <label className="flex items-center gap-1 text-slate-300 cursor-pointer hover:text-white">
+                      <input 
+                        type="checkbox" 
+                        checked={p.can_install || false} 
+                        onChange={() => toggleRole(p.id, 'can_install', p.can_install)} 
+                        className="accent-green-500" 
+                      />
+                      🛠 Монтаж
+                    </label>
                   </div>
                 </div>
-                <button onClick={() => deleteStaff(p.id)} className="p-2 text-slate-600 hover:text-red-500 transition"><Trash2 className="w-5 h-5" /></button>
+
               </div>
             ))}
           </div>
