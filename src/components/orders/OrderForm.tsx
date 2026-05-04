@@ -22,7 +22,7 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
     source_link: '',
     dimensions: '',
     material: '',
-    department: 'installation' // По умолчанию монтаж
+    department: 'installation'
   });
 
   useEffect(() => {
@@ -52,19 +52,16 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
   const uploadImages = async (files: FileList | File[]) => {
     setLoading(true);
     const newUrls: string[] = [];
-
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
       const filePath = `previews/${fileName}`;
-      
       const { error } = await supabase.storage.from('order-photos').upload(filePath, file);
       if (!error) {
         const { data } = supabase.storage.from('order-photos').getPublicUrl(filePath);
         newUrls.push(data.publicUrl);
       }
     }
-
     setFormData(prev => ({ ...prev, image_urls: [...prev.image_urls, ...newUrls] }));
     setLoading(false);
   };
@@ -79,8 +76,10 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
     e.preventDefault();
     setLoading(true);
     
+    // ИСПРАВЛЕНИЕ ТУТ: если дата пустая, отправляем null, а не ""
     const payload = {
       ...formData,
+      deadline: formData.deadline || null, 
       created_by: creatorId,
       assigned_to: formData.is_general ? null : (formData.assigned_to || null)
     };
@@ -97,7 +96,6 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
   return (
     <div className="flex flex-col h-full bg-slate-900 text-white overflow-hidden p-6" onPaste={handlePaste}>
       <form onSubmit={handleSubmit} className="flex flex-col h-full">
-        
         <div className="flex-grow overflow-y-auto space-y-5 pr-2 custom-scrollbar" style={{ maxHeight: '70vh' }}>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -121,7 +119,7 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Лично исполнителю</label>
-              <select disabled={formData.is_general} className="w-full p-2 bg-slate-950 border border-slate-800 rounded focus:border-blue-500 outline-none disabled:opacity-30" value={formData.assigned_to} onChange={e => setFormData({...formData, assigned_to: e.target.value})}>
+              <select disabled={formData.is_general} className="w-full p-2 bg-slate-950 border border-slate-800 rounded focus:border-blue-500 outline-none transition disabled:opacity-30" value={formData.assigned_to} onChange={e => setFormData({...formData, assigned_to: e.target.value})}>
                 <option value="">Не назначен...</option>
                 {installers.map(i => <option key={i.id} value={i.id}>{i.full_name}</option>)}
               </select>
@@ -144,7 +142,7 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
           </div>
 
           <div>
-             <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Эскиз / Фото (Можно Ctrl+V)</label>
+             <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Эскиз / Фото (Ctrl+V)</label>
              <input type="file" accept="image/*" multiple onChange={e => e.target.files && uploadImages(e.target.files)} className="text-xs w-full file:bg-blue-600 file:text-white file:border-0 file:rounded file:px-3 file:py-1 cursor-pointer" />
              {formData.image_urls.length > 0 && (
                <div className="flex gap-2 mt-3 flex-wrap">
