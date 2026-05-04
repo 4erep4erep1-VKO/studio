@@ -22,7 +22,7 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
     source_link: '',
     dimensions: '',
     material: '',
-    department: 'installation'
+    department: 'installation' // По умолчанию монтаж
   });
 
   useEffect(() => {
@@ -98,20 +98,18 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
     <div className="flex flex-col h-full bg-slate-900 text-white overflow-hidden p-6" onPaste={handlePaste}>
       <form onSubmit={handleSubmit} className="flex flex-col h-full">
         
-        {/* Прокручиваемая часть формы */}
         <div className="flex-grow overflow-y-auto space-y-5 pr-2 custom-scrollbar" style={{ maxHeight: '70vh' }}>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Объект</label>
-              <input required className="w-full p-2 bg-slate-950 border border-slate-800 rounded focus:border-blue-500 outline-none transition" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+              <input required className="w-full p-2 bg-slate-950 border border-slate-800 rounded focus:border-blue-500 outline-none" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Куда отправить</label>
-              <select className="w-full p-2 bg-slate-950 border border-slate-800 rounded focus:border-blue-500 outline-none transition" value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})}>
+              <select className="w-full p-2 bg-slate-950 border border-slate-800 rounded focus:border-blue-500 outline-none" value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})}>
                 <option value="installation">🛠 На монтаж</option>
                 <option value="print">🖨 На печать</option>
-                <option value="design">🎨 На дизайн</option>
               </select>
             </div>
           </div>
@@ -119,11 +117,11 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Дедлайн</label>
-              <input type="date" className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-slate-300 focus:border-blue-500 outline-none transition" value={formData.deadline} onChange={e => setFormData({...formData, deadline: e.target.value})} />
+              <input type="date" className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-slate-300 focus:border-blue-500 outline-none" value={formData.deadline} onChange={e => setFormData({...formData, deadline: e.target.value})} />
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Лично исполнителю</label>
-              <select disabled={formData.is_general} className="w-full p-2 bg-slate-950 border border-slate-800 rounded focus:border-blue-500 outline-none transition disabled:opacity-30" value={formData.assigned_to} onChange={e => setFormData({...formData, assigned_to: e.target.value})}>
+              <select disabled={formData.is_general} className="w-full p-2 bg-slate-950 border border-slate-800 rounded focus:border-blue-500 outline-none disabled:opacity-30" value={formData.assigned_to} onChange={e => setFormData({...formData, assigned_to: e.target.value})}>
                 <option value="">Не назначен...</option>
                 {installers.map(i => <option key={i.id} value={i.id}>{i.full_name}</option>)}
               </select>
@@ -145,7 +143,6 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
             <input placeholder="Облако / Диск" className="w-full p-2 bg-slate-950 border border-slate-800 rounded focus:border-blue-500 outline-none" value={formData.source_link} onChange={e => setFormData({...formData, source_link: e.target.value})} />
           </div>
 
-          {/* ВОТ ЭТОТ БЛОК МЫ ВЕРНУЛИ */}
           <div>
              <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Эскиз / Фото (Можно Ctrl+V)</label>
              <input type="file" accept="image/*" multiple onChange={e => e.target.files && uploadImages(e.target.files)} className="text-xs w-full file:bg-blue-600 file:text-white file:border-0 file:rounded file:px-3 file:py-1 cursor-pointer" />
@@ -164,7 +161,6 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
           </div>
         </div>
 
-        {/* Фиксированная кнопка внизу */}
         <div className="pt-4 mt-auto border-t border-slate-800">
           <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white p-3 rounded font-bold uppercase hover:bg-blue-700 transition disabled:bg-slate-700">
             {loading ? 'Секунду...' : 'Запустить в работу'}
