@@ -28,9 +28,10 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
   useEffect(() => {
     async function loadData() {
       try {
+        // ДОБАВИЛИ telegram_chat_id в выборку
         const { data: inst } = await supabase
           .from('profiles')
-          .select('id, full_name')
+          .select('id, full_name, telegram_chat_id')
           .in('role', ['installer', 'admin']);
         if (inst) setInstallers(inst);
 
@@ -52,16 +53,19 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
   const uploadImages = async (files: FileList | File[]) => {
     setLoading(true);
     const newUrls: string[] = [];
+
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
       const filePath = `previews/${fileName}`;
+      
       const { error } = await supabase.storage.from('order-photos').upload(filePath, file);
       if (!error) {
         const { data } = supabase.storage.from('order-photos').getPublicUrl(filePath);
         newUrls.push(data.publicUrl);
       }
     }
+
     setFormData(prev => ({ ...prev, image_urls: [...prev.image_urls, ...newUrls] }));
     setLoading(false);
   };
@@ -76,7 +80,6 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
     e.preventDefault();
     setLoading(true);
     
-    // ИСПРАВЛЕНИЕ ТУТ: если дата пустая, отправляем null, а не ""
     const payload = {
       ...formData,
       deadline: formData.deadline || null, 
@@ -84,28 +87,57 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
       assigned_to: formData.is_general ? null : (formData.assigned_to || null)
     };
 
+    // Сохраняем заказ
     const { error } = orderId 
       ? await supabase.from('orders').update(payload).eq('id', orderId)
       : await supabase.from('orders').insert([payload]);
 
-    if (!error) onSave();
-    else alert('Ошибка: ' + error.message);
+    if (!error) {
+      // ===== ОТПРАВКА УВЕДОМЛЕНИЯ В ЛИЧКУ =====
+      // Если заказ новый (не редактирование), не общий и назначен конкретному человеку
+      if (!orderId && !formData.is_general && formData.assigned_to) {
+        const assignedUser = installers.find(i => i.id === formData.assigned_to);
+        const botToken = process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN;
+        
+        if (assignedUser && assignedUser.telegram_chat_id && botToken) {
+          const messageText = `🔔 <b>ЛИЧНЫЙ ЗАКАЗ!</b>\n\nТебе назначили новый объект: <b>${formData.title}</b>\n\nЗайди в раздел «📦 Мои заказы», чтобы посмотреть детали.`;
+          
+          // Отправляем запрос напрямую в API Telegram
+          fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              chat_id: assignedUser.telegram_chat_id, 
+              text: messageText, 
+              parse_mode: 'HTML' 
+            })
+          }).catch(err => console.error("Ошибка отправки уведомления:", err));
+        }
+      }
+      // ========================================
+
+      onSave(); // Закрываем модалку и обновляем список
+    } else {
+      alert('Ошибка: ' + error.message);
+    }
+    
     setLoading(false);
   };
 
   return (
     <div className="flex flex-col h-full bg-slate-900 text-white overflow-hidden p-6" onPaste={handlePaste}>
       <form onSubmit={handleSubmit} className="flex flex-col h-full">
+        
         <div className="flex-grow overflow-y-auto space-y-5 pr-2 custom-scrollbar" style={{ maxHeight: '70vh' }}>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Объект</label>
-              <input required className="w-full p-2 bg-slate-950 border border-slate-800 rounded focus:border-blue-500 outline-none" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+              <input required className="w-full p-2 bg-slate-950 border border-slate-800 rounded focus:border-blue-500 outline-none transition" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Куда отправить</label>
-              <select className="w-full p-2 bg-slate-950 border border-slate-800 rounded focus:border-blue-500 outline-none" value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})}>
+              <select className="w-full p-2 bg-slate-950 border border-slate-800 rounded focus:border-blue-500 outline-none transition" value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})}>
                 <option value="installation">🛠 На монтаж</option>
                 <option value="print">🖨 На печать</option>
               </select>
@@ -115,7 +147,7 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Дедлайн</label>
-              <input type="date" className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-slate-300 focus:border-blue-500 outline-none" value={formData.deadline} onChange={e => setFormData({...formData, deadline: e.target.value})} />
+              <input type="date" className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-slate-300 focus:border-blue-500 outline-none transition" value={formData.deadline} onChange={e => setFormData({...formData, deadline: e.target.value})} />
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Лично исполнителю</label>
@@ -142,7 +174,7 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
           </div>
 
           <div>
-             <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Эскиз / Фото (Ctrl+V)</label>
+             <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Эскиз / Фото (Можно Ctrl+V)</label>
              <input type="file" accept="image/*" multiple onChange={e => e.target.files && uploadImages(e.target.files)} className="text-xs w-full file:bg-blue-600 file:text-white file:border-0 file:rounded file:px-3 file:py-1 cursor-pointer" />
              {formData.image_urls.length > 0 && (
                <div className="flex gap-2 mt-3 flex-wrap">
