@@ -24,6 +24,7 @@ export default function Dashboard() {
   
   const [view, setView] = useState<'orders' | 'staff'>('orders');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null); // НОВОЕ: Храним ID того, кто вошел
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [activeTab, setActiveTab] = useState<'active' | 'general' | 'completed' | 'all'>('active');
@@ -36,8 +37,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     const savedAuth = localStorage.getItem('adminAuth');
-    if (savedAuth === 'true') {
+    const savedId = localStorage.getItem('adminId');
+    if (savedAuth === 'true' && savedId) {
       setIsAuthenticated(true);
+      setCurrentUserId(savedId);
     }
   }, []);
 
@@ -50,12 +53,15 @@ export default function Dashboard() {
 
       const mergedOrders = (rawOrders || []).map((order: any) => {
         const assignedProfile = rawProfiles?.find(p => p.id === order.assigned_to);
+        const creatorProfile = rawProfiles?.find(p => p.id === order.created_by); // Находим создателя
+        
         return {
           ...order,
           profiles: assignedProfile ? { 
             full_name: assignedProfile.full_name, 
             telegram_chat_id: assignedProfile.telegram_chat_id 
-          } : null
+          } : null,
+          creator_name: creatorProfile ? creatorProfile.full_name : 'Админ' // Прикрепляем имя автора
         };
       });
 
@@ -99,7 +105,9 @@ export default function Dashboard() {
 
       if (data) {
         setIsAuthenticated(true);
+        setCurrentUserId(data.id); // Запоминаем ID
         localStorage.setItem('adminAuth', 'true');
+        localStorage.setItem('adminId', data.id); // Сохраняем ID в браузер
         toast({ title: `Вход выполнен: ${data.full_name}` });
       } else {
         alert('Ошибка доступа: Неверный ПИН или недостаточно прав');
@@ -113,7 +121,9 @@ export default function Dashboard() {
 
   const handleLogout = () => {
     localStorage.removeItem('adminAuth');
+    localStorage.removeItem('adminId');
     setIsAuthenticated(false);
+    setCurrentUserId(null);
     setPassword('');
   };
 
@@ -180,7 +190,6 @@ export default function Dashboard() {
     }
   };
 
-  // НОВАЯ ФУНКЦИЯ ДЛЯ ПЕРЕКЛЮЧЕНИЯ ГАЛОЧЕК
   const toggleRole = async (userId: string, field: string, currentValue: boolean) => {
     const { error } = await supabase
       .from('profiles')
@@ -188,7 +197,7 @@ export default function Dashboard() {
       .eq('id', userId);
     
     if (!error) {
-      fetchAllData(); // Перезагружаем данные после смены галочки
+      fetchAllData();
       toast({ title: "Допуск обновлен" });
     } else {
       alert("Ошибка обновления прав: " + error.message);
@@ -366,7 +375,6 @@ export default function Dashboard() {
                   <button onClick={() => deleteStaff(p.id)} className="p-2 text-slate-600 hover:text-red-500 transition"><Trash2 className="w-5 h-5" /></button>
                 </div>
 
-                {/* БЛОК С ГАЛОЧКАМИ ДОПУСКОВ */}
                 <div className="mt-4 pt-4 border-t border-slate-800">
                   <p className="text-[10px] font-bold uppercase text-slate-500 mb-2">Права доступа:</p>
                   <div className="flex flex-wrap gap-3 text-xs">
@@ -410,7 +418,11 @@ export default function Dashboard() {
             <DialogHeader className="p-6 pb-0">
               <DialogTitle className="text-xl font-bold uppercase italic tracking-tight">Параметры объекта</DialogTitle>
             </DialogHeader>
-            <OrderForm orderId={editingOrderId} onSave={() => setIsModalOpen(false)} />
+            <OrderForm 
+              orderId={editingOrderId} 
+              onSave={() => { setIsModalOpen(false); fetchAllData(); }} 
+              creatorId={currentUserId || ''} 
+            />
           </DialogContent>
         </Dialog>
 
