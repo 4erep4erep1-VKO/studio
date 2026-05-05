@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2, CheckCircle, ExternalLink } from 'lucide-react';
+import { Trash2, CheckCircle, ExternalLink, User } from 'lucide-react';
 
 interface OrderCardProps {
   order: any;
@@ -39,6 +39,15 @@ export function OrderCard({ order, onEdit, onDelete, onComplete }: OrderCardProp
             )}
           </span>
         </div>
+        
+        {/* НОВЫЙ БЛОК: КТО СОЗДАЛ ЗАКАЗ */}
+        <div className="flex justify-between items-center border-t border-slate-800/80 pt-2 mt-2">
+          <span className="text-slate-500 text-xs uppercase font-bold tracking-wider">Создал:</span>
+          <div className="flex items-center gap-1 text-slate-400">
+            <User className="w-3 h-3" />
+            <span className="text-xs">{order.creator_name || 'Админ'}</span>
+          </div>
+        </div>
       </div>
 
       {order.report_photo && (
@@ -65,7 +74,6 @@ export function OrderCard({ order, onEdit, onDelete, onComplete }: OrderCardProp
         </div>
 
         <div className="flex items-center gap-1">
-          {/* Кнопка "Завершить" (только если не завершен) */}
           {order.status !== 'completed' && (
             <button 
               onClick={() => onComplete(order.id)}
