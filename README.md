@@ -47,12 +47,13 @@
 NEXT_PUBLIC_SUPABASE_URL=твоя_ссылка_supabase
 NEXT_PUBLIC_SUPABASE_ANON_KEY=твой_ключ_supabase
 NEXT_PUBLIC_TELEGRAM_BOT_TOKEN=токен_бота_от_botfather
-Для бота (Python):
 
+Для бота (Python):
 Фрагмент кода
 TELEGRAM_BOT_TOKEN=токен_бота_от_botfather
 SUPABASE_URL=твоя_ссылка_supabase
 SUPABASE_KEY=твой_сервисный_ключ_supabase
+
 2. Запуск Сайта (Админки)
 Bash
 npm install
@@ -61,10 +62,10 @@ npm run dev
 
 3. Запуск Telegram-бота
 Убедитесь, что установлен Python 3.9+.
-
 Bash
 pip install aiogram supabase python-dotenv
 python main.py
+
 4. Настройка Telegram-группы
 Добавьте бота в ваш рабочий чат Telegram.
 
