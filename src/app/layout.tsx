@@ -1,17 +1,13 @@
-import './globals.css';
+import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import { ThemeProvider } from "@/components/theme-provider"
+import './globals.css';
+import { ThemeProvider } from '@/components/ThemeProvider';
 
 const inter = Inter({ subsets: ['latin', 'cyrillic'] });
 
-export const viewport = {
-  width: 'device-width',
-  initialScale: 1,
-};
-
-export const metadata = {
-  title: 'Монтажка ПРО v 3.0',
-  description: 'Система управления заказами',
+export const metadata: Metadata = {
+  title: 'Montazhka PRO',
+  description: 'CRM для управления производством рекламы',
 };
 
 export default function RootLayout({
@@ -20,13 +16,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
+    // suppressHydrationWarning нужен для next-themes, чтобы не было ошибки при загрузке
     <html lang="ru" suppressHydrationWarning>
       <body className={inter.className}>
         <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
         >
           {children}
         </ThemeProvider>
