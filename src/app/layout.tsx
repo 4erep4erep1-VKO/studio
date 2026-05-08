@@ -1,33 +1,24 @@
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
-import { ThemeProvider } from '@/components/ThemeProvider';
+import { ThemeProvider } from "@/components/theme-provider"
+import { ThemeToggle } from "@/components/ThemeToggle"
+import "./globals.css"
 
-const inter = Inter({ subsets: ['latin', 'cyrillic'] });
-
-export const metadata: Metadata = {
-  title: 'Montazhka PRO',
-  description: 'CRM для управления производством рекламы',
-};
-
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    // suppressHydrationWarning нужен для next-themes, чтобы не было ошибки при загрузке
     <html lang="ru" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
         >
-          {children}
+          <header className="p-4 flex justify-between items-center border-b bg-card">
+            <h1 className="font-bold text-secondary">Монтажка PRO</h1>
+            <ThemeToggle />
+          </header>
+          <main>{children}</main>
         </ThemeProvider>
       </body>
     </html>
-  );
+  )
 }

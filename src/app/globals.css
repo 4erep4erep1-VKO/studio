@@ -1,99 +1,65 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 283 22% 98%;
-    --foreground: 283 22% 10%;
+    /* СВЕТЛАЯ ТЕМА: Белый, Шоколад и Коралл */
+    --background: 0 0% 100%; /* Белый */
+    --foreground: 20 25% 15%; /* Почти черный с оттенком шоколада */
+    
     --card: 0 0% 100%;
-    --card-foreground: 283 22% 10%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 283 22% 10%;
-    --primary: 280 100% 30%;
+    --card-foreground: 20 25% 15%;
+ 
+    --primary: 16 100% 66%; /* Коралловый (#FF7F50) */
     --primary-foreground: 0 0% 100%;
-    --secondary: 240 100% 92%;
-    --secondary-foreground: 280 100% 30%;
-    --muted: 283 10% 90%;
-    --muted-foreground: 283 10% 40%;
-    --accent: 240 100% 82%;
-    --accent-foreground: 283 22% 10%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 283 10% 85%;
-    --input: 283 10% 85%;
-    --ring: 280 100% 30%;
+ 
+    --secondary: 19 40% 21%; /* Шоколадный (#4B2C20) */
+    --secondary-foreground: 0 0% 100%;
+ 
+    --muted: 20 10% 95%;
+    --muted-foreground: 20 10% 40%;
+ 
+    --accent: 16 100% 66%;
+    --accent-foreground: 0 0% 100%;
+ 
+    --border: 20 15% 90%;
+    --input: 20 15% 90%;
+    --ring: 16 100% 66%;
     --radius: 0.75rem;
   }
+ 
   .dark {
-    --background: 283 22% 6%;
-    --foreground: 283 22% 98%;
-    --card: 283 22% 10%;
-    --card-foreground: 283 22% 98%;
-    --popover: 283 22% 10%;
-    --popover-foreground: 283 22% 98%;
-    --primary: 280 100% 40%;
+    /* ТЕМНАЯ ТЕМА: Оставляем классический темный, но с коралловым акцентом */
+    --background: 20 20% 4%;
+    --foreground: 0 0% 98%;
+ 
+    --card: 20 20% 6%;
+    --card-foreground: 0 0% 98%;
+ 
+    --primary: 16 100% 66%; /* Коралл остается акцентом */
     --primary-foreground: 0 0% 100%;
-    --secondary: 283 22% 15%;
-    --secondary-foreground: 283 22% 98%;
-    --muted: 283 22% 15%;
-    --muted-foreground: 283 22% 70%;
-    --accent: 240 100% 82%;
-    --accent-foreground: 283 22% 6%;
-    --destructive: 0 62% 30%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 283 22% 15%;
-    --input: 283 22% 15%;
-    --ring: 240 100% 82%;
+ 
+    --secondary: 20 15% 15%;
+    --secondary-foreground: 0 0% 98%;
+ 
+    --muted: 20 15% 15%;
+    --muted-foreground: 20 10% 65%;
+ 
+    --accent: 16 100% 66%;
+    --accent-foreground: 0 0% 100%;
+ 
+    --border: 20 15% 15%;
+    --input: 20 15% 15%;
+    --ring: 16 100% 66%;
   }
 }
 
 @layer base {
   * {
     @apply border-border;
-    -webkit-tap-highlight-color: transparent;
   }
-  
-  html {
-    scroll-behavior: smooth;
-    overflow-x: hidden;
-  }
-
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
-    overflow-x: hidden;
-    min-height: 100dvh;
-    height: auto;
   }
-
-  h1, h2, h3, h4, h5, h6 {
-    @apply font-headline tracking-tight;
-  }
-}
-
-/* Custom scrollbar for desktop */
-@media (min-width: 768px) {
-  ::-webkit-scrollbar {
-    width: 8px;
-  }
-  ::-webkit-scrollbar-track {
-    @apply bg-background;
-  }
-  ::-webkit-scrollbar-thumb {
-    @apply bg-muted rounded-full;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    @apply bg-muted-foreground/30;
-  }
-}
-
-/* Fix mobile scroll bounce/lock */
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
 }
