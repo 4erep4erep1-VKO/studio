@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 
-// Настройки уведомлений
+// Настройки
 const BOT_TOKEN = process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN; 
 const GROUP_ID = "-1003935954352";
 
@@ -11,10 +11,28 @@ export default function OrderMiniPage() {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [deadline, setDeadline] = useState('');
-    const [loading, setLoading] = useState(false);
+    const [department, setDepartment] = useState('installation');
+    const [assignedTo, setAssignedTo] = useState('');
+    const [isGeneral, setIsGeneral] = useState(true);
+    const [imageUrls, setImageUrls] = useState<string[]>([]);
     
-    // Реф, чтобы не вешать слушатель клика дважды
+    const [installers, setInstallers] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    
     const mainButtonCallback = useRef<(() => void) | null>(null);
+
+    // Загружаем профили сотрудников при открытии
+    useEffect(() => {
+        async function loadProfiles() {
+            const { data } = await supabase
+                .from('profiles')
+                .select('id, full_name, telegram_chat_id')
+                .in('role', ['installer', 'admin']);
+            if (data) setInstallers(data);
+        }
+        loadProfiles();
+    }, []);
 
     useEffect(() => {
         const script = document.createElement('script');
@@ -25,7 +43,7 @@ export default function OrderMiniPage() {
         script.onload = () => {
             const tg = window.Telegram?.WebApp;
             if (tg) {
-                tg.expand(); // Разворачиваем на весь экран
+                tg.expand();
                 tg.MainButton.text = "СОЗДАТЬ И ОПОВЕСТИТЬ";
                 tg.MainButton.show();
             }
@@ -38,18 +56,42 @@ export default function OrderMiniPage() {
         };
     }, []);
 
-    // Обновляем логику Главной кнопки при изменении данных
+    // Обработчик загрузки картинок
+    const handleImageUpload = async (files: FileList | null) => {
+        if (!files || files.length === 0) return;
+        setUploading(true);
+        const tg = window.Telegram?.WebApp;
+        if (tg) tg.MainButton.showProgress();
+
+        const newUrls: string[] = [];
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
+            const filePath = `previews/${fileName}`;
+            
+            const { error } = await supabase.storage.from('order-photos').upload(filePath, file);
+            if (!error) {
+                const { data } = supabase.storage.from('order-photos').getPublicUrl(filePath);
+                newUrls.push(data.publicUrl);
+            }
+        }
+
+        setImageUrls(prev => [...prev, ...newUrls]);
+        setUploading(false);
+        if (tg) tg.MainButton.hideProgress();
+    };
+
+    // Логика кнопки "Отправить"
     useEffect(() => {
         const tg = window.Telegram?.WebApp;
         if (!tg) return;
 
-        // Удаляем старый слушатель, если был
         if (mainButtonCallback.current) {
             tg.MainButton.offClick(mainButtonCallback.current);
         }
 
-        // Если форма не заполнена - прячем или дизейблим кнопку
-        if (!title || !deadline) {
+        // Блокируем кнопку, если нет названия, дедлайна или идет загрузка картинки
+        if (!title || !deadline || uploading) {
             tg.MainButton.disable();
             tg.MainButton.color = tg.themeParams.hint_color || "#999999";
         } else {
@@ -57,43 +99,59 @@ export default function OrderMiniPage() {
             tg.MainButton.color = tg.themeParams.button_color || "#2481cc";
         }
 
-        // Новая функция отправки
         const submitData = async () => {
-            if (!title || !deadline) return;
+            if (!title || !deadline || uploading) return;
             tg.MainButton.showProgress();
             setLoading(true);
 
             try {
-                const { error } = await supabase
-                    .from('orders')
-                    .insert([{ 
-                        title, 
-                        description, 
-                        deadline, 
-                        status: 'new',
-                        is_general: true,
-                        department: 'installation' 
-                    }]);
+                const payload = { 
+                    title, 
+                    description, 
+                    deadline, 
+                    status: 'new',
+                    is_general: isGeneral,
+                    department,
+                    assigned_to: isGeneral ? null : (assignedTo || null),
+                    image_urls: imageUrls
+                };
 
+                const { error } = await supabase.from('orders').insert([payload]);
                 if (error) throw error;
 
-                // Уведомление в группу
+                // УВЕДОМЛЕНИЯ В ТЕЛЕГРАМ
                 if (BOT_TOKEN) {
-                    const text = `🔥 <b>НОВЫЙ ЗАКАЗ (из Web App)</b>\n\n📍 Объект: <b>${title}</b>\n📅 Срок: ${deadline}\n📝 Задача: ${description || 'без описания'}`;
+                    // 1. Если личный заказ — шлем исполнителю
+                    if (!isGeneral && assignedTo) {
+                        const user = installers.find(i => i.id === assignedTo);
+                        if (user && user.telegram_chat_id) {
+                            const personalText = `🔔 <b>ЛИЧНЫЙ ЗАКАЗ!</b>\n\nТебе назначили новый объект: <b>${title}</b>\n\nЗайди в раздел «📦 Мои заказы», чтобы посмотреть.`;
+                            await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ chat_id: user.telegram_chat_id, text: personalText, parse_mode: 'HTML' })
+                            });
+                        }
+                    }
+
+                    // 2. Всегда шлем в общую группу для истории
+                    let groupText = `🔥 <b>НОВЫЙ ЗАКАЗ (Mini App)</b>\n\n📍 Объект: <b>${title}</b>\n📅 Срок: ${deadline}\n🏢 Отдел: ${department === 'installation' ? '🛠 Монтаж' : '🖨 Печать'}`;
+                    groupText += `\n👤 Кому: ${isGeneral ? '🌍 Общий заказ' : (installers.find(i => i.id === assignedTo)?.full_name || 'Не назначен')}`;
+                    if (description) groupText += `\n📝 Описание: ${description}`;
+
                     await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ chat_id: GROUP_ID, text: text, parse_mode: 'HTML' })
+                        body: JSON.stringify({ chat_id: GROUP_ID, text: groupText, parse_mode: 'HTML' })
                     });
                 }
 
                 tg.showPopup({
                     title: 'Успешно',
-                    message: 'Объект добавлен в базу и отправлен в группу!',
+                    message: 'Объект добавлен в базу!',
                     buttons: [{ type: 'ok' }]
-                }, () => {
-                    tg.close();
-                });
+                }, () => tg.close());
+
             } catch (err) {
                 tg.showAlert('Ошибка при сохранении в базу');
             } finally {
@@ -105,7 +163,28 @@ export default function OrderMiniPage() {
         mainButtonCallback.current = submitData;
         tg.MainButton.onClick(submitData);
 
-    }, [title, description, deadline]);
+    }, [title, description, deadline, department, assignedTo, isGeneral, imageUrls, uploading, installers]);
+
+    // Общие стили для полей (нативные из Telegram)
+    const inputStyle = {
+        width: '100%',
+        padding: '12px',
+        borderRadius: '10px',
+        border: 'none',
+        backgroundColor: 'var(--tg-theme-secondary-bg-color, #f0f0f0)',
+        color: 'var(--tg-theme-text-color, #000000)',
+        outline: 'none',
+        boxSizing: 'border-box' as const,
+        marginBottom: '16px'
+    };
+    const labelStyle = {
+        display: 'block',
+        marginBottom: '6px',
+        fontSize: '13px',
+        fontWeight: 'bold',
+        color: 'var(--tg-theme-hint-color, #999999)',
+        textTransform: 'uppercase' as const
+    };
 
     return (
         <div style={{
@@ -113,85 +192,81 @@ export default function OrderMiniPage() {
             color: 'var(--tg-theme-text-color, #000000)',
             minHeight: '100vh',
             padding: '20px',
-            fontFamily: 'sans-serif'
+            fontFamily: 'sans-serif',
+            paddingBottom: '80px' // Отступ для нижней кнопки
         }}>
-            <h1 style={{ 
-                fontSize: '24px', 
-                fontWeight: 'bold', 
-                marginBottom: '20px',
-                color: 'var(--tg-theme-text-color, #000000)'
-            }}>Новый заказ</h1>
+            
+            <label style={labelStyle}>Объект *</label>
+            <input required value={title} onChange={e => setTitle(e.target.value)} placeholder="Название..." style={inputStyle} />
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div>
-                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', color: 'var(--tg-theme-hint-color, #999999)' }}>
-                        Название объекта *
-                    </label>
-                    <input 
-                        required
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                        placeholder="Световой короб..."
-                        style={{
-                            width: '100%',
-                            padding: '12px',
-                            borderRadius: '10px',
-                            border: 'none',
-                            backgroundColor: 'var(--tg-theme-secondary-bg-color, #f0f0f0)',
-                            color: 'var(--tg-theme-text-color, #000000)',
-                            outline: 'none',
-                            boxSizing: 'border-box'
-                        }}
-                    />
+            <div style={{ display: 'flex', gap: '10px' }}>
+                <div style={{ flex: 1 }}>
+                    <label style={labelStyle}>Отдел</label>
+                    <select value={department} onChange={e => setDepartment(e.target.value)} style={inputStyle}>
+                        <option value="installation">🛠 Монтаж</option>
+                        <option value="print">🖨 Печать</option>
+                    </select>
                 </div>
-
-                <div>
-                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', color: 'var(--tg-theme-hint-color, #999999)' }}>
-                        Описание
-                    </label>
-                    <textarea 
-                        rows={3}
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        placeholder="Что нужно сделать..."
-                        style={{
-                            width: '100%',
-                            padding: '12px',
-                            borderRadius: '10px',
-                            border: 'none',
-                            backgroundColor: 'var(--tg-theme-secondary-bg-color, #f0f0f0)',
-                            color: 'var(--tg-theme-text-color, #000000)',
-                            outline: 'none',
-                            boxSizing: 'border-box',
-                            resize: 'none'
-                        }}
-                    />
-                </div>
-
-                <div>
-                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', color: 'var(--tg-theme-hint-color, #999999)' }}>
-                        Дедлайн *
-                    </label>
-                    <input 
-                        type="date"
-                        required
-                        value={deadline}
-                        onChange={(e) => setDeadline(e.target.value)}
-                        style={{
-                            width: '100%',
-                            padding: '12px',
-                            borderRadius: '10px',
-                            border: 'none',
-                            backgroundColor: 'var(--tg-theme-secondary-bg-color, #f0f0f0)',
-                            color: 'var(--tg-theme-text-color, #000000)',
-                            outline: 'none',
-                            boxSizing: 'border-box'
-                        }}
-                    />
+                <div style={{ flex: 1 }}>
+                    <label style={labelStyle}>Дедлайн *</label>
+                    <input type="date" required value={deadline} onChange={e => setDeadline(e.target.value)} style={inputStyle} />
                 </div>
             </div>
-            
-            {/* Обычную кнопку убрали, так как теперь работает нативная внизу экрана */}
+
+            <label style={labelStyle}>Описание</label>
+            <textarea rows={3} value={description} onChange={e => setDescription(e.target.value)} placeholder="Детали задачи..." style={{ ...inputStyle, resize: 'none' }} />
+
+            <div style={{
+                backgroundColor: 'var(--tg-theme-secondary-bg-color, #f0f0f0)',
+                padding: '12px',
+                borderRadius: '10px',
+                marginBottom: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+            }}>
+                <input 
+                    type="checkbox" 
+                    checked={isGeneral} 
+                    onChange={e => setIsGeneral(e.target.checked)} 
+                    style={{ width: '20px', height: '20px' }} 
+                />
+                <span style={{ fontSize: '14px', fontWeight: 'bold' }}>Общий заказ (для всех)</span>
+            </div>
+
+            {!isGeneral && (
+                <div>
+                    <label style={labelStyle}>Лично исполнителю</label>
+                    <select value={assignedTo} onChange={e => setAssignedTo(e.target.value)} style={inputStyle}>
+                        <option value="">Выберите сотрудника...</option>
+                        {installers.map(i => (
+                            <option key={i.id} value={i.id}>{i.full_name}</option>
+                        ))}
+                    </select>
+                </div>
+            )}
+
+            <div>
+                <label style={labelStyle}>Фото / Эскиз {uploading && '(Загрузка...)'}</label>
+                <input 
+                    type="file" 
+                    accept="image/*" 
+                    multiple 
+                    onChange={e => handleImageUpload(e.target.files)} 
+                    style={{ ...inputStyle, padding: '8px' }} 
+                    disabled={uploading}
+                />
+                
+                {/* Превью загруженных картинок */}
+                {imageUrls.length > 0 && (
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+                        {imageUrls.map((url, idx) => (
+                            <img key={idx} src={url} alt="Превью" style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '8px' }} />
+                        ))}
+                    </div>
+                )}
+            </div>
+
         </div>
     );
 }
