@@ -12,28 +12,28 @@ export function OrderCard({ order, onEdit, onDelete, onComplete }: OrderCardProp
   const chatId = order.profiles?.telegram_chat_id || null;
 
   return (
-    <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl shadow-sm hover:border-slate-700 transition flex flex-col h-full">
+    <div className="bg-card border border-border p-5 rounded-xl shadow-sm hover:border-muted-foreground/30 transition flex flex-col h-full">
       <div className="flex justify-between items-start">
-        <h3 className="font-bold text-lg text-white mb-2">{order.title}</h3>
+        <h3 className="font-bold text-lg text-card-foreground mb-2">{order.title}</h3>
         <div className="flex gap-2">
-           {order.preview_url && <span className="text-[10px] text-blue-400 bg-blue-900/30 px-2 py-1 rounded uppercase font-bold">Эскиз</span>}
+           {order.preview_url && <span className="text-[10px] text-primary bg-primary/10 border border-primary/20 px-2 py-1 rounded uppercase font-bold">Эскиз</span>}
         </div>
       </div>
       
-      <p className="text-slate-400 text-sm mb-4 line-clamp-2 flex-grow">
+      <p className="text-muted-foreground text-sm mb-4 line-clamp-2 flex-grow">
         {order.description || 'Нет описания'}
       </p>
       
-      <div className="space-y-2 text-sm mb-4 bg-slate-950/50 p-3 rounded-lg border border-slate-800/50">
+      <div className="space-y-2 text-sm mb-4 bg-background/50 p-3 rounded-lg border border-border/50">
         <div className="flex justify-between">
-          <span className="text-slate-500">Дедлайн:</span>
-          <span className="text-slate-300">{order.deadline ? new Date(order.deadline).toLocaleDateString() : '—'}</span>
+          <span className="text-muted-foreground">Дедлайн:</span>
+          <span className="text-foreground font-medium">{order.deadline ? new Date(order.deadline).toLocaleDateString() : '—'}</span>
         </div>
         <div className="flex justify-between items-center">
-          <span className="text-slate-500">Исполнитель:</span>
-          <span className="text-slate-300 font-medium">
+          <span className="text-muted-foreground">Исполнитель:</span>
+          <span className="text-foreground font-medium">
             {order.is_general ? (
-              <span className="text-purple-400 text-xs uppercase font-bold">Общий заказ</span>
+              <span className="text-primary text-xs uppercase font-bold">Общий заказ</span>
             ) : (
               order.profiles?.full_name || 'Не назначен'
             )}
@@ -41,9 +41,9 @@ export function OrderCard({ order, onEdit, onDelete, onComplete }: OrderCardProp
         </div>
         
         {/* НОВЫЙ БЛОК: КТО СОЗДАЛ ЗАКАЗ */}
-        <div className="flex justify-between items-center border-t border-slate-800/80 pt-2 mt-2">
-          <span className="text-slate-500 text-xs uppercase font-bold tracking-wider">Создал:</span>
-          <div className="flex items-center gap-1 text-slate-400">
+        <div className="flex justify-between items-center border-t border-border/80 pt-2 mt-2">
+          <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider">Создал:</span>
+          <div className="flex items-center gap-1 text-muted-foreground">
             <User className="w-3 h-3" />
             <span className="text-xs">{order.creator_name || 'Админ'}</span>
           </div>
@@ -51,10 +51,10 @@ export function OrderCard({ order, onEdit, onDelete, onComplete }: OrderCardProp
       </div>
 
       {order.report_photo && (
-        <div className="mb-4 bg-slate-950 p-2 rounded-lg border border-slate-800">
-          <p className="text-[10px] text-slate-500 uppercase font-bold mb-2">📸 Отчет:</p>
+        <div className="mb-4 bg-background p-2 rounded-lg border border-border">
+          <p className="text-[10px] text-muted-foreground uppercase font-bold mb-2">📸 Отчет:</p>
           <a href={order.report_photo} target="_blank" rel="noopener noreferrer" className="block relative group">
-            <img src={order.report_photo} alt="Отчет" className="w-full h-24 object-cover rounded-md border border-slate-700" />
+            <img src={order.report_photo} alt="Отчет" className="w-full h-24 object-cover rounded-md border border-border" />
             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition rounded-md">
               <ExternalLink className="text-white w-5 h-5" />
             </div>
@@ -62,12 +62,12 @@ export function OrderCard({ order, onEdit, onDelete, onComplete }: OrderCardProp
         </div>
       )}
 
-      <div className="pt-4 border-t border-slate-800 flex flex-wrap gap-2 justify-between items-center mt-auto">
+      <div className="pt-4 border-t border-border flex flex-wrap gap-2 justify-between items-center mt-auto">
         <div className="flex items-center gap-2">
           <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
-            order.status === 'completed' ? 'bg-green-500/20 text-green-400' : 
-            order.status === 'in_progress' ? 'bg-yellow-500/20 text-yellow-400' : 
-            'bg-slate-800 text-slate-300'
+            order.status === 'completed' ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 
+            order.status === 'in_progress' ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400' : 
+            'bg-muted text-muted-foreground border border-border'
           }`}>
             {order.status === 'completed' ? 'Завершен' : order.status === 'in_progress' ? 'В работе' : 'Новый'}
           </span>
@@ -77,7 +77,7 @@ export function OrderCard({ order, onEdit, onDelete, onComplete }: OrderCardProp
           {order.status !== 'completed' && (
             <button 
               onClick={() => onComplete(order.id)}
-              className="p-2 text-green-500 hover:bg-green-500/10 rounded-lg transition"
+              className="p-2 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition"
               title="Завершить заказ"
             >
               <CheckCircle className="w-5 h-5" />
@@ -86,14 +86,14 @@ export function OrderCard({ order, onEdit, onDelete, onComplete }: OrderCardProp
 
           <button 
             onClick={() => onEdit(order.id)}
-            className="px-3 py-1.5 text-blue-500 hover:bg-blue-500/10 rounded-lg text-sm font-bold transition"
+            className="px-3 py-1.5 text-primary hover:bg-primary/10 rounded-lg text-sm font-bold transition"
           >
             Правка
           </button>
 
           <button 
             onClick={() => onDelete(order.id, chatId, order.title)}
-            className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition"
+            className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition"
             title="Удалить заказ"
           >
             <Trash2 className="w-5 h-5" />
