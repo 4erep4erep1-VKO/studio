@@ -302,4 +302,131 @@ export default function Dashboard() {
               <Megaphone className="w-4 h-4 mr-2" /> Объявление
             </Button>
             {view === 'orders' ? (
-              <Button onClick={() => {
+              <Button onClick={() => { setEditingOrderId(null); setIsModalOpen(true); }} className="bg-primary text-primary-foreground font-bold hover:opacity-90 shadow-md border-0">
+                <Plus className="w-4 h-4 mr-2" /> Новый объект
+              </Button>
+            ) : (
+              <Button onClick={addStaff} className="bg-primary text-primary-foreground font-bold hover:opacity-90 shadow-md border-0">
+                <UserPlus className="w-4 h-4 mr-2" /> Добавить профиль
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {view === 'orders' ? (
+          <>
+            <div className="flex flex-wrap gap-4 mb-6">
+              <div className="relative flex-grow max-w-md">
+                <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
+                <input 
+                  placeholder="Поиск по названию..." 
+                  className="w-full pl-10 pr-4 py-2 bg-card border border-border text-foreground rounded-lg outline-none focus:border-primary transition" 
+                  value={searchQuery} 
+                  onChange={e => setSearchQuery(e.target.value)} 
+                />
+              </div>
+              <div className="flex gap-2 bg-card p-1 rounded-lg border border-border">
+                {['active', 'general', 'completed', 'all'].map(t => (
+                  <button 
+                    key={t} 
+                    onClick={() => setActiveTab(t as any)} 
+                    className={`px-4 py-1.5 rounded-md text-xs font-bold uppercase transition ${activeTab === t ? 'bg-primary text-primary-foreground shadow' : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    {t === 'active' ? '🔥 Актив' : t === 'general' ? '🌍 Общие' : t === 'completed' ? '✅ Архив' : '📦 Все'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary w-10 h-10" /></div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {filteredOrders.map((o: any) => (
+                  <OrderCard 
+                    key={o.id} 
+                    order={o} 
+                    onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} 
+                    onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} 
+                    onComplete={fetchAllData} 
+                  />
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {profiles.map(p => (
+              <div key={p.id} className={`bg-card border ${p.role === 'admin' ? 'border-primary/50' : 'border-border'} p-5 rounded-xl flex flex-col justify-between hover:border-muted-foreground/30 transition shadow-sm`}>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-bold text-foreground">{p.full_name}</h3>
+                      {p.role === 'admin' && <ShieldCheck className="w-4 h-4 text-primary" />}
+                    </div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-widest">{p.role === 'admin' ? 'Администратор' : 'Сотрудник'}</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <span className="text-[10px] bg-background px-2 py-1 rounded text-primary font-mono border border-border">PIN: {p.pin_code}</span>
+                      <span className={`text-[10px] px-2 py-1 rounded font-bold ${p.telegram_chat_id ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'}`}>
+                        {p.telegram_chat_id ? 'Бот активен' : 'Бот не привязан'}
+                      </span>
+                    </div>
+                  </div>
+                  <button onClick={() => deleteStaff(p.id)} className="p-2 text-muted-foreground hover:text-destructive transition"><Trash2 className="w-5 h-5" /></button>
+                </div>
+
+                <div className="mt-4 pt-4 border-t border-border">
+                  <p className="text-[10px] font-bold uppercase text-muted-foreground mb-2">Права доступа:</p>
+                  <div className="flex flex-wrap gap-3 text-xs">
+                    <label className="flex items-center gap-1 text-muted-foreground cursor-pointer hover:text-foreground transition">
+                      <input 
+                        type="checkbox" 
+                        checked={p.can_design || false} 
+                        onChange={() => toggleRole(p.id, 'can_design', p.can_design)} 
+                        className="accent-primary" 
+                      />
+                      🎨 Дизайн
+                    </label>
+                    <label className="flex items-center gap-1 text-muted-foreground cursor-pointer hover:text-foreground transition">
+                      <input 
+                        type="checkbox" 
+                        checked={p.can_print || false} 
+                        onChange={() => toggleRole(p.id, 'can_print', p.can_print)} 
+                        className="accent-primary" 
+                      />
+                      🖨 Печать
+                    </label>
+                    <label className="flex items-center gap-1 text-muted-foreground cursor-pointer hover:text-foreground transition">
+                      <input 
+                        type="checkbox" 
+                        checked={p.can_install || false} 
+                        onChange={() => toggleRole(p.id, 'can_install', p.can_install)} 
+                        className="accent-primary" 
+                      />
+                      🛠 Монтаж
+                    </label>
+                  </div>
+                </div>
+
+              </div>
+            ))}
+          </div>
+        )}
+
+        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+          <DialogContent className="max-w-xl bg-card border-border text-foreground p-0 shadow-2xl overflow-hidden">
+            <DialogHeader className="p-6 pb-0">
+              <DialogTitle className="text-xl font-bold uppercase italic tracking-tight text-secondary">Параметры объекта</DialogTitle>
+            </DialogHeader>
+            <OrderForm 
+              orderId={editingOrderId} 
+              onSave={() => { setIsModalOpen(false); fetchAllData(); }} 
+              creatorId={currentUserId || ''} 
+            />
+          </DialogContent>
+        </Dialog>
+
+      </div>
+    </div>
+  );
+}
