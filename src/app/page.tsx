@@ -149,6 +149,23 @@ export default function Dashboard() {
     }
   };
 
+  // НОВАЯ ФУНКЦИЯ ДЛЯ ЗАВЕРШЕНИЯ ЗАКАЗА
+  const handleComplete = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: 'completed' })
+        .eq('id', id);
+        
+      if (error) throw error;
+      
+      toast({ title: "Заказ завершен!" });
+      fetchAllData(); // Обновляем список только после успешного сохранения в базу
+    } catch (err: any) {
+      alert('Ошибка при завершении заказа: ' + err.message);
+    }
+  };
+
   const handleBroadcast = async () => {
     const msg = prompt("Введите текст объявления для всех сотрудников:");
     if (!msg) return;
@@ -348,7 +365,7 @@ export default function Dashboard() {
                     order={o} 
                     onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} 
                     onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} 
-                    onComplete={fetchAllData} 
+                    onComplete={handleComplete} // ВОТ ТУТ ТЕПЕРЬ ВЫЗЫВАЕТСЯ ПРАВИЛЬНАЯ ФУНКЦИЯ
                   />
                 ))}
               </div>
