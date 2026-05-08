@@ -1,5 +1,6 @@
 import React from 'react';
 import { Trash2, CheckCircle, ExternalLink, User } from 'lucide-react';
+import confetti from 'canvas-confetti';
 
 interface OrderCardProps {
   order: any;
@@ -10,6 +11,18 @@ interface OrderCardProps {
 
 export function OrderCard({ order, onEdit, onDelete, onComplete }: OrderCardProps) {
   const chatId = order.profiles?.telegram_chat_id || null;
+
+  const handleComplete = () => {
+    // ЗАПУСКАЕМ САЛЮТ 🎉
+    confetti({
+      particleCount: 100,
+      spread: 70,
+      origin: { y: 0.6 },
+      colors: ['#FF7F50', '#4B2C20', '#10B981'] // Наши цвета: коралл, шоколад, зеленый
+    });
+    // Вызываем оригинальную функцию завершения
+    onComplete(order.id);
+  };
 
   return (
     <div className="bg-card border border-border p-5 rounded-xl shadow-sm hover:border-muted-foreground/30 transition flex flex-col h-full">
@@ -40,7 +53,6 @@ export function OrderCard({ order, onEdit, onDelete, onComplete }: OrderCardProp
           </span>
         </div>
         
-        {/* НОВЫЙ БЛОК: КТО СОЗДАЛ ЗАКАЗ */}
         <div className="flex justify-between items-center border-t border-border/80 pt-2 mt-2">
           <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider">Создал:</span>
           <div className="flex items-center gap-1 text-muted-foreground">
@@ -76,7 +88,7 @@ export function OrderCard({ order, onEdit, onDelete, onComplete }: OrderCardProp
         <div className="flex items-center gap-1">
           {order.status !== 'completed' && (
             <button 
-              onClick={() => onComplete(order.id)}
+              onClick={handleComplete}
               className="p-2 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition"
               title="Завершить заказ"
             >

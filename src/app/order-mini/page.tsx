@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 
-// Твои настройки (замени на реальные, если они другие)
-const BOT_TOKEN = "ТВОЙ_ТОКЕН_БОТА"; 
+// Настройки уведомлений
+const BOT_TOKEN = process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN; 
 const GROUP_ID = "-1003935954352";
 
 export default function OrderMiniPage() {
@@ -12,100 +12,186 @@ export default function OrderMiniPage() {
     const [description, setDescription] = useState('');
     const [deadline, setDeadline] = useState('');
     const [loading, setLoading] = useState(false);
+    
+    // Реф, чтобы не вешать слушатель клика дважды
+    const mainButtonCallback = useRef<(() => void) | null>(null);
 
     useEffect(() => {
         const script = document.createElement('script');
         script.src = 'https://telegram.org/js/telegram-web-app.js';
         script.async = true;
         document.body.appendChild(script);
+
+        script.onload = () => {
+            const tg = window.Telegram?.WebApp;
+            if (tg) {
+                tg.expand(); // Разворачиваем на весь экран
+                tg.MainButton.text = "СОЗДАТЬ И ОПОВЕСТИТЬ";
+                tg.MainButton.show();
+            }
+        };
+
+        return () => {
+            if (window.Telegram?.WebApp && mainButtonCallback.current) {
+                window.Telegram.WebApp.MainButton.offClick(mainButtonCallback.current);
+            }
+        };
     }, []);
 
-    const sendTelegramNotify = async (orderTitle: string) => {
-        const text = `🔥 **НОВЫЙ ЗАКАЗ**\n\n📍 Объект: ${orderTitle}\n📅 Срок: ${deadline}\n📝 Описание: ${description}`;
-        try {
-            await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    chat_id: GROUP_ID,
-                    text: text,
-                    parse_mode: 'Markdown'
-                })
-            });
-        } catch (e) {
-            console.error('Ошибка уведомления в группу', e);
+    // Обновляем логику Главной кнопки при изменении данных
+    useEffect(() => {
+        const tg = window.Telegram?.WebApp;
+        if (!tg) return;
+
+        // Удаляем старый слушатель, если был
+        if (mainButtonCallback.current) {
+            tg.MainButton.offClick(mainButtonCallback.current);
         }
-    };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
-        try {
-            const { error } = await supabase
-                .from('orders')
-                .insert([{ title, description, deadline, status: 'pending' }]);
+        // Если форма не заполнена - прячем или дизейблим кнопку
+        if (!title || !deadline) {
+            tg.MainButton.disable();
+            tg.MainButton.color = tg.themeParams.hint_color || "#999999";
+        } else {
+            tg.MainButton.enable();
+            tg.MainButton.color = tg.themeParams.button_color || "#2481cc";
+        }
 
-            if (error) throw error;
+        // Новая функция отправки
+        const submitData = async () => {
+            if (!title || !deadline) return;
+            tg.MainButton.showProgress();
+            setLoading(true);
 
-            await sendTelegramNotify(title);
+            try {
+                const { error } = await supabase
+                    .from('orders')
+                    .insert([{ 
+                        title, 
+                        description, 
+                        deadline, 
+                        status: 'new',
+                        is_general: true,
+                        department: 'installation' 
+                    }]);
 
-            if (window.Telegram?.WebApp) {
-                window.Telegram.WebApp.showPopup({
+                if (error) throw error;
+
+                // Уведомление в группу
+                if (BOT_TOKEN) {
+                    const text = `🔥 <b>НОВЫЙ ЗАКАЗ (из Web App)</b>\n\n📍 Объект: <b>${title}</b>\n📅 Срок: ${deadline}\n📝 Задача: ${description || 'без описания'}`;
+                    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ chat_id: GROUP_ID, text: text, parse_mode: 'HTML' })
+                    });
+                }
+
+                tg.showPopup({
                     title: 'Успешно',
-                    message: 'Заказ создан и отправлен в группу!',
+                    message: 'Объект добавлен в базу и отправлен в группу!',
                     buttons: [{ type: 'ok' }]
+                }, () => {
+                    tg.close();
                 });
-                window.Telegram.WebApp.close();
+            } catch (err) {
+                tg.showAlert('Ошибка при сохранении в базу');
+            } finally {
+                tg.MainButton.hideProgress();
+                setLoading(false);
             }
-        } catch (err) {
-            alert('Ошибка при сохранении в базу');
-        } finally {
-            setLoading(false);
-        }
-    };
+        };
+
+        mainButtonCallback.current = submitData;
+        tg.MainButton.onClick(submitData);
+
+    }, [title, description, deadline]);
 
     return (
-        <div className="min-h-screen bg-background text-foreground p-4">
-            <h1 className="text-xl font-bold mb-6 font-headline">Новый заказ</h1>
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-1">
-                    <label className="text-sm font-medium">Название объекта</label>
+        <div style={{
+            backgroundColor: 'var(--tg-theme-bg-color, #ffffff)',
+            color: 'var(--tg-theme-text-color, #000000)',
+            minHeight: '100vh',
+            padding: '20px',
+            fontFamily: 'sans-serif'
+        }}>
+            <h1 style={{ 
+                fontSize: '24px', 
+                fontWeight: 'bold', 
+                marginBottom: '20px',
+                color: 'var(--tg-theme-text-color, #000000)'
+            }}>Новый заказ</h1>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div>
+                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', color: 'var(--tg-theme-hint-color, #999999)' }}>
+                        Название объекта *
+                    </label>
                     <input 
                         required
-                        className="w-full p-3 rounded-lg border bg-card"
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
-                        placeholder="Напр: Световой короб"
+                        placeholder="Световой короб..."
+                        style={{
+                            width: '100%',
+                            padding: '12px',
+                            borderRadius: '10px',
+                            border: 'none',
+                            backgroundColor: 'var(--tg-theme-secondary-bg-color, #f0f0f0)',
+                            color: 'var(--tg-theme-text-color, #000000)',
+                            outline: 'none',
+                            boxSizing: 'border-box'
+                        }}
                     />
                 </div>
-                <div className="space-y-1">
-                    <label className="text-sm font-medium">Описание</label>
+
+                <div>
+                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', color: 'var(--tg-theme-hint-color, #999999)' }}>
+                        Описание
+                    </label>
                     <textarea 
-                        className="w-full p-3 rounded-lg border bg-card"
                         rows={3}
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
-                        placeholder="Что именно сделать?"
+                        placeholder="Что нужно сделать..."
+                        style={{
+                            width: '100%',
+                            padding: '12px',
+                            borderRadius: '10px',
+                            border: 'none',
+                            backgroundColor: 'var(--tg-theme-secondary-bg-color, #f0f0f0)',
+                            color: 'var(--tg-theme-text-color, #000000)',
+                            outline: 'none',
+                            boxSizing: 'border-box',
+                            resize: 'none'
+                        }}
                     />
                 </div>
-                <div className="space-y-1">
-                    <label className="text-sm font-medium">Дедлайн</label>
+
+                <div>
+                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', color: 'var(--tg-theme-hint-color, #999999)' }}>
+                        Дедлайн *
+                    </label>
                     <input 
                         type="date"
                         required
-                        className="w-full p-3 rounded-lg border bg-card"
                         value={deadline}
                         onChange={(e) => setDeadline(e.target.value)}
+                        style={{
+                            width: '100%',
+                            padding: '12px',
+                            borderRadius: '10px',
+                            border: 'none',
+                            backgroundColor: 'var(--tg-theme-secondary-bg-color, #f0f0f0)',
+                            color: 'var(--tg-theme-text-color, #000000)',
+                            outline: 'none',
+                            boxSizing: 'border-box'
+                        }}
                     />
                 </div>
-                <button 
-                    type="submit"
-                    disabled={loading}
-                    className="w-full bg-primary text-primary-foreground p-4 rounded-xl font-bold active:scale-95 transition mt-4"
-                >
-                    {loading ? 'Загрузка...' : 'СОЗДАТЬ И ОПОВЕСТИТЬ'}
-                </button>
-            </form>
+            </div>
+            
+            {/* Обычную кнопку убрали, так как теперь работает нативная внизу экрана */}
         </div>
     );
 }
