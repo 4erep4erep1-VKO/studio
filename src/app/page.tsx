@@ -24,7 +24,7 @@ export default function Dashboard() {
   
   const [view, setView] = useState<'orders' | 'staff'>('orders');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null); // НОВОЕ: Храним ID того, кто вошел
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [activeTab, setActiveTab] = useState<'active' | 'general' | 'completed' | 'all'>('active');
@@ -53,7 +53,7 @@ export default function Dashboard() {
 
       const mergedOrders = (rawOrders || []).map((order: any) => {
         const assignedProfile = rawProfiles?.find(p => p.id === order.assigned_to);
-        const creatorProfile = rawProfiles?.find(p => p.id === order.created_by); // Находим создателя
+        const creatorProfile = rawProfiles?.find(p => p.id === order.created_by);
         
         return {
           ...order,
@@ -61,7 +61,7 @@ export default function Dashboard() {
             full_name: assignedProfile.full_name, 
             telegram_chat_id: assignedProfile.telegram_chat_id 
           } : null,
-          creator_name: creatorProfile ? creatorProfile.full_name : 'Админ' // Прикрепляем имя автора
+          creator_name: creatorProfile ? creatorProfile.full_name : 'Админ'
         };
       });
 
@@ -105,9 +105,9 @@ export default function Dashboard() {
 
       if (data) {
         setIsAuthenticated(true);
-        setCurrentUserId(data.id); // Запоминаем ID
+        setCurrentUserId(data.id);
         localStorage.setItem('adminAuth', 'true');
-        localStorage.setItem('adminId', data.id); // Сохраняем ID в браузер
+        localStorage.setItem('adminId', data.id);
         toast({ title: `Вход выполнен: ${data.full_name}` });
       } else {
         alert('Ошибка доступа: Неверный ПИН или недостаточно прав');
@@ -222,17 +222,17 @@ export default function Dashboard() {
 
   if (!isAuthenticated) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-950 text-white">
-        <div className="bg-slate-900 p-8 rounded-2xl border border-slate-800 w-96 text-center shadow-2xl">
-          <h2 className="text-2xl font-bold mb-6 tracking-tight">Montazhka PRO Admin</h2>
+      <div className="flex items-center justify-center min-h-screen bg-background text-foreground transition-colors duration-300">
+        <div className="bg-card p-8 rounded-2xl border border-border w-96 text-center shadow-2xl">
+          <h2 className="text-2xl font-bold mb-6 tracking-tight text-secondary">Montazhka PRO</h2>
           <input 
             type="password" 
             placeholder="Введите ПИН-код" 
-            className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg mb-4 text-center text-xl tracking-widest outline-none focus:border-blue-500 transition" 
+            className="w-full p-3 bg-background border border-border rounded-lg mb-4 text-center text-xl tracking-widest outline-none focus:border-primary transition" 
             onKeyDown={e => e.key === 'Enter' && handleLogin()} 
             onChange={e => setPassword(e.target.value)} 
           />
-          <Button onClick={handleLogin} disabled={isLoggingIn} className="w-full bg-blue-600 font-bold h-12">
+          <Button onClick={handleLogin} disabled={isLoggingIn} className="w-full bg-primary text-primary-foreground font-bold h-12 hover:opacity-90">
             {isLoggingIn ? <Loader2 className="animate-spin" /> : 'Войти'}
           </Button>
         </div>
@@ -241,44 +241,44 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-6 bg-slate-950 min-h-screen text-white font-sans">
+    <div className="p-6 bg-background min-h-screen text-foreground font-sans transition-colors duration-300">
       <div className="max-w-7xl mx-auto">
         
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex items-center gap-4">
-            <div className="p-3 bg-blue-600/20 rounded-lg"><BarChart3 className="text-blue-500" /></div>
-            <div><p className="text-xs text-slate-500 uppercase font-bold">Заказы</p><p className="text-2xl font-bold">{stats.total}</p></div>
+          <div className="bg-card p-4 rounded-xl border border-border flex items-center gap-4 shadow-sm">
+            <div className="p-3 bg-primary/10 rounded-lg"><BarChart3 className="text-primary" /></div>
+            <div><p className="text-xs text-muted-foreground uppercase font-bold">Заказы</p><p className="text-2xl font-bold">{stats.total}</p></div>
           </div>
-          <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex items-center gap-4">
-            <div className="p-3 bg-yellow-600/20 rounded-lg"><Clock className="text-yellow-500" /></div>
-            <div><p className="text-xs text-slate-500 uppercase font-bold">В работе</p><p className="text-2xl font-bold">{stats.active}</p></div>
+          <div className="bg-card p-4 rounded-xl border border-border flex items-center gap-4 shadow-sm">
+            <div className="p-3 bg-amber-500/10 rounded-lg"><Clock className="text-amber-500" /></div>
+            <div><p className="text-xs text-muted-foreground uppercase font-bold">В работе</p><p className="text-2xl font-bold">{stats.active}</p></div>
           </div>
-          <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex items-center gap-4">
-            <div className="p-3 bg-green-600/20 rounded-lg"><CheckCircle2 className="text-green-500" /></div>
-            <div><p className="text-xs text-slate-500 uppercase font-bold">Сделано</p><p className="text-2xl font-bold">{stats.done}</p></div>
+          <div className="bg-card p-4 rounded-xl border border-border flex items-center gap-4 shadow-sm">
+            <div className="p-3 bg-emerald-500/10 rounded-lg"><CheckCircle2 className="text-emerald-500" /></div>
+            <div><p className="text-xs text-muted-foreground uppercase font-bold">Сделано</p><p className="text-2xl font-bold">{stats.done}</p></div>
           </div>
-          <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex items-center gap-4 relative">
-             <div className="p-3 bg-orange-600/20 rounded-lg cursor-pointer" onClick={() => setShowNotifs(!showNotifs)}>
-                <Bell className={notifications.length > 0 ? "text-orange-500 animate-pulse" : "text-slate-500"} />
+          <div className="bg-card p-4 rounded-xl border border-border flex items-center gap-4 relative shadow-sm">
+             <div className="p-3 bg-secondary/10 rounded-lg cursor-pointer" onClick={() => setShowNotifs(!showNotifs)}>
+                <Bell className={notifications.length > 0 ? "text-secondary animate-pulse" : "text-muted-foreground"} />
              </div>
              <div className="flex-grow">
-                <p className="text-xs text-slate-500 uppercase font-bold">Система</p>
+                <p className="text-xs text-muted-foreground uppercase font-bold">Система</p>
                 <div className="flex items-center justify-between">
-                  <p className="text-sm text-slate-400 font-medium">Активна</p>
-                  <LogOut onClick={handleLogout} className="w-5 h-5 text-red-500 cursor-pointer hover:text-red-400" title="Выйти" />
+                  <p className="text-sm text-foreground font-medium">Активна</p>
+                  <LogOut onClick={handleLogout} className="w-5 h-5 text-destructive cursor-pointer hover:opacity-70" title="Выйти" />
                 </div>
              </div>
              
              {showNotifs && (
-               <div className="absolute top-full left-0 w-full mt-2 bg-slate-900 border border-slate-800 rounded-xl p-3 z-50 shadow-2xl">
-                 <div className="flex justify-between mb-2 border-b border-slate-800 pb-1">
-                   <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">События</span>
-                   <X className="w-3 h-3 cursor-pointer" onClick={() => setShowNotifs(false)} />
+               <div className="absolute top-full left-0 w-full mt-2 bg-card border border-border rounded-xl p-3 z-50 shadow-2xl">
+                 <div className="flex justify-between mb-2 border-b border-border pb-1">
+                   <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">События</span>
+                   <X className="w-3 h-3 cursor-pointer text-muted-foreground hover:text-foreground" onClick={() => setShowNotifs(false)} />
                  </div>
-                 {notifications.length === 0 ? <p className="text-[10px] text-slate-600 text-center py-2">Уведомлений нет</p> : 
+                 {notifications.length === 0 ? <p className="text-[10px] text-muted-foreground text-center py-2">Уведомлений нет</p> : 
                   notifications.map(n => (
-                    <div key={n.id} className="text-[10px] mb-2 last:mb-0 border-l-2 border-blue-600 pl-2">
-                      <span className="text-slate-500">{n.time}</span> — {n.text}
+                    <div key={n.id} className="text-[10px] mb-2 last:mb-0 border-l-2 border-primary pl-2 text-foreground">
+                      <span className="text-muted-foreground">{n.time}</span> — {n.text}
                     </div>
                   ))
                  }
@@ -288,145 +288,18 @@ export default function Dashboard() {
         </div>
 
         <div className="flex flex-wrap justify-between items-center mb-8 gap-4">
-          <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800">
-            <button onClick={() => setView('orders')} className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition ${view === 'orders' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>
+          <div className="flex bg-card p-1 rounded-xl border border-border">
+            <button onClick={() => setView('orders')} className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition ${view === 'orders' ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground'}`}>
               <LayoutDashboard className="w-4 h-4" /> Заказы
             </button>
-            <button onClick={() => setView('staff')} className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition ${view === 'staff' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>
+            <button onClick={() => setView('staff')} className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition ${view === 'staff' ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground'}`}>
               <Users className="w-4 h-4" /> Команда
             </button>
           </div>
 
           <div className="flex gap-2">
-            <Button onClick={handleBroadcast} className="bg-orange-600 font-bold hover:bg-orange-700">
+            <Button onClick={handleBroadcast} className="bg-secondary text-secondary-foreground font-bold hover:opacity-90">
               <Megaphone className="w-4 h-4 mr-2" /> Объявление
             </Button>
             {view === 'orders' ? (
-              <Button onClick={() => { setEditingOrderId(null); setIsModalOpen(true); }} className="bg-blue-600 font-bold hover:bg-blue-700">
-                <Plus className="w-4 h-4 mr-2" /> Новый объект
-              </Button>
-            ) : (
-              <Button onClick={addStaff} className="bg-green-600 font-bold hover:bg-green-700">
-                <UserPlus className="w-4 h-4 mr-2" /> Добавить профиль
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {view === 'orders' ? (
-          <>
-            <div className="flex flex-wrap gap-4 mb-6">
-              <div className="relative flex-grow max-w-md">
-                <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
-                <input 
-                  placeholder="Поиск по названию..." 
-                  className="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-800 rounded-lg outline-none focus:border-blue-500" 
-                  value={searchQuery} 
-                  onChange={e => setSearchQuery(e.target.value)} 
-                />
-              </div>
-              <div className="flex gap-2 bg-slate-900 p-1 rounded-lg border border-slate-800">
-                {['active', 'general', 'completed', 'all'].map(t => (
-                  <button 
-                    key={t} 
-                    onClick={() => setActiveTab(t as any)} 
-                    className={`px-4 py-1.5 rounded-md text-xs font-bold uppercase transition ${activeTab === t ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-white'}`}
-                  >
-                    {t === 'active' ? '🔥 Актив' : t === 'general' ? '🌍 Общие' : t === 'completed' ? '✅ Архив' : '📦 Все'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {loading ? (
-              <div className="flex justify-center py-20"><Loader2 className="animate-spin text-blue-500 w-10 h-10" /></div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {filteredOrders.map((o: any) => (
-                  <OrderCard 
-                    key={o.id} 
-                    order={o} 
-                    onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} 
-                    onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} 
-                    onComplete={fetchAllData} 
-                  />
-                ))}
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {profiles.map(p => (
-              <div key={p.id} className={`bg-slate-900 border ${p.role === 'admin' ? 'border-blue-500/50' : 'border-slate-800'} p-5 rounded-xl flex flex-col justify-between hover:border-slate-600 transition`}>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-bold">{p.full_name}</h3>
-                      {p.role === 'admin' && <ShieldCheck className="w-4 h-4 text-blue-500" />}
-                    </div>
-                    <p className="text-xs text-slate-500 uppercase tracking-widest">{p.role === 'admin' ? 'Администратор' : 'Сотрудник'}</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <span className="text-[10px] bg-slate-950 px-2 py-1 rounded text-blue-400 font-mono border border-slate-800">PIN: {p.pin_code}</span>
-                      <span className={`text-[10px] px-2 py-1 rounded font-bold ${p.telegram_chat_id ? 'bg-green-900/20 text-green-400 border border-green-900/50' : 'bg-red-900/20 text-red-400 border border-red-900/50'}`}>
-                        {p.telegram_chat_id ? 'Бот активен' : 'Бот не привязан'}
-                      </span>
-                    </div>
-                  </div>
-                  <button onClick={() => deleteStaff(p.id)} className="p-2 text-slate-600 hover:text-red-500 transition"><Trash2 className="w-5 h-5" /></button>
-                </div>
-
-                <div className="mt-4 pt-4 border-t border-slate-800">
-                  <p className="text-[10px] font-bold uppercase text-slate-500 mb-2">Права доступа:</p>
-                  <div className="flex flex-wrap gap-3 text-xs">
-                    <label className="flex items-center gap-1 text-slate-300 cursor-pointer hover:text-white">
-                      <input 
-                        type="checkbox" 
-                        checked={p.can_design || false} 
-                        onChange={() => toggleRole(p.id, 'can_design', p.can_design)} 
-                        className="accent-purple-500" 
-                      />
-                      🎨 Дизайн
-                    </label>
-                    <label className="flex items-center gap-1 text-slate-300 cursor-pointer hover:text-white">
-                      <input 
-                        type="checkbox" 
-                        checked={p.can_print || false} 
-                        onChange={() => toggleRole(p.id, 'can_print', p.can_print)} 
-                        className="accent-blue-500" 
-                      />
-                      🖨 Печать
-                    </label>
-                    <label className="flex items-center gap-1 text-slate-300 cursor-pointer hover:text-white">
-                      <input 
-                        type="checkbox" 
-                        checked={p.can_install || false} 
-                        onChange={() => toggleRole(p.id, 'can_install', p.can_install)} 
-                        className="accent-green-500" 
-                      />
-                      🛠 Монтаж
-                    </label>
-                  </div>
-                </div>
-
-              </div>
-            ))}
-          </div>
-        )}
-
-        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-          <DialogContent className="max-w-xl bg-slate-900 border-slate-800 text-white p-0 shadow-2xl overflow-hidden">
-            <DialogHeader className="p-6 pb-0">
-              <DialogTitle className="text-xl font-bold uppercase italic tracking-tight">Параметры объекта</DialogTitle>
-            </DialogHeader>
-            <OrderForm 
-              orderId={editingOrderId} 
-              onSave={() => { setIsModalOpen(false); fetchAllData(); }} 
-              creatorId={currentUserId || ''} 
-            />
-          </DialogContent>
-        </Dialog>
-
-      </div>
-    </div>
-  );
-}
+              <Button onClick={() => {
