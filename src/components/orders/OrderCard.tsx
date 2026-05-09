@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2, CheckCircle, ExternalLink, User } from 'lucide-react';
+import { Trash2, CheckCircle, ExternalLink, User, Play } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface OrderCardProps {
@@ -7,20 +7,19 @@ interface OrderCardProps {
   onEdit: (id: string) => void;
   onDelete: (id: string, assignedToChatId: string | null, title: string) => void;
   onComplete: (id: string) => void;
+  onStartWork?: (id: string) => void; // Добавили функцию "В работу"
 }
 
-export function OrderCard({ order, onEdit, onDelete, onComplete }: OrderCardProps) {
+export function OrderCard({ order, onEdit, onDelete, onComplete, onStartWork }: OrderCardProps) {
   const chatId = order.profiles?.telegram_chat_id || null;
 
   const handleComplete = () => {
-    // ЗАПУСКАЕМ САЛЮТ 🎉
     confetti({
       particleCount: 100,
       spread: 70,
       origin: { y: 0.6 },
-      colors: ['#FF7F50', '#4B2C20', '#10B981'] // Наши цвета: коралл, шоколад, зеленый
+      colors: ['#FF7F50', '#4B2C20', '#10B981']
     });
-    // Вызываем оригинальную функцию завершения
     onComplete(order.id);
   };
 
@@ -86,6 +85,18 @@ export function OrderCard({ order, onEdit, onDelete, onComplete }: OrderCardProp
         </div>
 
         <div className="flex items-center gap-1">
+          {/* КНОПКА "ВЗЯТЬ В РАБОТУ" */}
+          {order.status === 'new' && onStartWork && (
+            <button 
+              onClick={() => onStartWork(order.id)}
+              className="p-2 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 rounded-lg transition"
+              title="Взять в работу"
+            >
+              <Play className="w-5 h-5" />
+            </button>
+          )}
+
+          {/* КНОПКА "ЗАВЕРШИТЬ" */}
           {order.status !== 'completed' && (
             <button 
               onClick={handleComplete}

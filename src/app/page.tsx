@@ -7,13 +7,14 @@ import {
   Plus, Loader2, Megaphone, 
   Users, LayoutDashboard, Search, Bell, 
   Trash2, UserPlus, CheckCircle2, Clock, 
-  BarChart3, X, LogOut, ShieldCheck
+  BarChart3, X, LogOut, ShieldCheck, Download
 } from 'lucide-react';
 import { Order } from '@/lib/types';
 import OrderForm from '@/components/orders/OrderForm';
 import { OrderCard } from '@/components/orders/OrderCard';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import * as XLSX from 'xlsx'; // Подключили библиотеку для Excel
 
 export default function Dashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -27,7 +28,7 @@ export default function Dashboard() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [activeTab, setActiveTab] = useState<'active' | 'general' | 'completed' | 'all'>('active');
+  const [activeTab, setActiveTab] = useState<'active' | 'general' | 'completed' | 'all'>('all'); // По умолчанию показываем Канбан полностью
   const [searchQuery, setSearchQuery] = useState('');
 
   const [notifications, setNotifications] = useState<{id: string, text: string, time: string}[]>([]);
@@ -149,21 +150,57 @@ export default function Dashboard() {
     }
   };
 
-  // НОВАЯ ФУНКЦИЯ ДЛЯ ЗАВЕРШЕНИЯ ЗАКАЗА
+  // ФУНКЦИЯ "ВЗЯТЬ В РАБОТУ"
+  const handleStartWork = async (id: string) => {
+    try {
+      const { error } = await supabase.from('orders').update({ status: 'in_progress' }).eq('id', id);
+      if (error) throw error;
+      toast({ title: "Заказ переведен в работу!" });
+      fetchAllData();
+    } catch (err: any) {
+      alert('Ошибка: ' + err.message);
+    }
+  };
+
+  // ФУНКЦИЯ "ЗАВЕРШИТЬ ЗАКАЗ"
   const handleComplete = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('orders')
-        .update({ status: 'completed' })
-        .eq('id', id);
-        
+      const { error } = await supabase.from('orders').update({ status: 'completed' }).eq('id', id);
       if (error) throw error;
-      
       toast({ title: "Заказ завершен!" });
-      fetchAllData(); // Обновляем список только после успешного сохранения в базу
+      fetchAllData();
     } catch (err: any) {
-      alert('Ошибка при завершении заказа: ' + err.message);
+      alert('Ошибка: ' + err.message);
     }
+  };
+
+  // ФУНКЦИЯ ЭКСПОРТА В EXCEL
+  const exportToExcel = () => {
+    if (orders.length === 0) {
+      alert("Нет данных для выгрузки");
+      return;
+    }
+    
+    // Формируем красивую таблицу для Excel
+    const dataToExport = orders.map((o: any) => ({
+      'Объект': o.title,
+      'Описание': o.description || '-',
+      'Статус': o.status === 'completed' ? 'Завершен' : o.status === 'in_progress' ? 'В работе' : 'Новый',
+      'Дедлайн': o.deadline ? new Date(o.deadline).toLocaleDateString() : '-',
+      'Отдел': o.department === 'installation' ? 'Монтаж' : 'Печать',
+      'Тип заказа': o.is_general ? 'Общий' : 'Личный',
+      'Исполнитель': o.profiles?.full_name || 'Не назначен',
+      'Создал (Админ)': o.creator_name || 'Система',
+      'Дата создания': new Date(o.created_at).toLocaleDateString()
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Заказы");
+    
+    // Авто-скачивание файла
+    XLSX.writeFile(workbook, `Отчет_Монтажка_${new Date().toLocaleDateString()}.xlsx`);
+    toast({ title: "Excel файл успешно скачан!" });
   };
 
   const handleBroadcast = async () => {
@@ -175,29 +212,18 @@ export default function Dashboard() {
     toast({ title: "Рассылка запущена" });
   };
 
+  // ... (addStaff, deleteStaff, toggleRole остаются без изменений)
   const addStaff = async () => {
     const name = prompt("ФИО сотрудника:");
     if (!name) return;
     const pin = prompt("Придумайте ПИН-код для входа:");
     if (!pin) return;
     const roleChoice = prompt("Выберите роль:\n1 — Монтажник\n2 — Администратор", "1");
-    
     const role = roleChoice === "2" ? "admin" : "installer";
     const newId = crypto.randomUUID();
-
-    const { error } = await supabase.from('profiles').insert([{ 
-      id: newId, 
-      full_name: name, 
-      pin_code: pin, 
-      role: role 
-    }]);
-
-    if (error) {
-      alert("❌ ОШИБКА: " + error.message);
-    } else {
-      toast({ title: role === 'admin' ? "Админ добавлен" : "Сотрудник добавлен" });
-      fetchAllData();
-    }
+    const { error } = await supabase.from('profiles').insert([{ id: newId, full_name: name, pin_code: pin, role: role }]);
+    if (error) alert("❌ ОШИБКА: " + error.message);
+    else { toast({ title: role === 'admin' ? "Админ добавлен" : "Сотрудник добавлен" }); fetchAllData(); }
   };
 
   const deleteStaff = async (id: string) => {
@@ -208,22 +234,13 @@ export default function Dashboard() {
   };
 
   const toggleRole = async (userId: string, field: string, currentValue: boolean) => {
-    const { error } = await supabase
-      .from('profiles')
-      .update({ [field]: !currentValue })
-      .eq('id', userId);
-    
-    if (!error) {
-      fetchAllData();
-      toast({ title: "Допуск обновлен" });
-    } else {
-      alert("Ошибка обновления прав: " + error.message);
-    }
+    const { error } = await supabase.from('profiles').update({ [field]: !currentValue }).eq('id', userId);
+    if (!error) { fetchAllData(); toast({ title: "Допуск обновлен" }); } 
+    else alert("Ошибка обновления прав: " + error.message);
   };
 
   const filteredOrders = orders.filter((o: any) => {
     const matchesSearch = (o.title || '').toLowerCase().includes(searchQuery.toLowerCase());
-    
     if (!matchesSearch) return false;
     if (activeTab === 'active') return o.status === 'new' || o.status === 'in_progress';
     if (activeTab === 'completed') return o.status === 'completed';
@@ -285,9 +302,8 @@ export default function Dashboard() {
                   <LogOut onClick={handleLogout} className="w-5 h-5 text-destructive cursor-pointer hover:opacity-70" title="Выйти" />
                 </div>
              </div>
-             
              {showNotifs && (
-               <div className="absolute top-full left-0 w-full mt-2 bg-card border border-border rounded-xl p-3 z-50 shadow-2xl">
+               <div className="absolute top-full left-0 w-full mt-2 bg-card border border-border rounded-xl p-3 z-50 shadow-2xl z-50">
                  <div className="flex justify-between mb-2 border-b border-border pb-1">
                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">События</span>
                    <X className="w-3 h-3 cursor-pointer text-muted-foreground hover:text-foreground" onClick={() => setShowNotifs(false)} />
@@ -315,6 +331,9 @@ export default function Dashboard() {
           </div>
 
           <div className="flex gap-2">
+            <Button onClick={exportToExcel} className="bg-emerald-600 text-white font-bold hover:bg-emerald-700">
+              <Download className="w-4 h-4 mr-2" /> Excel Отчет
+            </Button>
             <Button onClick={handleBroadcast} className="bg-secondary text-secondary-foreground font-bold hover:opacity-90">
               <Megaphone className="w-4 h-4 mr-2" /> Объявление
             </Button>
@@ -358,16 +377,66 @@ export default function Dashboard() {
             {loading ? (
               <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary w-10 h-10" /></div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {filteredOrders.map((o: any) => (
-                  <OrderCard 
-                    key={o.id} 
-                    order={o} 
-                    onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} 
-                    onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} 
-                    onComplete={handleComplete} // ВОТ ТУТ ТЕПЕРЬ ВЫЗЫВАЕТСЯ ПРАВИЛЬНАЯ ФУНКЦИЯ
-                  />
-                ))}
+              /* КАНБАН ДОСКА */
+              <div className="flex gap-6 overflow-x-auto pb-6 items-start">
+                
+                {/* КОЛОНКА: НОВЫЕ */}
+                <div className="min-w-[320px] flex-1 bg-muted/20 border border-border p-4 rounded-xl flex flex-col gap-4">
+                  <h3 className="font-bold text-foreground flex items-center justify-between border-b border-border pb-2">
+                    <span>🆕 Новые</span>
+                    <span className="bg-primary text-primary-foreground text-xs px-2 py-0.5 rounded-full">
+                      {filteredOrders.filter(o => o.status === 'new').length}
+                    </span>
+                  </h3>
+                  {filteredOrders.filter(o => o.status === 'new').map((o: any) => (
+                    <OrderCard 
+                      key={o.id} order={o} 
+                      onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} 
+                      onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} 
+                      onComplete={handleComplete} 
+                      onStartWork={handleStartWork}
+                    />
+                  ))}
+                </div>
+
+                {/* КОЛОНКА: В РАБОТЕ */}
+                <div className="min-w-[320px] flex-1 bg-amber-500/5 border border-amber-500/20 p-4 rounded-xl flex flex-col gap-4">
+                  <h3 className="font-bold text-amber-600 dark:text-amber-400 flex items-center justify-between border-b border-amber-500/20 pb-2">
+                    <span>⏳ В работе</span>
+                    <span className="bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full">
+                      {filteredOrders.filter(o => o.status === 'in_progress').length}
+                    </span>
+                  </h3>
+                  {filteredOrders.filter(o => o.status === 'in_progress').map((o: any) => (
+                    <OrderCard 
+                      key={o.id} order={o} 
+                      onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} 
+                      onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} 
+                      onComplete={handleComplete} 
+                      onStartWork={handleStartWork}
+                    />
+                  ))}
+                </div>
+
+                {/* КОЛОНКА: ГОТОВО */}
+                <div className="min-w-[320px] flex-1 bg-emerald-500/5 border border-emerald-500/20 p-4 rounded-xl flex flex-col gap-4">
+                  <h3 className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center justify-between border-b border-emerald-500/20 pb-2">
+                    <span>✅ Готово</span>
+                    <span className="bg-emerald-500 text-white text-xs px-2 py-0.5 rounded-full">
+                      {filteredOrders.filter(o => o.status === 'completed').length}
+                    </span>
+                  </h3>
+                  {filteredOrders.filter(o => o.status === 'completed').map((o: any) => (
+                    <OrderCard 
+                      key={o.id} order={o} 
+                      onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} 
+                      onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} 
+                      onComplete={handleComplete} 
+                      onStartWork={handleStartWork}
+                    />
+                  ))}
+                </div>
+
               </div>
             )}
           </>
@@ -396,35 +465,16 @@ export default function Dashboard() {
                   <p className="text-[10px] font-bold uppercase text-muted-foreground mb-2">Права доступа:</p>
                   <div className="flex flex-wrap gap-3 text-xs">
                     <label className="flex items-center gap-1 text-muted-foreground cursor-pointer hover:text-foreground transition">
-                      <input 
-                        type="checkbox" 
-                        checked={p.can_design || false} 
-                        onChange={() => toggleRole(p.id, 'can_design', p.can_design)} 
-                        className="accent-primary" 
-                      />
-                      🎨 Дизайн
+                      <input type="checkbox" checked={p.can_design || false} onChange={() => toggleRole(p.id, 'can_design', p.can_design)} className="accent-primary" /> 🎨 Дизайн
                     </label>
                     <label className="flex items-center gap-1 text-muted-foreground cursor-pointer hover:text-foreground transition">
-                      <input 
-                        type="checkbox" 
-                        checked={p.can_print || false} 
-                        onChange={() => toggleRole(p.id, 'can_print', p.can_print)} 
-                        className="accent-primary" 
-                      />
-                      🖨 Печать
+                      <input type="checkbox" checked={p.can_print || false} onChange={() => toggleRole(p.id, 'can_print', p.can_print)} className="accent-primary" /> 🖨 Печать
                     </label>
                     <label className="flex items-center gap-1 text-muted-foreground cursor-pointer hover:text-foreground transition">
-                      <input 
-                        type="checkbox" 
-                        checked={p.can_install || false} 
-                        onChange={() => toggleRole(p.id, 'can_install', p.can_install)} 
-                        className="accent-primary" 
-                      />
-                      🛠 Монтаж
+                      <input type="checkbox" checked={p.can_install || false} onChange={() => toggleRole(p.id, 'can_install', p.can_install)} className="accent-primary" /> 🛠 Монтаж
                     </label>
                   </div>
                 </div>
-
               </div>
             ))}
           </div>
