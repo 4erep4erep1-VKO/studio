@@ -395,7 +395,10 @@ export default function Dashboard() {
             {profiles.map(p => (
               <div key={p.id} className="bg-card border border-border p-5 rounded-xl shadow-sm">
                 <div className="flex justify-between mb-4">
-                   <h3 className="font-bold">{p.full_name} {p.role === 'admin' && '🛡️'}</h3>
+                   <div>
+                     <h3 className="font-bold">{p.full_name} {p.role === 'admin' && '🛡️'}</h3>
+                     {isAdmin && <p className="text-xs text-muted-foreground">PIN: {p.pin_code || '—'}</p>}
+                   </div>
                    <button onClick={() => deleteStaff(p.id)} className="text-destructive"><Trash2 className="w-4 h-4" /></button>
                 </div>
                 <div className="flex flex-wrap gap-2 text-[10px]">
