@@ -370,21 +370,21 @@ export default function Dashboard() {
                 <div className="min-w-[320px] flex-1 bg-muted/20 border border-border p-4 rounded-xl flex flex-col gap-4">
                   <h3 className="font-bold border-b border-border pb-2 flex justify-between">🆕 Новые <span>{filteredOrders.filter(o => o.status === 'new').length}</span></h3>
                   {filteredOrders.filter(o => o.status === 'new').map((o: any) => (
-                    <OrderCard key={o.id} order={o} onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} onDelete={handleDelete} onComplete={handleComplete} onStartWork={handleStartWork} onTransferToInstallation={handleTransferToInstallation} />
+                    <OrderCard key={o.id} order={o} onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} onComplete={handleComplete} onStartWork={handleStartWork} onTransferToInstallation={handleTransferToInstallation} />
                   ))}
                 </div>
                 {/* КОЛОНКА 2: В РАБОТЕ */}
                 <div className="min-w-[320px] flex-1 bg-amber-500/5 border border-amber-500/20 p-4 rounded-xl flex flex-col gap-4">
                   <h3 className="font-bold border-b border-amber-500/20 pb-2 flex justify-between">⏳ В работе <span>{filteredOrders.filter(o => o.status === 'in_progress').length}</span></h3>
                   {filteredOrders.filter(o => o.status === 'in_progress').map((o: any) => (
-                    <OrderCard key={o.id} order={o} onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} onDelete={handleDelete} onComplete={handleComplete} onStartWork={handleStartWork} onTransferToInstallation={handleTransferToInstallation} />
+                    <OrderCard key={o.id} order={o} onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} onComplete={handleComplete} onStartWork={handleStartWork} onTransferToInstallation={handleTransferToInstallation} />
                   ))}
                 </div>
                 {/* КОЛОНКА 3: ГОТОВО */}
                 <div className="min-w-[320px] flex-1 bg-emerald-500/5 border border-emerald-500/20 p-4 rounded-xl flex flex-col gap-4">
                   <h3 className="font-bold border-b border-emerald-500/20 pb-2 flex justify-between">✅ Готово <span>{filteredOrders.filter(o => o.status === 'completed').length}</span></h3>
                   {filteredOrders.filter(o => o.status === 'completed').map((o: any) => (
-                    <OrderCard key={o.id} order={o} onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} onDelete={handleDelete} onComplete={handleComplete} onStartWork={handleStartWork} onTransferToInstallation={handleTransferToInstallation} />
+                    <OrderCard key={o.id} order={o} onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} onComplete={handleComplete} onStartWork={handleStartWork} onTransferToInstallation={handleTransferToInstallation} />
                   ))}
                 </div>
               </div>
