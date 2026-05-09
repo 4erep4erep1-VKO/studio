@@ -14,7 +14,7 @@ import OrderForm from '@/components/orders/OrderForm';
 import { OrderCard } from '@/components/orders/OrderCard';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import * as XLSX from 'xlsx'; // Подключили библиотеку для Excel
+import * as XLSX from 'xlsx';
 
 export default function Dashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -23,12 +23,17 @@ export default function Dashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   
+  // СОСТОЯНИЯ ДЛЯ ЭКСПОРТА
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportStart, setExportStart] = useState('');
+  const [exportEnd, setExportEnd] = useState('');
+
   const [view, setView] = useState<'orders' | 'staff'>('orders');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [activeTab, setActiveTab] = useState<'active' | 'general' | 'completed' | 'all'>('all'); // По умолчанию показываем Канбан полностью
+  const [activeTab, setActiveTab] = useState<'active' | 'general' | 'completed' | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   const [notifications, setNotifications] = useState<{id: string, text: string, time: string}[]>([]);
@@ -150,7 +155,6 @@ export default function Dashboard() {
     }
   };
 
-  // ФУНКЦИЯ "ВЗЯТЬ В РАБОТУ"
   const handleStartWork = async (id: string) => {
     try {
       const { error } = await supabase.from('orders').update({ status: 'in_progress' }).eq('id', id);
@@ -162,7 +166,6 @@ export default function Dashboard() {
     }
   };
 
-  // ФУНКЦИЯ "ЗАВЕРШИТЬ ЗАКАЗ"
   const handleComplete = async (id: string) => {
     try {
       const { error } = await supabase.from('orders').update({ status: 'completed' }).eq('id', id);
@@ -174,15 +177,30 @@ export default function Dashboard() {
     }
   };
 
-  // ФУНКЦИЯ ЭКСПОРТА В EXCEL
-  const exportToExcel = () => {
-    if (orders.length === 0) {
-      alert("Нет данных для выгрузки");
+  // ОБНОВЛЕННАЯ ФУНКЦИЯ ЭКСПОРТА В EXCEL С ФИЛЬТРАЦИЕЙ ПО ДАТЕ
+  const executeExport = () => {
+    let filteredForExport = orders;
+
+    // Фильтруем по дате начала (учитываем дату создания заказа)
+    if (exportStart) {
+      const start = new Date(exportStart);
+      start.setHours(0, 0, 0, 0);
+      filteredForExport = filteredForExport.filter(o => new Date(o.created_at) >= start);
+    }
+
+    // Фильтруем по дате конца
+    if (exportEnd) {
+      const end = new Date(exportEnd);
+      end.setHours(23, 59, 59, 999);
+      filteredForExport = filteredForExport.filter(o => new Date(o.created_at) <= end);
+    }
+
+    if (filteredForExport.length === 0) {
+      alert("Нет заказов за выбранный период");
       return;
     }
     
-    // Формируем красивую таблицу для Excel
-    const dataToExport = orders.map((o: any) => ({
+    const dataToExport = filteredForExport.map((o: any) => ({
       'Объект': o.title,
       'Описание': o.description || '-',
       'Статус': o.status === 'completed' ? 'Завершен' : o.status === 'in_progress' ? 'В работе' : 'Новый',
@@ -198,9 +216,16 @@ export default function Dashboard() {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Заказы");
     
-    // Авто-скачивание файла
-    XLSX.writeFile(workbook, `Отчет_Монтажка_${new Date().toLocaleDateString()}.xlsx`);
+    // Генерируем название файла с датами, если они выбраны
+    let fileName = "Отчет_Монтажка";
+    if (exportStart && exportEnd) fileName += `_${exportStart}_по_${exportEnd}`;
+    else if (exportStart) fileName += `_с_${exportStart}`;
+    else if (exportEnd) fileName += `_до_${exportEnd}`;
+    else fileName += `_Все_время`;
+    
+    XLSX.writeFile(workbook, `${fileName}.xlsx`);
     toast({ title: "Excel файл успешно скачан!" });
+    setIsExportModalOpen(false); // Закрываем окно после скачивания
   };
 
   const handleBroadcast = async () => {
@@ -212,7 +237,6 @@ export default function Dashboard() {
     toast({ title: "Рассылка запущена" });
   };
 
-  // ... (addStaff, deleteStaff, toggleRole остаются без изменений)
   const addStaff = async () => {
     const name = prompt("ФИО сотрудника:");
     if (!name) return;
@@ -331,12 +355,15 @@ export default function Dashboard() {
           </div>
 
           <div className="flex gap-2">
-            <Button onClick={exportToExcel} className="bg-emerald-600 text-white font-bold hover:bg-emerald-700">
+            {/* ИЗМЕНИЛИ КНОПКУ: ТЕПЕРЬ ОНА ОТКРЫВАЕТ ОКНО */}
+            <Button onClick={() => setIsExportModalOpen(true)} className="bg-emerald-600 text-white font-bold hover:bg-emerald-700">
               <Download className="w-4 h-4 mr-2" /> Excel Отчет
             </Button>
+            
             <Button onClick={handleBroadcast} className="bg-secondary text-secondary-foreground font-bold hover:opacity-90">
               <Megaphone className="w-4 h-4 mr-2" /> Объявление
             </Button>
+            
             {view === 'orders' ? (
               <Button onClick={() => { setEditingOrderId(null); setIsModalOpen(true); }} className="bg-primary text-primary-foreground font-bold hover:opacity-90 shadow-md border-0">
                 <Plus className="w-4 h-4 mr-2" /> Новый объект
@@ -377,10 +404,8 @@ export default function Dashboard() {
             {loading ? (
               <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary w-10 h-10" /></div>
             ) : (
-              /* КАНБАН ДОСКА */
               <div className="flex gap-6 overflow-x-auto pb-6 items-start">
                 
-                {/* КОЛОНКА: НОВЫЕ */}
                 <div className="min-w-[320px] flex-1 bg-muted/20 border border-border p-4 rounded-xl flex flex-col gap-4">
                   <h3 className="font-bold text-foreground flex items-center justify-between border-b border-border pb-2">
                     <span>🆕 Новые</span>
@@ -399,7 +424,6 @@ export default function Dashboard() {
                   ))}
                 </div>
 
-                {/* КОЛОНКА: В РАБОТЕ */}
                 <div className="min-w-[320px] flex-1 bg-amber-500/5 border border-amber-500/20 p-4 rounded-xl flex flex-col gap-4">
                   <h3 className="font-bold text-amber-600 dark:text-amber-400 flex items-center justify-between border-b border-amber-500/20 pb-2">
                     <span>⏳ В работе</span>
@@ -418,7 +442,6 @@ export default function Dashboard() {
                   ))}
                 </div>
 
-                {/* КОЛОНКА: ГОТОВО */}
                 <div className="min-w-[320px] flex-1 bg-emerald-500/5 border border-emerald-500/20 p-4 rounded-xl flex flex-col gap-4">
                   <h3 className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center justify-between border-b border-emerald-500/20 pb-2">
                     <span>✅ Готово</span>
@@ -480,6 +503,7 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* МОДАЛКА СОЗДАНИЯ/РЕДАКТИРОВАНИЯ ЗАКАЗА */}
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogContent className="max-w-xl bg-card border-border text-foreground p-0 shadow-2xl overflow-hidden">
             <DialogHeader className="p-6 pb-0">
@@ -490,6 +514,39 @@ export default function Dashboard() {
               onSave={() => { setIsModalOpen(false); fetchAllData(); }} 
               creatorId={currentUserId || ''} 
             />
+          </DialogContent>
+        </Dialog>
+
+        {/* НОВАЯ МОДАЛКА ДЛЯ ЭКСПОРТА EXCEL */}
+        <Dialog open={isExportModalOpen} onOpenChange={setIsExportModalOpen}>
+          <DialogContent className="max-w-sm bg-card border-border text-foreground shadow-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-bold text-secondary">Выгрузка в Excel</DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col gap-4 py-2">
+              <p className="text-sm text-muted-foreground">Укажите период по дате создания заказа. Если оставить пустым — выгрузятся все данные.</p>
+              <div>
+                <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">С даты:</label>
+                <input 
+                  type="date" 
+                  value={exportStart} 
+                  onChange={e => setExportStart(e.target.value)} 
+                  className="w-full p-2 bg-background text-foreground border border-border rounded focus:border-primary outline-none transition" 
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">По дату:</label>
+                <input 
+                  type="date" 
+                  value={exportEnd} 
+                  onChange={e => setExportEnd(e.target.value)} 
+                  className="w-full p-2 bg-background text-foreground border border-border rounded focus:border-primary outline-none transition" 
+                />
+              </div>
+              <Button onClick={executeExport} className="w-full bg-emerald-600 text-white font-bold hover:bg-emerald-700 mt-2">
+                <Download className="w-4 h-4 mr-2" /> Скачать таблицу
+              </Button>
+            </div>
           </DialogContent>
         </Dialog>
 
