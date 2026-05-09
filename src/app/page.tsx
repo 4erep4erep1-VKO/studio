@@ -23,7 +23,6 @@ export default function Dashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   
-  // СОСТОЯНИЯ ДЛЯ ЭКСПОРТА
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [exportStart, setExportStart] = useState('');
   const [exportEnd, setExportEnd] = useState('');
@@ -177,29 +176,41 @@ export default function Dashboard() {
     }
   };
 
-  // ОБНОВЛЕННАЯ ФУНКЦИЯ ЭКСПОРТА В EXCEL С ФИЛЬТРАЦИЕЙ ПО ДАТЕ
+  const handleTransferToInstallation = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ 
+          department: 'installation', 
+          status: 'new', 
+          assigned_to: null, 
+          is_general: true 
+        })
+        .eq('id', id);
+      if (error) throw error;
+      toast({ title: "Заказ передан монтажникам!" });
+      fetchAllData();
+    } catch (err: any) {
+      alert('Ошибка: ' + err.message);
+    }
+  };
+
   const executeExport = () => {
     let filteredForExport = orders;
-
-    // Фильтруем по дате начала (учитываем дату создания заказа)
     if (exportStart) {
       const start = new Date(exportStart);
       start.setHours(0, 0, 0, 0);
       filteredForExport = filteredForExport.filter(o => new Date(o.created_at) >= start);
     }
-
-    // Фильтруем по дате конца
     if (exportEnd) {
       const end = new Date(exportEnd);
       end.setHours(23, 59, 59, 999);
       filteredForExport = filteredForExport.filter(o => new Date(o.created_at) <= end);
     }
-
     if (filteredForExport.length === 0) {
       alert("Нет заказов за выбранный период");
       return;
     }
-    
     const dataToExport = filteredForExport.map((o: any) => ({
       'Объект': o.title,
       'Описание': o.description || '-',
@@ -211,21 +222,14 @@ export default function Dashboard() {
       'Создал (Админ)': o.creator_name || 'Система',
       'Дата создания': new Date(o.created_at).toLocaleDateString()
     }));
-
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Заказы");
-    
-    // Генерируем название файла с датами, если они выбраны
     let fileName = "Отчет_Монтажка";
     if (exportStart && exportEnd) fileName += `_${exportStart}_по_${exportEnd}`;
-    else if (exportStart) fileName += `_с_${exportStart}`;
-    else if (exportEnd) fileName += `_до_${exportEnd}`;
-    else fileName += `_Все_время`;
-    
     XLSX.writeFile(workbook, `${fileName}.xlsx`);
-    toast({ title: "Excel файл успешно скачан!" });
-    setIsExportModalOpen(false); // Закрываем окно после скачивания
+    toast({ title: "Excel файл скачан!" });
+    setIsExportModalOpen(false);
   };
 
   const handleBroadcast = async () => {
@@ -240,18 +244,16 @@ export default function Dashboard() {
   const addStaff = async () => {
     const name = prompt("ФИО сотрудника:");
     if (!name) return;
-    const pin = prompt("Придумайте ПИН-код для входа:");
+    const pin = prompt("ПИН-код:");
     if (!pin) return;
-    const roleChoice = prompt("Выберите роль:\n1 — Монтажник\n2 — Администратор", "1");
+    const roleChoice = prompt("Роль: 1-Монтажник, 2-Админ", "1");
     const role = roleChoice === "2" ? "admin" : "installer";
-    const newId = crypto.randomUUID();
-    const { error } = await supabase.from('profiles').insert([{ id: newId, full_name: name, pin_code: pin, role: role }]);
-    if (error) alert("❌ ОШИБКА: " + error.message);
-    else { toast({ title: role === 'admin' ? "Админ добавлен" : "Сотрудник добавлен" }); fetchAllData(); }
+    const { error } = await supabase.from('profiles').insert([{ id: crypto.randomUUID(), full_name: name, pin_code: pin, role: role }]);
+    if (error) alert(error.message); else fetchAllData();
   };
 
   const deleteStaff = async (id: string) => {
-    if (confirm("Удалить этот профиль навсегда?")) {
+    if (confirm("Удалить профиль?")) {
       const { error } = await supabase.from('profiles').delete().eq('id', id);
       if (!error) fetchAllData();
     }
@@ -259,8 +261,7 @@ export default function Dashboard() {
 
   const toggleRole = async (userId: string, field: string, currentValue: boolean) => {
     const { error } = await supabase.from('profiles').update({ [field]: !currentValue }).eq('id', userId);
-    if (!error) { fetchAllData(); toast({ title: "Допуск обновлен" }); } 
-    else alert("Ошибка обновления прав: " + error.message);
+    if (!error) fetchAllData();
   };
 
   const filteredOrders = orders.filter((o: any) => {
@@ -280,272 +281,134 @@ export default function Dashboard() {
 
   if (!isAuthenticated) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background text-foreground transition-colors duration-300">
-        <div className="bg-card p-8 rounded-2xl border border-border w-96 text-center shadow-2xl">
-          <h2 className="text-2xl font-bold mb-6 tracking-tight text-secondary">Montazhka PRO</h2>
-          <input 
-            type="password" 
-            placeholder="Введите ПИН-код" 
-            className="w-full p-3 bg-background border border-border rounded-lg mb-4 text-center text-xl tracking-widest outline-none focus:border-primary transition" 
-            onKeyDown={e => e.key === 'Enter' && handleLogin()} 
-            onChange={e => setPassword(e.target.value)} 
-          />
-          <Button onClick={handleLogin} disabled={isLoggingIn} className="w-full bg-primary text-primary-foreground font-bold h-12 hover:opacity-90">
-            {isLoggingIn ? <Loader2 className="animate-spin" /> : 'Войти'}
-          </Button>
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="bg-card p-8 rounded-2xl border border-border w-96 text-center">
+          <h2 className="text-2xl font-bold mb-6 text-secondary">Montazhka PRO</h2>
+          <input type="password" placeholder="ПИН-код" className="w-full p-3 bg-background border border-border rounded-lg mb-4 text-center" onKeyDown={e => e.key === 'Enter' && handleLogin()} onChange={e => setPassword(e.target.value)} />
+          <Button onClick={handleLogin} disabled={isLoggingIn} className="w-full bg-primary h-12">{isLoggingIn ? '...' : 'Войти'}</Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 bg-background min-h-screen text-foreground font-sans transition-colors duration-300">
+    <div className="p-6 bg-background min-h-screen text-foreground transition-colors duration-300">
       <div className="max-w-7xl mx-auto">
         
+        {/* СТАТИСТИКА */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-card p-4 rounded-xl border border-border flex items-center gap-4 shadow-sm">
+          <div className="bg-card p-4 rounded-xl border border-border flex items-center gap-4">
             <div className="p-3 bg-primary/10 rounded-lg"><BarChart3 className="text-primary" /></div>
-            <div><p className="text-xs text-muted-foreground uppercase font-bold">Заказы</p><p className="text-2xl font-bold">{stats.total}</p></div>
+            <div><p className="text-xs text-muted-foreground font-bold">Заказы</p><p className="text-2xl font-bold">{stats.total}</p></div>
           </div>
-          <div className="bg-card p-4 rounded-xl border border-border flex items-center gap-4 shadow-sm">
+          <div className="bg-card p-4 rounded-xl border border-border flex items-center gap-4">
             <div className="p-3 bg-amber-500/10 rounded-lg"><Clock className="text-amber-500" /></div>
-            <div><p className="text-xs text-muted-foreground uppercase font-bold">В работе</p><p className="text-2xl font-bold">{stats.active}</p></div>
+            <div><p className="text-xs text-muted-foreground font-bold">В работе</p><p className="text-2xl font-bold">{stats.active}</p></div>
           </div>
-          <div className="bg-card p-4 rounded-xl border border-border flex items-center gap-4 shadow-sm">
+          <div className="bg-card p-4 rounded-xl border border-border flex items-center gap-4">
             <div className="p-3 bg-emerald-500/10 rounded-lg"><CheckCircle2 className="text-emerald-500" /></div>
-            <div><p className="text-xs text-muted-foreground uppercase font-bold">Сделано</p><p className="text-2xl font-bold">{stats.done}</p></div>
+            <div><p className="text-xs text-muted-foreground font-bold">Сделано</p><p className="text-2xl font-bold">{stats.done}</p></div>
           </div>
-          <div className="bg-card p-4 rounded-xl border border-border flex items-center gap-4 relative shadow-sm">
+          <div className="bg-card p-4 rounded-xl border border-border flex items-center gap-4 relative">
              <div className="p-3 bg-secondary/10 rounded-lg cursor-pointer" onClick={() => setShowNotifs(!showNotifs)}>
                 <Bell className={notifications.length > 0 ? "text-secondary animate-pulse" : "text-muted-foreground"} />
              </div>
              <div className="flex-grow">
-                <p className="text-xs text-muted-foreground uppercase font-bold">Система</p>
+                <p className="text-xs text-muted-foreground font-bold">Система</p>
                 <div className="flex items-center justify-between">
-                  <p className="text-sm text-foreground font-medium">Активна</p>
-                  <LogOut onClick={handleLogout} className="w-5 h-5 text-destructive cursor-pointer hover:opacity-70" title="Выйти" />
+                  <p className="text-sm font-medium">Активна</p>
+                  <LogOut onClick={handleLogout} className="w-5 h-5 text-destructive cursor-pointer" title="Выйти" />
                 </div>
              </div>
-             {showNotifs && (
-               <div className="absolute top-full left-0 w-full mt-2 bg-card border border-border rounded-xl p-3 z-50 shadow-2xl z-50">
-                 <div className="flex justify-between mb-2 border-b border-border pb-1">
-                   <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">События</span>
-                   <X className="w-3 h-3 cursor-pointer text-muted-foreground hover:text-foreground" onClick={() => setShowNotifs(false)} />
-                 </div>
-                 {notifications.length === 0 ? <p className="text-[10px] text-muted-foreground text-center py-2">Уведомлений нет</p> : 
-                  notifications.map(n => (
-                    <div key={n.id} className="text-[10px] mb-2 last:mb-0 border-l-2 border-primary pl-2 text-foreground">
-                      <span className="text-muted-foreground">{n.time}</span> — {n.text}
-                    </div>
-                  ))
-                 }
-               </div>
-             )}
           </div>
         </div>
 
+        {/* ПЕРЕКЛЮЧАТЕЛИ И КНОПКИ */}
         <div className="flex flex-wrap justify-between items-center mb-8 gap-4">
           <div className="flex bg-card p-1 rounded-xl border border-border">
-            <button onClick={() => setView('orders')} className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition ${view === 'orders' ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground'}`}>
-              <LayoutDashboard className="w-4 h-4" /> Заказы
-            </button>
-            <button onClick={() => setView('staff')} className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition ${view === 'staff' ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground'}`}>
-              <Users className="w-4 h-4" /> Команда
-            </button>
+            <button onClick={() => setView('orders')} className={`px-6 py-2 rounded-lg text-sm font-bold transition ${view === 'orders' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>Заказы</button>
+            <button onClick={() => setView('staff')} className={`px-6 py-2 rounded-lg text-sm font-bold transition ${view === 'staff' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>Команда</button>
           </div>
-
           <div className="flex gap-2">
-            {/* ИЗМЕНИЛИ КНОПКУ: ТЕПЕРЬ ОНА ОТКРЫВАЕТ ОКНО */}
-            <Button onClick={() => setIsExportModalOpen(true)} className="bg-emerald-600 text-white font-bold hover:bg-emerald-700">
-              <Download className="w-4 h-4 mr-2" /> Excel Отчет
-            </Button>
-            
-            <Button onClick={handleBroadcast} className="bg-secondary text-secondary-foreground font-bold hover:opacity-90">
-              <Megaphone className="w-4 h-4 mr-2" /> Объявление
-            </Button>
-            
-            {view === 'orders' ? (
-              <Button onClick={() => { setEditingOrderId(null); setIsModalOpen(true); }} className="bg-primary text-primary-foreground font-bold hover:opacity-90 shadow-md border-0">
-                <Plus className="w-4 h-4 mr-2" /> Новый объект
-              </Button>
-            ) : (
-              <Button onClick={addStaff} className="bg-primary text-primary-foreground font-bold hover:opacity-90 shadow-md border-0">
-                <UserPlus className="w-4 h-4 mr-2" /> Добавить профиль
-              </Button>
-            )}
+            <Button onClick={() => setIsExportModalOpen(true)} className="bg-emerald-600 text-white font-bold">Excel Отчет</Button>
+            <Button onClick={handleBroadcast} className="bg-secondary text-secondary-foreground font-bold">Объявление</Button>
+            <Button onClick={() => { setEditingOrderId(null); setIsModalOpen(true); }} className="bg-primary text-primary-foreground font-bold">Новый объект</Button>
           </div>
         </div>
 
         {view === 'orders' ? (
           <>
             <div className="flex flex-wrap gap-4 mb-6">
-              <div className="relative flex-grow max-w-md">
-                <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
-                <input 
-                  placeholder="Поиск по названию..." 
-                  className="w-full pl-10 pr-4 py-2 bg-card border border-border text-foreground rounded-lg outline-none focus:border-primary transition" 
-                  value={searchQuery} 
-                  onChange={e => setSearchQuery(e.target.value)} 
-                />
-              </div>
+              <input placeholder="Поиск..." className="flex-grow max-w-md p-2 bg-card border border-border rounded-lg outline-none focus:border-primary" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
               <div className="flex gap-2 bg-card p-1 rounded-lg border border-border">
                 {['active', 'general', 'completed', 'all'].map(t => (
-                  <button 
-                    key={t} 
-                    onClick={() => setActiveTab(t as any)} 
-                    className={`px-4 py-1.5 rounded-md text-xs font-bold uppercase transition ${activeTab === t ? 'bg-primary text-primary-foreground shadow' : 'text-muted-foreground hover:text-foreground'}`}
-                  >
+                  <button key={t} onClick={() => setActiveTab(t as any)} className={`px-4 py-1.5 rounded-md text-xs font-bold transition ${activeTab === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>
                     {t === 'active' ? '🔥 Актив' : t === 'general' ? '🌍 Общие' : t === 'completed' ? '✅ Архив' : '📦 Все'}
                   </button>
                 ))}
               </div>
             </div>
 
-            {loading ? (
-              <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary w-10 h-10" /></div>
-            ) : (
+            {loading ? <Loader2 className="animate-spin mx-auto mt-20" /> : (
               <div className="flex gap-6 overflow-x-auto pb-6 items-start">
-                
+                {/* КОЛОНКА 1: НОВЫЕ */}
                 <div className="min-w-[320px] flex-1 bg-muted/20 border border-border p-4 rounded-xl flex flex-col gap-4">
-                  <h3 className="font-bold text-foreground flex items-center justify-between border-b border-border pb-2">
-                    <span>🆕 Новые</span>
-                    <span className="bg-primary text-primary-foreground text-xs px-2 py-0.5 rounded-full">
-                      {filteredOrders.filter(o => o.status === 'new').length}
-                    </span>
-                  </h3>
+                  <h3 className="font-bold border-b border-border pb-2 flex justify-between">🆕 Новые <span>{filteredOrders.filter(o => o.status === 'new').length}</span></h3>
                   {filteredOrders.filter(o => o.status === 'new').map((o: any) => (
-                    <OrderCard 
-                      key={o.id} order={o} 
-                      onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} 
-                      onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} 
-                      onComplete={handleComplete} 
-                      onStartWork={handleStartWork}
-                    />
+                    <OrderCard key={o.id} order={o} onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} onDelete={handleDelete} onComplete={handleComplete} onStartWork={handleStartWork} onTransferToInstallation={handleTransferToInstallation} />
                   ))}
                 </div>
-
+                {/* КОЛОНКА 2: В РАБОТЕ */}
                 <div className="min-w-[320px] flex-1 bg-amber-500/5 border border-amber-500/20 p-4 rounded-xl flex flex-col gap-4">
-                  <h3 className="font-bold text-amber-600 dark:text-amber-400 flex items-center justify-between border-b border-amber-500/20 pb-2">
-                    <span>⏳ В работе</span>
-                    <span className="bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full">
-                      {filteredOrders.filter(o => o.status === 'in_progress').length}
-                    </span>
-                  </h3>
+                  <h3 className="font-bold border-b border-amber-500/20 pb-2 flex justify-between">⏳ В работе <span>{filteredOrders.filter(o => o.status === 'in_progress').length}</span></h3>
                   {filteredOrders.filter(o => o.status === 'in_progress').map((o: any) => (
-                    <OrderCard 
-                      key={o.id} order={o} 
-                      onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} 
-                      onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} 
-                      onComplete={handleComplete} 
-                      onStartWork={handleStartWork}
-                    />
+                    <OrderCard key={o.id} order={o} onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} onDelete={handleDelete} onComplete={handleComplete} onStartWork={handleStartWork} onTransferToInstallation={handleTransferToInstallation} />
                   ))}
                 </div>
-
+                {/* КОЛОНКА 3: ГОТОВО */}
                 <div className="min-w-[320px] flex-1 bg-emerald-500/5 border border-emerald-500/20 p-4 rounded-xl flex flex-col gap-4">
-                  <h3 className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center justify-between border-b border-emerald-500/20 pb-2">
-                    <span>✅ Готово</span>
-                    <span className="bg-emerald-500 text-white text-xs px-2 py-0.5 rounded-full">
-                      {filteredOrders.filter(o => o.status === 'completed').length}
-                    </span>
-                  </h3>
+                  <h3 className="font-bold border-b border-emerald-500/20 pb-2 flex justify-between">✅ Готово <span>{filteredOrders.filter(o => o.status === 'completed').length}</span></h3>
                   {filteredOrders.filter(o => o.status === 'completed').map((o: any) => (
-                    <OrderCard 
-                      key={o.id} order={o} 
-                      onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} 
-                      onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} 
-                      onComplete={handleComplete} 
-                      onStartWork={handleStartWork}
-                    />
+                    <OrderCard key={o.id} order={o} onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} onDelete={handleDelete} onComplete={handleComplete} onStartWork={handleStartWork} onTransferToInstallation={handleTransferToInstallation} />
                   ))}
                 </div>
-
               </div>
             )}
           </>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {profiles.map(p => (
-              <div key={p.id} className={`bg-card border ${p.role === 'admin' ? 'border-primary/50' : 'border-border'} p-5 rounded-xl flex flex-col justify-between hover:border-muted-foreground/30 transition shadow-sm`}>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-bold text-foreground">{p.full_name}</h3>
-                      {p.role === 'admin' && <ShieldCheck className="w-4 h-4 text-primary" />}
-                    </div>
-                    <p className="text-xs text-muted-foreground uppercase tracking-widest">{p.role === 'admin' ? 'Администратор' : 'Сотрудник'}</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <span className="text-[10px] bg-background px-2 py-1 rounded text-primary font-mono border border-border">PIN: {p.pin_code}</span>
-                      <span className={`text-[10px] px-2 py-1 rounded font-bold ${p.telegram_chat_id ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'}`}>
-                        {p.telegram_chat_id ? 'Бот активен' : 'Бот не привязан'}
-                      </span>
-                    </div>
-                  </div>
-                  <button onClick={() => deleteStaff(p.id)} className="p-2 text-muted-foreground hover:text-destructive transition"><Trash2 className="w-5 h-5" /></button>
+              <div key={p.id} className="bg-card border border-border p-5 rounded-xl shadow-sm">
+                <div className="flex justify-between mb-4">
+                   <h3 className="font-bold">{p.full_name} {p.role === 'admin' && '🛡️'}</h3>
+                   <button onClick={() => deleteStaff(p.id)} className="text-destructive"><Trash2 className="w-4 h-4" /></button>
                 </div>
-
-                <div className="mt-4 pt-4 border-t border-border">
-                  <p className="text-[10px] font-bold uppercase text-muted-foreground mb-2">Права доступа:</p>
-                  <div className="flex flex-wrap gap-3 text-xs">
-                    <label className="flex items-center gap-1 text-muted-foreground cursor-pointer hover:text-foreground transition">
-                      <input type="checkbox" checked={p.can_design || false} onChange={() => toggleRole(p.id, 'can_design', p.can_design)} className="accent-primary" /> 🎨 Дизайн
-                    </label>
-                    <label className="flex items-center gap-1 text-muted-foreground cursor-pointer hover:text-foreground transition">
-                      <input type="checkbox" checked={p.can_print || false} onChange={() => toggleRole(p.id, 'can_print', p.can_print)} className="accent-primary" /> 🖨 Печать
-                    </label>
-                    <label className="flex items-center gap-1 text-muted-foreground cursor-pointer hover:text-foreground transition">
-                      <input type="checkbox" checked={p.can_install || false} onChange={() => toggleRole(p.id, 'can_install', p.can_install)} className="accent-primary" /> 🛠 Монтаж
-                    </label>
-                  </div>
+                <div className="flex flex-wrap gap-2 text-[10px]">
+                  <label className="flex items-center gap-1"><input type="checkbox" checked={p.can_design} onChange={() => toggleRole(p.id, 'can_design', p.can_design)} /> 🎨 Дизайн</label>
+                  <label className="flex items-center gap-1"><input type="checkbox" checked={p.can_print} onChange={() => toggleRole(p.id, 'can_print', p.can_print)} /> 🖨 Печать</label>
+                  <label className="flex items-center gap-1"><input type="checkbox" checked={p.can_install} onChange={() => toggleRole(p.id, 'can_install', p.can_install)} /> 🛠 Монтаж</label>
                 </div>
               </div>
             ))}
+            <Button onClick={addStaff} className="h-full border-dashed border-2 bg-transparent text-muted-foreground">+ Добавить сотрудника</Button>
           </div>
         )}
 
-        {/* МОДАЛКА СОЗДАНИЯ/РЕДАКТИРОВАНИЯ ЗАКАЗА */}
+        {/* МОДАЛКИ */}
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogContent className="max-w-xl bg-card border-border text-foreground p-0 shadow-2xl overflow-hidden">
-            <DialogHeader className="p-6 pb-0">
-              <DialogTitle className="text-xl font-bold uppercase italic tracking-tight text-secondary">Параметры объекта</DialogTitle>
-            </DialogHeader>
-            <OrderForm 
-              orderId={editingOrderId} 
-              onSave={() => { setIsModalOpen(false); fetchAllData(); }} 
-              creatorId={currentUserId || ''} 
-            />
+            <DialogHeader className="p-6 pb-0"><DialogTitle className="text-xl font-bold uppercase italic tracking-tight text-secondary">Параметры объекта</DialogTitle></DialogHeader>
+            <OrderForm orderId={editingOrderId} onSave={() => { setIsModalOpen(false); fetchAllData(); }} creatorId={currentUserId || ''} />
           </DialogContent>
         </Dialog>
 
-        {/* НОВАЯ МОДАЛКА ДЛЯ ЭКСПОРТА EXCEL */}
         <Dialog open={isExportModalOpen} onOpenChange={setIsExportModalOpen}>
           <DialogContent className="max-w-sm bg-card border-border text-foreground shadow-2xl">
-            <DialogHeader>
-              <DialogTitle className="text-lg font-bold text-secondary">Выгрузка в Excel</DialogTitle>
-            </DialogHeader>
+            <DialogHeader><DialogTitle className="text-lg font-bold text-secondary">Выгрузка в Excel</DialogTitle></DialogHeader>
             <div className="flex flex-col gap-4 py-2">
-              <p className="text-sm text-muted-foreground">Укажите период по дате создания заказа. Если оставить пустым — выгрузятся все данные.</p>
-              <div>
-                <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">С даты:</label>
-                <input 
-                  type="date" 
-                  value={exportStart} 
-                  onChange={e => setExportStart(e.target.value)} 
-                  className="w-full p-2 bg-background text-foreground border border-border rounded focus:border-primary outline-none transition" 
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">По дату:</label>
-                <input 
-                  type="date" 
-                  value={exportEnd} 
-                  onChange={e => setExportEnd(e.target.value)} 
-                  className="w-full p-2 bg-background text-foreground border border-border rounded focus:border-primary outline-none transition" 
-                />
-              </div>
-              <Button onClick={executeExport} className="w-full bg-emerald-600 text-white font-bold hover:bg-emerald-700 mt-2">
-                <Download className="w-4 h-4 mr-2" /> Скачать таблицу
-              </Button>
+              <div><label className="block text-xs font-bold text-muted-foreground uppercase mb-1">С даты:</label><input type="date" value={exportStart} onChange={e => setExportStart(e.target.value)} className="w-full p-2 bg-background border border-border rounded outline-none" /></div>
+              <div><label className="block text-xs font-bold text-muted-foreground uppercase mb-1">По дату:</label><input type="date" value={exportEnd} onChange={e => setExportEnd(e.target.value)} className="w-full p-2 bg-background border border-border rounded outline-none" /></div>
+              <Button onClick={executeExport} className="w-full bg-emerald-600 text-white font-bold mt-2">Скачать таблицу</Button>
             </div>
           </DialogContent>
         </Dialog>

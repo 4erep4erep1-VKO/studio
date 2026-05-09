@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2, CheckCircle, ExternalLink, User, Play } from 'lucide-react';
+import { Trash2, CheckCircle, ExternalLink, User, Play, Truck } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface OrderCardProps {
@@ -7,10 +7,11 @@ interface OrderCardProps {
   onEdit: (id: string) => void;
   onDelete: (id: string, assignedToChatId: string | null, title: string) => void;
   onComplete: (id: string) => void;
-  onStartWork?: (id: string) => void; // Добавили функцию "В работу"
+  onStartWork?: (id: string) => void;
+  onTransferToInstallation?: (id: string) => void;
 }
 
-export function OrderCard({ order, onEdit, onDelete, onComplete, onStartWork }: OrderCardProps) {
+export function OrderCard({ order, onEdit, onDelete, onComplete, onStartWork, onTransferToInstallation }: OrderCardProps) {
   const chatId = order.profiles?.telegram_chat_id || null;
 
   const handleComplete = () => {
@@ -29,6 +30,9 @@ export function OrderCard({ order, onEdit, onDelete, onComplete, onStartWork }: 
         <h3 className="font-bold text-lg text-card-foreground mb-2">{order.title}</h3>
         <div className="flex gap-2">
            {order.preview_url && <span className="text-[10px] text-primary bg-primary/10 border border-primary/20 px-2 py-1 rounded uppercase font-bold">Эскиз</span>}
+           <span className={`text-[10px] px-2 py-1 rounded uppercase font-bold ${order.department === 'print' ? 'bg-purple-500/10 text-purple-500' : 'bg-blue-500/10 text-blue-500'}`}>
+             {order.department === 'print' ? '🖨 Печать' : '🛠 Монтаж'}
+           </span>
         </div>
       </div>
       
@@ -85,42 +89,41 @@ export function OrderCard({ order, onEdit, onDelete, onComplete, onStartWork }: 
         </div>
 
         <div className="flex items-center gap-1">
-          {/* КНОПКА "ВЗЯТЬ В РАБОТУ" */}
           {order.status === 'new' && onStartWork && (
-            <button 
-              onClick={() => onStartWork(order.id)}
-              className="p-2 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 rounded-lg transition"
-              title="Взять в работу"
-            >
+            <button onClick={() => onStartWork(order.id)} className="p-2 text-amber-600 hover:bg-amber-500/10 rounded-lg transition" title="Взять в работу">
               <Play className="w-5 h-5" />
             </button>
           )}
 
-          {/* КНОПКА "ЗАВЕРШИТЬ" */}
-          {order.status !== 'completed' && (
-            <button 
-              onClick={handleComplete}
-              className="p-2 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition"
-              title="Завершить заказ"
-            >
-              <CheckCircle className="w-5 h-5" />
-            </button>
+          {order.status === 'in_progress' && order.department === 'print' ? (
+            <>
+              <button 
+                onClick={handleComplete}
+                className="flex items-center gap-1 px-2 py-1 text-emerald-600 hover:bg-emerald-500/10 rounded-lg text-xs font-bold transition"
+                title="Завершить (В офис)"
+              >
+                <CheckCircle className="w-4 h-4" /> В офис
+              </button>
+              {onTransferToInstallation && (
+                <button 
+                  onClick={() => onTransferToInstallation(order.id)}
+                  className="flex items-center gap-1 px-2 py-1 text-blue-600 hover:bg-blue-500/10 rounded-lg text-xs font-bold transition"
+                  title="Передать на монтаж"
+                >
+                  <Truck className="w-4 h-4" /> На монтаж
+                </button>
+              )}
+            </>
+          ) : (
+            order.status !== 'completed' && (
+              <button onClick={handleComplete} className="p-2 text-emerald-600 hover:bg-emerald-500/10 rounded-lg transition" title="Завершить">
+                <CheckCircle className="w-5 h-5" />
+              </button>
+            )
           )}
 
-          <button 
-            onClick={() => onEdit(order.id)}
-            className="px-3 py-1.5 text-primary hover:bg-primary/10 rounded-lg text-sm font-bold transition"
-          >
-            Правка
-          </button>
-
-          <button 
-            onClick={() => onDelete(order.id, chatId, order.title)}
-            className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition"
-            title="Удалить заказ"
-          >
-            <Trash2 className="w-5 h-5" />
-          </button>
+          <button onClick={() => onEdit(order.id)} className="px-3 py-1.5 text-primary hover:bg-primary/10 rounded-lg text-sm font-bold transition">Правка</button>
+          <button onClick={() => onDelete(order.id, chatId, order.title)} className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition" title="Удалить"><Trash2 className="w-5 h-5" /></button>
         </div>
       </div>
     </div>
