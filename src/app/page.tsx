@@ -176,7 +176,8 @@ export default function Dashboard() {
     }
   };
 
-  const handleTransferToInstallation = async (id: string) => {
+ const handleTransferToInstallation = async (id: string) => {
+    const GROUP_ID = "-1003935954352"; // ID твоей общей группы
     try {
       const { error } = await supabase
         .from('orders')
@@ -188,6 +189,11 @@ export default function Dashboard() {
         })
         .eq('id', id);
       if (error) throw error;
+      
+      const orderTitle = orders.find(o => o.id === id)?.title || 'Неизвестный объект';
+      const text = `🛠 <b>ПЕРЕДАНО МОНТАЖНИКАМ!</b>\n\nНапечатанный баннер готов:\n📍 Объект: <b>${orderTitle}</b>\n\nЗайдите в раздел «🆓 Свободные заказы» в боте.`;
+      await notifyTelegram(GROUP_ID, text);
+
       toast({ title: "Заказ передан монтажникам!" });
       fetchAllData();
     } catch (err: any) {
