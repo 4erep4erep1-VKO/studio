@@ -420,12 +420,27 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {profiles.map(p => (
               <div key={p.id} className="bg-card border border-border p-5 rounded-xl shadow-sm">
-                <div className="flex justify-between mb-4">
-                   <div>
-                     <h3 className="font-bold">{p.full_name} {p.role === 'admin' && '🛡️'}</h3>
-                     {isAdmin && <p className="text-xs text-muted-foreground">PIN: {p.pin_code || '—'}</p>}
-                   </div>
-                   <button onClick={() => deleteStaff(p.id)} className="text-destructive"><Trash2 className="w-4 h-4" /></button>
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h3 className="font-bold text-lg flex items-center gap-2">
+                      {p.full_name} {p.role === 'admin' && '🛡️'}
+                    </h3>
+                    <div className="flex items-center gap-3 mt-1.5">
+                      <span className="text-sm font-mono text-muted-foreground bg-background px-2 py-0.5 rounded border border-border">
+                        PIN: {p.pin_code}
+                      </span>
+                      <span className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider ${
+                        p.telegram_chat_id 
+                          ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
+                          : 'bg-red-500/10 text-red-500 border border-red-500/20'
+                      }`}>
+                        {p.telegram_chat_id ? '✅ Бот активен' : '❌ Нет бота'}
+                      </span>
+                    </div>
+                  </div>
+                  <button onClick={() => deleteStaff(p.id)} className="text-destructive hover:bg-destructive/10 p-2 rounded-lg transition" title="Удалить сотрудника">
+                    <Trash2 className="w-5 h-5" />
+                  </button>
                 </div>
                 <div className="flex flex-wrap gap-2 text-[10px]">
                   <label className="flex items-center gap-1"><input type="checkbox" checked={p.can_design} onChange={() => toggleRole(p.id, 'can_design', p.can_design)} /> 🎨 Дизайн</label>
