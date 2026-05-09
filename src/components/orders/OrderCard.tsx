@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2, CheckCircle, ExternalLink, User, Play, Truck } from 'lucide-react';
+import { Trash2, CheckCircle, ExternalLink, User, UserPlus, Truck } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface OrderCardProps {
@@ -7,11 +7,11 @@ interface OrderCardProps {
   onEdit: (id: string) => void;
   onDelete: (id: string, assignedToChatId: string | null, title: string) => void;
   onComplete: (id: string) => void;
-  onStartWork?: (id: string) => void;
+  onAssignOrder?: (id: string) => void;
   onTransferToInstallation?: (id: string) => void;
 }
 
-export function OrderCard({ order, onEdit, onDelete, onComplete, onStartWork, onTransferToInstallation }: OrderCardProps) {
+export function OrderCard({ order, onEdit, onDelete, onComplete, onAssignOrder, onTransferToInstallation }: OrderCardProps) {
   const chatId = order.profiles?.telegram_chat_id || null;
 
   const handleComplete = () => {
@@ -89,9 +89,9 @@ export function OrderCard({ order, onEdit, onDelete, onComplete, onStartWork, on
         </div>
 
         <div className="flex items-center gap-1">
-          {order.status === 'new' && onStartWork && (
-            <button onClick={() => onStartWork(order.id)} className="p-2 text-amber-600 hover:bg-amber-500/10 rounded-lg transition" title="Взять в работу">
-              <Play className="w-5 h-5" />
+          {order.status === 'new' && onAssignOrder && (
+            <button onClick={() => onAssignOrder(order.id)} className="flex items-center gap-1 px-2 py-1 text-amber-600 hover:bg-amber-500/10 rounded-lg text-xs font-bold transition" title="Назначить исполнителя">
+              <UserPlus className="w-4 h-4"/> Назначить
             </button>
           )}
 

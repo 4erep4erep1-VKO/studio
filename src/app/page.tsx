@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Plus, Loader2, Megaphone, 
-  Users, LayoutDashboard, Search, Bell, 
+  Users, User, LayoutDashboard, Search, Bell, 
   Trash2, UserPlus, CheckCircle2, Clock, 
   BarChart3, X, LogOut, ShieldCheck, Download
 } from 'lucide-react';
@@ -26,6 +26,8 @@ export default function Dashboard() {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [exportStart, setExportStart] = useState('');
   const [exportEnd, setExportEnd] = useState('');
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [assigningOrderId, setAssigningOrderId] = useState<string | null>(null);
 
   const [view, setView] = useState<'orders' | 'staff'>('orders');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -161,11 +163,35 @@ export default function Dashboard() {
     }
   };
 
-  const handleStartWork = async (id: string) => {
+  const openAssignModal = (id: string) => {
+    setAssigningOrderId(id);
+    setIsAssignModalOpen(true);
+  };
+
+  const executeAssign = async (workerId: string) => {
+    if (!assigningOrderId) return;
     try {
-      const { error } = await supabase.from('orders').update({ status: 'in_progress' }).eq('id', id);
+      const { error } = await supabase
+        .from('orders')
+        .update({ 
+          status: 'in_progress', 
+          assigned_to: workerId, 
+          is_general: false 
+        })
+        .eq('id', assigningOrderId);
       if (error) throw error;
-      toast({ title: "Заказ переведен в работу!" });
+
+      const worker = profiles.find(p => p.id === workerId);
+      const order = orders.find(o => o.id === assigningOrderId);
+      if (worker?.telegram_chat_id) {
+        await notifyTelegram(
+          worker.telegram_chat_id,
+          `⚠️ <b>ВАМ НАЗНАЧЕН ЗАКАЗ!</b>\n\n📍 Объект: <b>${order?.title}</b>\n\nАдминистратор назначил вас исполнителем. Заказ добавлен в раздел «📦 Мои заказы».`
+        );
+      }
+
+      toast({ title: "Исполнитель назначен!" });
+      setIsAssignModalOpen(false);
       fetchAllData();
     } catch (err: any) {
       alert('Ошибка: ' + err.message);
@@ -330,7 +356,7 @@ export default function Dashboard() {
                 <p className="text-xs text-muted-foreground font-bold">Система</p>
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-medium">Активна</p>
-                  <LogOut onClick={handleLogout} className="w-5 h-5 text-destructive cursor-pointer" title="Выйти" />
+                  <LogOut onClick={handleLogout} className="w-5 h-5 text-destructive cursor-pointer" aria-label="Выйти" />
                 </div>
              </div>
           </div>
@@ -370,21 +396,21 @@ export default function Dashboard() {
                 <div className="min-w-[320px] flex-1 bg-muted/20 border border-border p-4 rounded-xl flex flex-col gap-4">
                   <h3 className="font-bold border-b border-border pb-2 flex justify-between">🆕 Новые <span>{filteredOrders.filter(o => o.status === 'new').length}</span></h3>
                   {filteredOrders.filter(o => o.status === 'new').map((o: any) => (
-                    <OrderCard key={o.id} order={o} onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} onComplete={handleComplete} onStartWork={handleStartWork} onTransferToInstallation={handleTransferToInstallation} />
+                    <OrderCard key={o.id} order={o} onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} onComplete={handleComplete} onAssignOrder={openAssignModal} onTransferToInstallation={handleTransferToInstallation} />
                   ))}
                 </div>
                 {/* КОЛОНКА 2: В РАБОТЕ */}
                 <div className="min-w-[320px] flex-1 bg-amber-500/5 border border-amber-500/20 p-4 rounded-xl flex flex-col gap-4">
                   <h3 className="font-bold border-b border-amber-500/20 pb-2 flex justify-between">⏳ В работе <span>{filteredOrders.filter(o => o.status === 'in_progress').length}</span></h3>
                   {filteredOrders.filter(o => o.status === 'in_progress').map((o: any) => (
-                    <OrderCard key={o.id} order={o} onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} onComplete={handleComplete} onStartWork={handleStartWork} onTransferToInstallation={handleTransferToInstallation} />
+                    <OrderCard key={o.id} order={o} onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} onComplete={handleComplete} onAssignOrder={openAssignModal} onTransferToInstallation={handleTransferToInstallation} />
                   ))}
                 </div>
                 {/* КОЛОНКА 3: ГОТОВО */}
                 <div className="min-w-[320px] flex-1 bg-emerald-500/5 border border-emerald-500/20 p-4 rounded-xl flex flex-col gap-4">
                   <h3 className="font-bold border-b border-emerald-500/20 pb-2 flex justify-between">✅ Готово <span>{filteredOrders.filter(o => o.status === 'completed').length}</span></h3>
                   {filteredOrders.filter(o => o.status === 'completed').map((o: any) => (
-                    <OrderCard key={o.id} order={o} onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} onComplete={handleComplete} onStartWork={handleStartWork} onTransferToInstallation={handleTransferToInstallation} />
+                    <OrderCard key={o.id} order={o} onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} onComplete={handleComplete} onAssignOrder={openAssignModal} onTransferToInstallation={handleTransferToInstallation} />
                   ))}
                 </div>
               </div>
@@ -427,6 +453,21 @@ export default function Dashboard() {
               <div><label className="block text-xs font-bold text-muted-foreground uppercase mb-1">С даты:</label><input type="date" value={exportStart} onChange={e => setExportStart(e.target.value)} className="w-full p-2 bg-background border border-border rounded outline-none" /></div>
               <div><label className="block text-xs font-bold text-muted-foreground uppercase mb-1">По дату:</label><input type="date" value={exportEnd} onChange={e => setExportEnd(e.target.value)} className="w-full p-2 bg-background border border-border rounded outline-none" /></div>
               <Button onClick={executeExport} className="w-full bg-emerald-600 text-white font-bold mt-2">Скачать таблицу</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isAssignModalOpen} onOpenChange={setIsAssignModalOpen}>
+          <DialogContent className="max-w-sm bg-card border-border text-foreground shadow-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-bold text-secondary">Кому передать в работу?</DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col gap-2 py-4 max-h-[60vh] overflow-y-auto">
+              {profiles.filter(p => p.role !== 'admin').map(p => (
+                <Button key={p.id} onClick={() => executeAssign(p.id)} className="justify-start bg-muted hover:bg-primary hover:text-primary-foreground text-foreground font-bold transition border border-border">
+                  <User className="w-4 h-4 mr-2"/> {p.full_name}
+                </Button>
+              ))}
             </div>
           </DialogContent>
         </Dialog>
