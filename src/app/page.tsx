@@ -32,6 +32,7 @@ export default function Dashboard() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState<'active' | 'general' | 'completed' | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -43,9 +44,11 @@ export default function Dashboard() {
   useEffect(() => {
     const savedAuth = localStorage.getItem('adminAuth');
     const savedId = localStorage.getItem('adminId');
+    const savedIsAdmin = localStorage.getItem('isAdmin') === 'true';
     if (savedAuth === 'true' && savedId) {
       setIsAuthenticated(true);
       setCurrentUserId(savedId);
+      setIsAdmin(savedIsAdmin);
     }
   }, []);
 
@@ -104,18 +107,20 @@ export default function Dashboard() {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('role', 'admin')
         .eq('pin_code', password)
         .single();
 
-      if (data) {
+      if (data && (data.role === 'admin' || data.can_design)) {
+        const adminFlag = data.role === 'admin';
         setIsAuthenticated(true);
+        setIsAdmin(adminFlag);
         setCurrentUserId(data.id);
         localStorage.setItem('adminAuth', 'true');
         localStorage.setItem('adminId', data.id);
+        localStorage.setItem('isAdmin', String(adminFlag));
         toast({ title: `Вход выполнен: ${data.full_name}` });
       } else {
-        alert('Ошибка доступа: Неверный ПИН или недостаточно прав');
+        alert('Ошибка доступа: Неверный ПИН или нет прав на создание заказов');
       }
     } catch (err) {
       alert('Ошибка при проверке данных');
@@ -127,7 +132,9 @@ export default function Dashboard() {
   const handleLogout = () => {
     localStorage.removeItem('adminAuth');
     localStorage.removeItem('adminId');
+    localStorage.removeItem('isAdmin');
     setIsAuthenticated(false);
+    setIsAdmin(false);
     setCurrentUserId(null);
     setPassword('');
   };
@@ -333,11 +340,13 @@ export default function Dashboard() {
         <div className="flex flex-wrap justify-between items-center mb-8 gap-4">
           <div className="flex bg-card p-1 rounded-xl border border-border">
             <button onClick={() => setView('orders')} className={`px-6 py-2 rounded-lg text-sm font-bold transition ${view === 'orders' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>Заказы</button>
-            <button onClick={() => setView('staff')} className={`px-6 py-2 rounded-lg text-sm font-bold transition ${view === 'staff' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>Команда</button>
+            {isAdmin && (
+              <button onClick={() => setView('staff')} className={`px-6 py-2 rounded-lg text-sm font-bold transition ${view === 'staff' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>Команда</button>
+            )}
           </div>
           <div className="flex gap-2">
             <Button onClick={() => setIsExportModalOpen(true)} className="bg-emerald-600 text-white font-bold">Excel Отчет</Button>
-            <Button onClick={handleBroadcast} className="bg-secondary text-secondary-foreground font-bold">Объявление</Button>
+            {isAdmin && <Button onClick={handleBroadcast} className="bg-secondary text-secondary-foreground font-bold">Объявление</Button>}
             <Button onClick={() => { setEditingOrderId(null); setIsModalOpen(true); }} className="bg-primary text-primary-foreground font-bold">Новый объект</Button>
           </div>
         </div>
@@ -396,7 +405,7 @@ export default function Dashboard() {
                 </div>
               </div>
             ))}
-            <Button onClick={addStaff} className="h-full border-dashed border-2 bg-transparent text-muted-foreground">+ Добавить сотрудника</Button>
+            {isAdmin && <Button onClick={addStaff} className="h-full border-dashed border-2 bg-transparent text-muted-foreground">+ Добавить сотрудника</Button>}
           </div>
         )}
 
