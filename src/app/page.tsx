@@ -37,6 +37,7 @@ export default function Dashboard() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState<'active' | 'general' | 'completed' | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [viewingOrder, setViewingOrder] = useState<any | null>(null);
 
   const [notifications, setNotifications] = useState<{id: string, text: string, time: string}[]>([]);
   const [showNotifs, setShowNotifs] = useState(false);
@@ -398,7 +399,7 @@ export default function Dashboard() {
                 <div className="w-full md:min-w-[320px] md:flex-1 bg-muted/20 border border-border p-4 rounded-xl flex flex-col gap-4">
                   <h3 className="font-bold border-b border-border pb-2 flex justify-between">🆕 Новые <span>{filteredOrders.filter(o => o.status === 'new').length}</span></h3>
                   {filteredOrders.filter(o => o.status === 'new').map((o: any) => (
-                    <OrderCard key={o.id} order={o} onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} onComplete={handleComplete} onAssignOrder={openAssignModal} onTransferToInstallation={handleTransferToInstallation} />
+                    <OrderCard key={o.id} order={o} onView={setViewingOrder} onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} onComplete={handleComplete} onAssignOrder={openAssignModal} onTransferToInstallation={handleTransferToInstallation} />
                   ))}
                 </div>
 
@@ -406,7 +407,7 @@ export default function Dashboard() {
                 <div className="w-full md:min-w-[320px] md:flex-1 bg-amber-500/5 border border-amber-500/20 p-4 rounded-xl flex flex-col gap-4">
                   <h3 className="font-bold border-b border-amber-500/20 pb-2 flex justify-between">⏳ В работе <span>{filteredOrders.filter(o => o.status === 'in_progress').length}</span></h3>
                   {filteredOrders.filter(o => o.status === 'in_progress').map((o: any) => (
-                    <OrderCard key={o.id} order={o} onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} onComplete={handleComplete} onAssignOrder={openAssignModal} onTransferToInstallation={handleTransferToInstallation} />
+                    <OrderCard key={o.id} order={o} onView={setViewingOrder} onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} onComplete={handleComplete} onAssignOrder={openAssignModal} onTransferToInstallation={handleTransferToInstallation} />
                   ))}
                 </div>
 
@@ -414,7 +415,7 @@ export default function Dashboard() {
                 <div className="w-full md:min-w-[320px] md:flex-1 bg-emerald-500/5 border border-emerald-500/20 p-4 rounded-xl flex flex-col gap-4">
                   <h3 className="font-bold border-b border-emerald-500/20 pb-2 flex justify-between">✅ Готово <span>{filteredOrders.filter(o => o.status === 'completed').length}</span></h3>
                   {filteredOrders.filter(o => o.status === 'completed').map((o: any) => (
-                    <OrderCard key={o.id} order={o} onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} onComplete={handleComplete} onAssignOrder={openAssignModal} onTransferToInstallation={handleTransferToInstallation} />
+                    <OrderCard key={o.id} order={o} onView={setViewingOrder} onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} onComplete={handleComplete} onAssignOrder={openAssignModal} onTransferToInstallation={handleTransferToInstallation} />
                   ))}
                 </div>
 
@@ -489,6 +490,105 @@ export default function Dashboard() {
                 </Button>
               ))}
             </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!viewingOrder} onOpenChange={() => setViewingOrder(null)}>
+          <DialogContent className="max-w-2xl bg-card border-border text-foreground shadow-2xl overflow-y-auto max-h-[90vh]">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold text-secondary uppercase">Полная информация о заказе</DialogTitle>
+            </DialogHeader>
+            
+            {viewingOrder && (
+              <div className="space-y-6 py-4">
+                {/* ОСНОВНАЯ ИНФОРМАЦИЯ */}
+                <div>
+                  <h3 className="font-bold text-lg text-primary mb-2">{viewingOrder.title}</h3>
+                  <div className="flex gap-2 flex-wrap mb-3">
+                    <span className={`text-[10px] px-3 py-1 rounded font-bold uppercase ${viewingOrder.department === 'print' ? 'bg-purple-500/20 text-purple-500' : 'bg-blue-500/20 text-blue-500'}`}>
+                      {viewingOrder.department === 'print' ? '🖨 Печать' : '🛠 Монтаж'}
+                    </span>
+                    <span className={`text-[10px] px-3 py-1 rounded font-bold uppercase ${
+                      viewingOrder.status === 'completed' ? 'bg-emerald-500/20 text-emerald-600' : 
+                      viewingOrder.status === 'in_progress' ? 'bg-amber-500/20 text-amber-600' : 
+                      'bg-muted text-muted-foreground'
+                    }`}>
+                      {viewingOrder.status === 'completed' ? 'Завершен' : viewingOrder.status === 'in_progress' ? 'В работе' : 'Новый'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* ОПИСАНИЕ */}
+                {viewingOrder.description && (
+                  <div className="bg-background/50 p-4 rounded-lg border border-border/50">
+                    <p className="text-xs text-muted-foreground font-bold uppercase mb-2">Описание</p>
+                    <p className="text-foreground leading-relaxed whitespace-pre-wrap break-words">{viewingOrder.description}</p>
+                  </div>
+                )}
+
+                {/* ДЕТАЛИ */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-background/50 p-3 rounded-lg border border-border/50">
+                    <p className="text-[10px] text-muted-foreground font-bold uppercase mb-1">Дедлайн</p>
+                    <p className="text-foreground font-medium">{viewingOrder.deadline ? new Date(viewingOrder.deadline).toLocaleDateString('ru-RU') : '—'}</p>
+                  </div>
+                  
+                  <div className="bg-background/50 p-3 rounded-lg border border-border/50">
+                    <p className="text-[10px] text-muted-foreground font-bold uppercase mb-1">Исполнитель</p>
+                    <p className="text-foreground font-medium">
+                      {viewingOrder.is_general ? 'Общий заказ' : (viewingOrder.profiles?.full_name || 'Не назначен')}
+                    </p>
+                  </div>
+
+                  {viewingOrder.dimensions && (
+                    <div className="bg-background/50 p-3 rounded-lg border border-border/50">
+                      <p className="text-[10px] text-muted-foreground font-bold uppercase mb-1">Размеры</p>
+                      <p className="text-foreground font-medium">{viewingOrder.dimensions}</p>
+                    </div>
+                  )}
+
+                  {viewingOrder.material && (
+                    <div className="bg-background/50 p-3 rounded-lg border border-border/50">
+                      <p className="text-[10px] text-muted-foreground font-bold uppercase mb-1">Материал</p>
+                      <p className="text-foreground font-medium">{viewingOrder.material}</p>
+                    </div>
+                  )}
+
+                  {viewingOrder.source_link && (
+                    <div className="bg-background/50 p-3 rounded-lg border border-border/50 col-span-2">
+                      <p className="text-[10px] text-muted-foreground font-bold uppercase mb-1">Источник</p>
+                      <a href={viewingOrder.source_link} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all">
+                        {viewingOrder.source_link}
+                      </a>
+                    </div>
+                  )}
+
+                  <div className="bg-background/50 p-3 rounded-lg border border-border/50">
+                    <p className="text-[10px] text-muted-foreground font-bold uppercase mb-1">Создал</p>
+                    <p className="text-foreground font-medium">{viewingOrder.creator_name || 'Админ'}</p>
+                  </div>
+                </div>
+
+                {/* ИЗОБРАЖЕНИЯ */}
+                {(viewingOrder.image_urls || viewingOrder.report_photo) && (
+                  <div>
+                    <p className="text-xs text-muted-foreground font-bold uppercase mb-3">Изображения</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {viewingOrder.image_urls && Array.isArray(viewingOrder.image_urls) && viewingOrder.image_urls.map((url: string, idx: number) => (
+                        <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="relative group overflow-hidden rounded-lg border border-border">
+                          <img src={url} alt={`Изображение ${idx + 1}`} className="w-full h-auto object-cover group-hover:scale-105 transition" />
+                        </a>
+                      ))}
+                      {viewingOrder.report_photo && (
+                        <a href={viewingOrder.report_photo} target="_blank" rel="noopener noreferrer" className="relative group overflow-hidden rounded-lg border border-border">
+                          <img src={viewingOrder.report_photo} alt="Отчет" className="w-full h-auto object-cover group-hover:scale-105 transition" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </DialogContent>
         </Dialog>
 

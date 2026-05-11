@@ -4,6 +4,7 @@ import confetti from 'canvas-confetti';
 
 interface OrderCardProps {
   order: any;
+  onView: (order: any) => void;
   onEdit: (id: string) => void;
   onDelete: (id: string, assignedToChatId: string | null, title: string) => void;
   onComplete: (id: string) => void;
@@ -11,7 +12,7 @@ interface OrderCardProps {
   onTransferToInstallation?: (id: string) => void;
 }
 
-export function OrderCard({ order, onEdit, onDelete, onComplete, onAssignOrder, onTransferToInstallation }: OrderCardProps) {
+export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssignOrder, onTransferToInstallation }: OrderCardProps) {
   const chatId = order.profiles?.telegram_chat_id || null;
 
   const handleComplete = () => {
@@ -26,19 +27,22 @@ export function OrderCard({ order, onEdit, onDelete, onComplete, onAssignOrder, 
 
   return (
     <div className="bg-card border border-border p-5 rounded-xl shadow-sm hover:border-muted-foreground/30 transition flex flex-col h-full">
-      <div className="flex justify-between items-start">
-        <h3 className="font-bold text-lg text-card-foreground mb-2">{order.title}</h3>
-        <div className="flex gap-2">
-           {order.preview_url && <span className="text-[10px] text-primary bg-primary/10 border border-primary/20 px-2 py-1 rounded uppercase font-bold">Эскиз</span>}
-           <span className={`text-[10px] px-2 py-1 rounded uppercase font-bold ${order.department === 'print' ? 'bg-purple-500/10 text-purple-500' : 'bg-blue-500/10 text-blue-500'}`}>
-             {order.department === 'print' ? '🖨 Печать' : '🛠 Монтаж'}
-           </span>
+      {/* ЗАГОЛОВОК И ОПИСАНИЕ - КЛИКАБЕЛЬНЫЕ */}
+      <div onClick={() => onView(order)} className="cursor-pointer group mb-4 -mx-5 -mt-5 px-5 pt-5 pb-4">
+        <div className="flex justify-between items-start">
+          <h3 className="font-bold text-lg text-card-foreground group-hover:text-primary transition mb-2">{order.title}</h3>
+          <div className="flex gap-2">
+             {order.preview_url && <span className="text-[10px] text-primary bg-primary/10 border border-primary/20 px-2 py-1 rounded uppercase font-bold">Эскиз</span>}
+             <span className={`text-[10px] px-2 py-1 rounded uppercase font-bold ${order.department === 'print' ? 'bg-purple-500/10 text-purple-500' : 'bg-blue-500/10 text-blue-500'}`}>
+               {order.department === 'print' ? '🖨 Печать' : '🛠 Монтаж'}
+             </span>
+          </div>
         </div>
+        
+        <p className="text-muted-foreground text-sm line-clamp-2 flex-grow">
+          {order.description || 'Нет описания'}
+        </p>
       </div>
-      
-      <p className="text-muted-foreground text-sm mb-4 line-clamp-2 flex-grow">
-        {order.description || 'Нет описания'}
-      </p>
       
       <div className="space-y-2 text-sm mb-4 bg-background/50 p-3 rounded-lg border border-border/50">
         <div className="flex justify-between">
