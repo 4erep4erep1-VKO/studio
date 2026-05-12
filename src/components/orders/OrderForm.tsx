@@ -12,7 +12,7 @@ interface OrderFormProps {
 export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps) {
   const [loading, setLoading] = useState(false);
   const [installers, setInstallers] = useState<any[]>([]);
-  const [formData, setFormData] = useState({
+  const initialFormState = {
     title: '',
     description: '',
     deadline: '',
@@ -23,6 +23,14 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
     dimensions: '',
     material: '',
     department: 'installation'
+  };
+  const [formData, setFormData] = useState(initialFormState);
+  const [initialData, setInitialData] = useState<typeof initialFormState | null>(null);
+
+  const normalizeFormValues = (data: typeof initialFormState) => ({
+    ...data,
+    deadline: data.deadline || null,
+    assigned_to: data.is_general ? null : (data.assigned_to || null)
   });
 
   useEffect(() => {
@@ -37,11 +45,21 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
         if (orderId) {
           const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
           if (order) {
-            setFormData({
-              ...order,
+            const loadedData = {
+              title: order.title ?? '',
+              description: order.description ?? '',
               deadline: order.deadline ? String(order.deadline).split('T')[0] : '',
-              image_urls: order.image_urls || []
-            });
+              assigned_to: order.assigned_to ?? '',
+              is_general: order.is_general ?? true,
+              image_urls: order.image_urls || [],
+              source_link: order.source_link ?? '',
+              dimensions: order.dimensions ?? '',
+              material: order.material ?? '',
+              department: order.department ?? 'installation'
+            };
+
+            setFormData(loadedData);
+            setInitialData(loadedData);
           }
         }
       } catch (e) { console.error(e); }
@@ -78,13 +96,37 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    
-    const payload = {
-      ...formData,
-      deadline: formData.deadline || null, 
-      created_by: creatorId,
-      assigned_to: formData.is_general ? null : (formData.assigned_to || null)
-    };
+
+    const currentData = normalizeFormValues(formData);
+    let payload: Record<string, any> = {};
+
+    if (orderId && initialData) {
+      const initialNormalized = normalizeFormValues(initialData);
+      payload = Object.entries(currentData).reduce((acc, [key, value]) => {
+        const initialValue = (initialNormalized as any)[key];
+        const changed = Array.isArray(value) && Array.isArray(initialValue)
+          ? JSON.stringify(value) !== JSON.stringify(initialValue)
+          : value !== initialValue;
+
+        if (changed) {
+          acc[key] = value;
+        }
+        return acc;
+      }, {} as Record<string, any>);
+    } else if (orderId) {
+      payload = currentData;
+    } else {
+      payload = {
+        ...currentData,
+        created_by: creatorId
+      };
+    }
+
+    if (orderId && Object.keys(payload).length === 0) {
+      setLoading(false);
+      onSave();
+      return;
+    }
 
     const { error } = orderId 
       ? await supabase.from('orders').update(payload).eq('id', orderId)
