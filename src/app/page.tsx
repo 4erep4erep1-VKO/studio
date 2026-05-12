@@ -210,6 +210,17 @@ export default function Dashboard() {
     }
   };
 
+  const handleRestore = async (id: string) => {
+    try {
+      const { error } = await supabase.from('orders').update({ status: 'in_progress', report_photo: null }).eq('id', id);
+      if (error) throw error;
+      toast({ title: 'Заказ возвращен в работу' });
+      fetchAllData();
+    } catch (err: any) {
+      alert('Ошибка: ' + err.message);
+    }
+  };
+
  const handleTransferToInstallation = async (id: string) => {
     const GROUP_ID = "-1003935954352"; 
     try {
@@ -415,7 +426,18 @@ export default function Dashboard() {
                 <div className="w-full md:min-w-[320px] md:flex-1 bg-emerald-500/5 border border-emerald-500/20 p-4 rounded-xl flex flex-col gap-4">
                   <h3 className="font-bold border-b border-emerald-500/20 pb-2 flex justify-between">✅ Готово <span>{filteredOrders.filter(o => o.status === 'completed').length}</span></h3>
                   {filteredOrders.filter(o => o.status === 'completed').map((o: any) => (
-                    <OrderCard key={o.id} order={o} onView={setViewingOrder} onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} onComplete={handleComplete} onAssignOrder={openAssignModal} onTransferToInstallation={handleTransferToInstallation} />
+                    <OrderCard
+                      key={o.id}
+                      order={o}
+                      onView={setViewingOrder}
+                      onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }}
+                      onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)}
+                      onComplete={handleComplete}
+                      onAssignOrder={openAssignModal}
+                      onTransferToInstallation={handleTransferToInstallation}
+                      onRestore={handleRestore}
+                      isAdmin={isAdmin}
+                    />
                   ))}
                 </div>
 

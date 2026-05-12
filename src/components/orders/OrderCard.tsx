@@ -10,9 +10,11 @@ interface OrderCardProps {
   onComplete: (id: string) => void;
   onAssignOrder?: (id: string) => void;
   onTransferToInstallation?: (id: string) => void;
+  onRestore?: (id: string) => void;
+  isAdmin?: boolean;
 }
 
-export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssignOrder, onTransferToInstallation }: OrderCardProps) {
+export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssignOrder, onTransferToInstallation, onRestore, isAdmin }: OrderCardProps) {
   const chatId = order.profiles?.telegram_chat_id || null;
 
   const handleComplete = () => {
@@ -124,6 +126,16 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssig
                 <CheckCircle className="w-5 h-5" />
               </button>
             )
+          )}
+
+          {order.status === 'completed' && isAdmin && onRestore && (
+            <button
+              onClick={() => onRestore(order.id)}
+              className="flex items-center gap-1 px-2 py-1 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-bold transition"
+              title="Вернуть заказ в работу"
+            >
+              ↩️ Вернуть в работу
+            </button>
           )}
 
           <button onClick={() => onEdit(order.id)} className="px-3 py-1.5 text-primary hover:bg-primary/10 rounded-lg text-sm font-bold transition">Правка</button>
