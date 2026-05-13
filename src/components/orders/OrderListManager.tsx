@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Grid3x3, List, ChevronDown } from 'lucide-react';
+import { Grid3x3, List, LayoutGrid, ChevronDown, Eye, Pencil } from 'lucide-react';
 import { OrderCard } from './OrderCard';
+import { useRouter } from 'next/navigation';
 
 interface OrderListManagerProps {
   orders: any[];
@@ -27,11 +28,11 @@ export default function OrderListManager({
   onView,
   isAdmin = false,
 }: OrderListManagerProps) {
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  // Добавили 'compact' в типы режима отображения
+  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'compact'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'name_asc' | 'deadline'>('newest');
 
-  // Фильтрация по поиску (по title и description, без учета регистра)
   const searchedOrders = useMemo(() => {
     return orders.filter((order) => {
       const searchLower = searchQuery.toLowerCase();
@@ -41,10 +42,8 @@ export default function OrderListManager({
     });
   }, [orders, searchQuery]);
 
-  // Сортировка
   const sortedOrders = useMemo(() => {
     const arr = [...searchedOrders];
-
     switch (sortBy) {
       case 'newest':
         return arr.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -67,7 +66,6 @@ export default function OrderListManager({
     <div className="space-y-4">
       {/* ПАНЕЛЬ УПРАВЛЕНИЯ */}
       <div className="bg-card border border-border p-4 rounded-xl shadow-sm">
-        {/* Первая строка: поиск */}
         <div className="mb-4">
           <input
             type="text"
@@ -78,13 +76,9 @@ export default function OrderListManager({
           />
         </div>
 
-        {/* Вторая строка: сортировка и переключение вида */}
         <div className="flex flex-col md:flex-row gap-3 items-center justify-between">
-          {/* Выпадающий список сортировки */}
           <div className="w-full md:w-auto flex items-center gap-2">
-            <label className="text-sm font-bold text-muted-foreground whitespace-nowrap">
-              Сортировка:
-            </label>
+            <label className="text-sm font-bold text-muted-foreground whitespace-nowrap">Сортировка:</label>
             <div className="relative w-full md:w-auto">
               <select
                 value={sortBy}
@@ -100,36 +94,37 @@ export default function OrderListManager({
             </div>
           </div>
 
-          {/* Кнопки переключения вида */}
-          <div className="flex bg-background border border-border rounded-lg p-1 w-full md:w-auto">
+          {/* Кнопки переключения вида (Добавлена плитка) */}
+          <div className="flex bg-background border border-border rounded-lg p-1 w-full md:w-auto overflow-x-auto">
             <button
               onClick={() => setViewMode('grid')}
-              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-bold transition ${
-                viewMode === 'grid'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-              title="Вид сеткой"
+              className={`flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-bold transition whitespace-nowrap ${viewMode === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              title="Крупная сетка"
             >
               <Grid3x3 className="w-4 h-4" />
-              <span className="hidden sm:inline">Плитки</span>
+              <span className="hidden lg:inline">Плитки</span>
             </button>
+            
+            <button
+              onClick={() => setViewMode('compact')}
+              className={`flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-bold transition whitespace-nowrap ${viewMode === 'compact' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              title="Мелкая сетка"
+            >
+              <LayoutGrid className="w-4 h-4" />
+              <span className="hidden lg:inline">Мелкая плитка</span>
+            </button>
+
             <button
               onClick={() => setViewMode('list')}
-              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-bold transition ${
-                viewMode === 'list'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
+              className={`flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-bold transition whitespace-nowrap ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               title="Вид списком"
             >
               <List className="w-4 h-4" />
-              <span className="hidden sm:inline">Список</span>
+              <span className="hidden lg:inline">Список</span>
             </button>
           </div>
         </div>
 
-        {/* Счетчик результатов */}
         <div className="mt-3 text-xs text-muted-foreground font-medium">
           Найдено заказов: <span className="font-bold text-foreground">{sortedOrders.length}</span> / {orders.length}
         </div>
@@ -140,98 +135,73 @@ export default function OrderListManager({
         {sortedOrders.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="text-4xl mb-3">📭</div>
-            <p className="text-muted-foreground font-medium">
-              {searchQuery ? 'Заказов не найдено' : 'Нет заказов'}
-            </p>
+            <p className="text-muted-foreground font-medium">{searchQuery ? 'Заказов не найдено' : 'Нет заказов'}</p>
           </div>
         ) : viewMode === 'grid' ? (
-          // РЕЖИМ СЕТКИ (ПЛИТКИ)
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {sortedOrders.map((order) => (
               <div key={order.id} className="h-full">
-                <OrderCard
-                  order={order}
-                  onView={onView}
-                  onEdit={onEdit}
-                  onDelete={(id, cid, title) => onDelete(id, cid, title, order.status)}
-                  onComplete={onComplete}
-                  onAssignOrder={onAssignOrder}
-                  onTransferToInstallation={onTransferToInstallation}
-                  onRestore={onRestore}
-                  isAdmin={isAdmin}
-                />
+                <OrderCard order={order} onView={onView} onEdit={onEdit} onDelete={(id, cid, title) => onDelete(id, cid, title, order.status)} onComplete={onComplete} onAssignOrder={onAssignOrder} onTransferToInstallation={onTransferToInstallation} onRestore={onRestore} isAdmin={isAdmin} />
+              </div>
+            ))}
+          </div>
+        ) : viewMode === 'compact' ? (
+          /* РЕЖИМ МЕЛКОЙ ПЛИТКИ */
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-2">
+            {sortedOrders.map((order) => (
+              <div 
+                key={order.id} 
+                className="bg-card border border-border p-2 rounded-lg hover:border-primary transition flex flex-col justify-between h-32 cursor-pointer group relative shadow-sm"
+                onClick={() => onView(order)}
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-1 mb-1">
+                    <span className={`text-[8px] px-1 rounded font-black uppercase ${order.department === 'print' ? 'bg-purple-500/20 text-purple-500' : 'bg-blue-500/20 text-blue-500'}`}>
+                      {order.department === 'print' ? 'ПЕЧАТЬ' : 'МОНТАЖ'}
+                    </span>
+                    <span className="text-[10px]">{order.status === 'completed' ? '✅' : order.status === 'in_progress' ? '⏳' : '🆕'}</span>
+                  </div>
+                  <h4 className="text-xs font-bold text-foreground leading-tight line-clamp-2 group-hover:text-primary transition uppercase">
+                    {order.title}
+                  </h4>
+                </div>
+
+                <div className="mt-auto">
+                   {order.deadline && (
+                      <div className="text-[9px] text-muted-foreground flex items-center gap-1 font-medium">
+                        📅 {new Date(order.deadline).toLocaleDateString('ru-RU', { month: 'numeric', day: 'numeric' })}
+                      </div>
+                   )}
+                   <div className="flex gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={(e) => { e.stopPropagation(); onEdit(order.id); }} className="p-1 bg-background border border-border rounded hover:text-primary"><Pencil className="w-3 h-3"/></button>
+                      <button onClick={(e) => { e.stopPropagation(); onView(order); }} className="p-1 bg-background border border-border rounded hover:text-primary"><Eye className="w-3 h-3"/></button>
+                   </div>
+                </div>
               </div>
             ))}
           </div>
         ) : (
-          // РЕЖИМ СПИСКА (КОМПАКТНЫЕ СТРОКИ)
+          /* РЕЖИМ СПИСКА */
           <div className="space-y-2">
             {sortedOrders.map((order) => (
-              <div
-                key={order.id}
-                className="bg-card border border-border p-3 rounded-lg hover:border-primary transition flex items-center justify-between gap-4 cursor-pointer group"
-                onClick={() => onView(order)}
-              >
-                {/* Левая часть: основная информация */}
-                <div className="flex-grow min-w-0">
+              <div key={order.id} className="bg-card border border-border p-3 rounded-lg hover:border-primary transition flex items-center justify-between gap-4 cursor-pointer group" onClick={() => onView(order)}>
+                <div className="flex-grow min-w-0 text-left">
                   <div className="flex items-center gap-2 mb-1">
-                    <h4 className="font-bold text-foreground truncate group-hover:text-primary transition">
-                      {order.title}
-                    </h4>
-                    <span
-                      className={`text-[9px] px-2 py-0.5 rounded font-bold whitespace-nowrap ${
-                        order.status === 'completed'
-                          ? 'bg-emerald-500/20 text-emerald-600'
-                          : order.status === 'in_progress'
-                          ? 'bg-amber-500/20 text-amber-600'
-                          : 'bg-blue-500/20 text-blue-600'
-                      }`}
-                    >
-                      {order.status === 'completed'
-                        ? '✅'
-                        : order.status === 'in_progress'
-                        ? '⏳'
-                        : '🆕'}
+                    <h4 className="font-bold text-foreground truncate group-hover:text-primary transition uppercase">{order.title}</h4>
+                    <span className={`text-[9px] px-2 py-0.5 rounded font-bold whitespace-nowrap ${order.status === 'completed' ? 'bg-emerald-500/20 text-emerald-600' : order.status === 'in_progress' ? 'bg-amber-500/20 text-amber-600' : 'bg-blue-500/20 text-blue-600'}`}>
+                      {order.status === 'completed' ? '✅ ГОТОВО' : order.status === 'in_progress' ? '⏳ В РАБОТЕ' : '🆕 НОВЫЙ'}
                     </span>
                   </div>
                   <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
-                    {order.description && (
-                      <span className="truncate">{order.description.substring(0, 40)}...</span>
-                    )}
-                    {order.deadline && (
-                      <span className="flex items-center gap-1 whitespace-nowrap">
-                        📅 {new Date(order.deadline).toLocaleDateString('ru-RU', { month: 'short', day: 'numeric' })}
-                      </span>
-                    )}
-                    {!order.is_general && order.profiles?.full_name && (
-                      <span className="flex items-center gap-1 whitespace-nowrap">
-                        👤 {order.profiles.full_name}
-                      </span>
-                    )}
-                    {order.is_general && (
-                      <span className="flex items-center gap-1 whitespace-nowrap">
-                        🌍 Общий
-                      </span>
-                    )}
+                    {order.deadline && <span className="flex items-center gap-1 whitespace-nowrap">📅 {new Date(order.deadline).toLocaleDateString('ru-RU')}</span>}
+                    <span className={`text-[10px] font-bold ${order.department === 'print' ? 'text-purple-400' : 'text-blue-400'}`}>
+                       {order.department === 'print' ? '🖨 ПЕЧАТЬ' : '🛠 МОНТАЖ'}
+                    </span>
                   </div>
                 </div>
-
-                {/* Правая часть: действия */}
                 <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={() => onView(order)}
-                    className="text-xs px-2 py-1 bg-background border border-border rounded hover:bg-primary hover:text-primary-foreground transition font-bold"
-                    title="Просмотр"
-                  >
-                    👁
-                  </button>
-                  <button
-                    onClick={() => onEdit(order.id)}
-                    className="text-xs px-2 py-1 bg-background border border-border rounded hover:bg-primary hover:text-primary-foreground transition font-bold"
-                    title="Редактирование"
-                  >
-                    ✏️
-                  </button>
+                  <button onClick={() => onView(order)} className="text-xs px-2 py-1 bg-background border border-border rounded hover:bg-primary hover:text-primary-foreground transition font-bold">👁</button>
+                  <button onClick={() => onEdit(order.id)} className="text-xs px-2 py-1 bg-background border border-border rounded hover:bg-primary hover:text-primary-foreground transition font-bold">✏️</button>
                 </div>
               </div>
             ))}
