@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { notifyNewOrderToGroup, notifyOrderToUser } from '@/app/actions/telegram';
 
 interface OrderFormProps {
   orderId: string | null;
@@ -133,22 +134,28 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
       : await supabase.from('orders').insert([payload]);
 
     if (!error) {
+      // Если это новый заказ - отправляем уведомление в группу
+      if (!orderId) {
+        // Отправка уведомления в Telegram группу
+        await notifyNewOrderToGroup({
+          title: formData.title,
+          description: formData.description,
+          department: formData.department,
+          deadline: formData.deadline,
+          is_general: formData.is_general,
+          dimensions: formData.dimensions,
+          material: formData.material,
+          source_link: formData.source_link,
+        }).catch((err: unknown) => console.error('Failed to send group notification:', err));
+      }
+
+      // Если это личный заказ - отправляем уведомление исполнителю
       if (!orderId && !formData.is_general && formData.assigned_to) {
         const assignedUser = installers.find(i => i.id === formData.assigned_to);
-        const botToken = process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN;
         
-        if (assignedUser && assignedUser.telegram_chat_id && botToken) {
-          const messageText = `🔔 <b>ЛИЧНЫЙ ЗАКАЗ!</b>\n\nТебе назначили новый объект: <b>${formData.title}</b>\n\nЗайди в раздел «📦 Мои заказы», чтобы посмотреть детали.`;
-          
-          fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              chat_id: assignedUser.telegram_chat_id, 
-              text: messageText, 
-              parse_mode: 'HTML' 
-            })
-          }).catch(err => console.error("Ошибка отправки уведомления:", err));
+        if (assignedUser && assignedUser.telegram_chat_id) {
+          await notifyOrderToUser(assignedUser.telegram_chat_id, formData.title)
+            .catch((err: unknown) => console.error('Failed to send personal notification:', err));
         }
       }
 
@@ -235,4 +242,5 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
       </form>
     </div>
   );
-}
+}TELEGRAM_BOT_TOKEN=ваш_токен_бота
+TELEGRAM_GROUP_CHAT_ID=ID_вашей_группы

@@ -12,6 +12,7 @@ import {
 import { Order } from '@/lib/types';
 import OrderForm from '@/components/orders/OrderForm';
 import { OrderCard } from '@/components/orders/OrderCard';
+import OrderListManager from '@/components/orders/OrderListManager';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import * as XLSX from 'xlsx';
@@ -30,6 +31,7 @@ export default function Dashboard() {
   const [assigningOrderId, setAssigningOrderId] = useState<string | null>(null);
 
   const [view, setView] = useState<'orders' | 'staff'>('orders');
+  const [displayMode, setDisplayMode] = useState<'kanban' | 'list'>('kanban');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [password, setPassword] = useState('');
@@ -376,10 +378,19 @@ export default function Dashboard() {
 
         {/* ПЕРЕКЛЮЧАТЕЛИ И КНОПКИ */}
         <div className="flex flex-wrap justify-between items-center mb-8 gap-4">
-          <div className="flex bg-card p-1 rounded-xl border border-border">
-            <button onClick={() => setView('orders')} className={`px-6 py-2 rounded-lg text-sm font-bold transition ${view === 'orders' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>Заказы</button>
-            {isAdmin && (
-              <button onClick={() => setView('staff')} className={`px-6 py-2 rounded-lg text-sm font-bold transition ${view === 'staff' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>Команда</button>
+          <div className="flex gap-4">
+            <div className="flex bg-card p-1 rounded-xl border border-border">
+              <button onClick={() => setView('orders')} className={`px-6 py-2 rounded-lg text-sm font-bold transition ${view === 'orders' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>Заказы</button>
+              {isAdmin && (
+                <button onClick={() => setView('staff')} className={`px-6 py-2 rounded-lg text-sm font-bold transition ${view === 'staff' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>Команда</button>
+              )}
+            </div>
+            
+            {view === 'orders' && (
+              <div className="flex bg-card p-1 rounded-xl border border-border">
+                <button onClick={() => setDisplayMode('kanban')} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${displayMode === 'kanban' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>📊 Канбан</button>
+                <button onClick={() => setDisplayMode('list')} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${displayMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>📋 Список</button>
+              </div>
             )}
           </div>
           <div className="flex gap-2 w-full md:w-auto">
@@ -391,20 +402,38 @@ export default function Dashboard() {
 
         {view === 'orders' ? (
           <>
-            <div className="flex flex-col md:flex-row gap-4 mb-6">
-              <input placeholder="Поиск..." className="flex-grow w-full md:max-w-md p-2 bg-card border border-border rounded-lg outline-none focus:border-primary" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-              <div className="flex flex-wrap gap-2 bg-card p-1 rounded-lg border border-border w-full md:w-auto">
-                {['active', 'general', 'completed', 'all'].map(t => (
-                  <button key={t} onClick={() => setActiveTab(t as any)} className={`flex-1 md:flex-none px-4 py-1.5 rounded-md text-xs font-bold transition ${activeTab === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>
-                    {t === 'active' ? '🔥 Актив' : t === 'general' ? '🌍 Общие' : t === 'completed' ? '✅ Архив' : '📦 Все'}
-                  </button>
-                ))}
-              </div>
-            </div>
+            {displayMode === 'list' ? (
+              // РЕЖИМ СПИСКА/СЕТКИ
+              <OrderListManager
+                orders={filteredOrders}
+                onEdit={(id) => {
+                  setEditingOrderId(id);
+                  setIsModalOpen(true);
+                }}
+                onDelete={(id, cid, title) => handleDelete(id, cid, title, '')}
+                onComplete={handleComplete}
+                onAssignOrder={openAssignModal}
+                onTransferToInstallation={handleTransferToInstallation}
+                onRestore={handleRestore}
+                onView={setViewingOrder}
+                isAdmin={isAdmin}
+              />
+            ) : (
+              // РЕЖИМ КАНБАНА
+              <>
+                <div className="flex flex-col md:flex-row gap-4 mb-6">
+                  <input placeholder="Поиск..." className="flex-grow w-full md:max-w-md p-2 bg-card border border-border rounded-lg outline-none focus:border-primary" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                  <div className="flex flex-wrap gap-2 bg-card p-1 rounded-lg border border-border w-full md:w-auto">
+                    {['active', 'general', 'completed', 'all'].map(t => (
+                      <button key={t} onClick={() => setActiveTab(t as any)} className={`flex-1 md:flex-none px-4 py-1.5 rounded-md text-xs font-bold transition ${activeTab === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>
+                        {t === 'active' ? '🔥 Актив' : t === 'general' ? '🌍 Общие' : t === 'completed' ? '✅ Архив' : '📦 Все'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-            {loading ? <Loader2 className="animate-spin mx-auto mt-20" /> : (
-              // ВОТ ЭТА СТРОЧКА ИСПРАВЛЯЕТ ОТОБРАЖЕНИЕ КАРТОЧЕК НА МОБИЛКЕ
-              <div className="flex flex-col md:flex-row gap-6 md:overflow-x-auto pb-6 items-start">
+                {loading ? <Loader2 className="animate-spin mx-auto mt-20" /> : (
+                  <div className="flex flex-col md:flex-row gap-6 md:overflow-x-auto pb-6 items-start">
                 
                 {/* КОЛОНКА 1: НОВЫЕ */}
                 <div className="w-full md:min-w-[320px] md:flex-1 bg-muted/20 border border-border p-4 rounded-xl flex flex-col gap-4">
@@ -442,6 +471,8 @@ export default function Dashboard() {
                 </div>
 
               </div>
+                )}
+              </>
             )}
           </>
         ) : (
