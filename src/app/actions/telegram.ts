@@ -49,7 +49,7 @@ ${orderData.dimensions ? `📐 <b>Размеры:</b> ${escapeHtml(orderData.dim
 ${orderData.material ? `🎨 <b>Материал:</b> ${escapeHtml(orderData.material)}` : ''}
 ${orderData.source_link ? `🔗 <b>Ссылка на макет:</b> <a href="${orderData.source_link}">открыть</a>` : ''}
 
-⏱ Время создания: ${new Date().toLocaleString('ru-RU')}
+⏱ Время создания: ${new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Almaty' })}
     `.trim();
 
     // Отправка POST запроса к Telegram Bot API
