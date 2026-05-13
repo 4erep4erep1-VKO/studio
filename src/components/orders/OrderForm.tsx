@@ -242,5 +242,4 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
       </form>
     </div>
   );
-}TELEGRAM_BOT_TOKEN=ваш_токен_бота
-TELEGRAM_GROUP_CHAT_ID=ID_вашей_группы
+}
