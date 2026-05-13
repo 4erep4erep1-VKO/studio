@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { notifyNewOrderToGroup, notifyOrderToUser } from '@/app/actions/telegram';
+import { useRouter } from 'next/navigation';
 
 interface OrderFormProps {
   orderId: string | null;
@@ -11,6 +12,7 @@ interface OrderFormProps {
 }
 
 export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [installers, setInstallers] = useState<any[]>([]);
   const initialFormState = {
@@ -134,34 +136,41 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
       : await supabase.from('orders').insert([payload]);
 
     if (!error) {
-      // Если это новый заказ - отправляем уведомление в группу
+      // Отправляем уведомления только для новых заказов
       if (!orderId) {
-        // Отправка уведомления в Telegram группу
-        await notifyNewOrderToGroup({
-          title: formData.title,
-          description: formData.description,
-          department: formData.department,
-          deadline: formData.deadline,
-          is_general: formData.is_general,
-          dimensions: formData.dimensions,
-          material: formData.material,
-          source_link: formData.source_link,
-        }).catch((err: unknown) => console.error('Failed to send group notification:', err));
-      }
-
-      // Если это личный заказ - отправляем уведомление исполнителю
-      if (!orderId && !formData.is_general && formData.assigned_to) {
-        const assignedUser = installers.find(i => i.id === formData.assigned_to);
-        
-        if (assignedUser && assignedUser.telegram_chat_id) {
-          await notifyOrderToUser(assignedUser.telegram_chat_id, formData.title)
-            .catch((err: unknown) => console.error('Failed to send personal notification:', err));
+        try {
+          await notifyNewOrderToGroup({
+            title: formData.title,
+            description: formData.description,
+            department: formData.department,
+            deadline: formData.deadline,
+            is_general: formData.is_general,
+            dimensions: formData.dimensions,
+            material: formData.material,
+            source_link: formData.source_link,
+          });
+        } catch (err: any) {
+          console.error('Ошибка Telegram:', err);
+          alert('Заказ создан, но в Телеграм не улетел. Проверь ключи на Vercel!');
         }
       }
 
+      // Личное уведомление исполнителю
+      if (!orderId && !formData.is_general && formData.assigned_to) {
+        const assignedUser = installers.find(i => i.id === formData.assigned_to);
+        if (assignedUser && assignedUser.telegram_chat_id) {
+          try {
+            await notifyOrderToUser(assignedUser.telegram_chat_id, formData.title);
+          } catch (err) {
+            console.error('Ошибка личного уведомления:', err);
+          }
+        }
+      }
+
+      router.refresh(); // Принудительно обновляем данные на странице (чтобы перекинулись отделы)
       onSave();
     } else {
-      alert('Ошибка: ' + error.message);
+      alert('Ошибка базы: ' + error.message);
     }
     
     setLoading(false);
