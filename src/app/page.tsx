@@ -396,7 +396,14 @@ export default function Dashboard() {
           <div className="flex gap-2 w-full md:w-auto">
             <Button onClick={() => setIsExportModalOpen(true)} className="bg-emerald-600 text-white font-bold flex-1 md:flex-none">Excel Отчет</Button>
             {isAdmin && <Button onClick={handleBroadcast} className="bg-secondary text-secondary-foreground font-bold flex-1 md:flex-none">Объявление</Button>}
-            <Button onClick={() => { setEditingOrderId(null); setIsModalOpen(true); }} className="bg-primary text-primary-foreground font-bold flex-1 md:flex-none">Новый объект</Button>
+            <Button onClick={() => {
+              if (!currentUserId) {
+                alert('❌ Ошибка: Вы не авторизованы. Пожалуйста, пройдите вход в систему, используя ПИН-код.');
+                return;
+              }
+              setEditingOrderId(null);
+              setIsModalOpen(true);
+            }} className="bg-primary text-primary-foreground font-bold flex-1 md:flex-none">Новый объект</Button>
           </div>
         </div>
 
@@ -407,6 +414,10 @@ export default function Dashboard() {
               <OrderListManager
                 orders={filteredOrders}
                 onEdit={(id) => {
+                  if (!currentUserId) {
+                    alert('❌ Ошибка: Вы не авторизованы. Пожалуйста, пройдите вход в систему.');
+                    return;
+                  }
                   setEditingOrderId(id);
                   setIsModalOpen(true);
                 }}
@@ -439,7 +450,14 @@ export default function Dashboard() {
                 <div className="w-full md:min-w-[320px] md:flex-1 bg-muted/20 border border-border p-4 rounded-xl flex flex-col gap-4">
                   <h3 className="font-bold border-b border-border pb-2 flex justify-between">🆕 Новые <span>{filteredOrders.filter(o => o.status === 'new').length}</span></h3>
                   {filteredOrders.filter(o => o.status === 'new').map((o: any) => (
-                    <OrderCard key={o.id} order={o} onView={setViewingOrder} onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} onComplete={handleComplete} onAssignOrder={openAssignModal} onTransferToInstallation={handleTransferToInstallation} />
+                    <OrderCard key={o.id} order={o} onView={setViewingOrder} onEdit={id => {
+                      if (!currentUserId) {
+                        alert('❌ Ошибка: Вы не авторизованы. Пожалуйста, пройдите вход в систему.');
+                        return;
+                      }
+                      setEditingOrderId(id);
+                      setIsModalOpen(true);
+                    }} onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} onComplete={handleComplete} onAssignOrder={openAssignModal} onTransferToInstallation={handleTransferToInstallation} />
                   ))}
                 </div>
 
@@ -447,7 +465,14 @@ export default function Dashboard() {
                 <div className="w-full md:min-w-[320px] md:flex-1 bg-amber-500/5 border border-amber-500/20 p-4 rounded-xl flex flex-col gap-4">
                   <h3 className="font-bold border-b border-amber-500/20 pb-2 flex justify-between">⏳ В работе <span>{filteredOrders.filter(o => o.status === 'in_progress').length}</span></h3>
                   {filteredOrders.filter(o => o.status === 'in_progress').map((o: any) => (
-                    <OrderCard key={o.id} order={o} onView={setViewingOrder} onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }} onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} onComplete={handleComplete} onAssignOrder={openAssignModal} onTransferToInstallation={handleTransferToInstallation} />
+                    <OrderCard key={o.id} order={o} onView={setViewingOrder} onEdit={id => {
+                      if (!currentUserId) {
+                        alert('❌ Ошибка: Вы не авторизованы. Пожалуйста, пройдите вход в систему.');
+                        return;
+                      }
+                      setEditingOrderId(id);
+                      setIsModalOpen(true);
+                    }} onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} onComplete={handleComplete} onAssignOrder={openAssignModal} onTransferToInstallation={handleTransferToInstallation} />
                   ))}
                 </div>
 
@@ -459,7 +484,14 @@ export default function Dashboard() {
                       key={o.id}
                       order={o}
                       onView={setViewingOrder}
-                      onEdit={id => { setEditingOrderId(id); setIsModalOpen(true); }}
+                      onEdit={id => {
+                        if (!currentUserId) {
+                          alert('❌ Ошибка: Вы не авторизованы. Пожалуйста, пройдите вход в систему.');
+                          return;
+                        }
+                        setEditingOrderId(id);
+                        setIsModalOpen(true);
+                      }}
                       onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)}
                       onComplete={handleComplete}
                       onAssignOrder={openAssignModal}

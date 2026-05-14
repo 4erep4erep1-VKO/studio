@@ -98,6 +98,13 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Проверка: если создатель не определен, не создаем заказ
+    if (!creatorId) {
+      alert('❌ Ошибка: Пользователь не авторизован. Пожалуйста, пройдите вход в систему.');
+      return;
+    }
+    
     setLoading(true);
 
     const currentData = normalizeFormValues(formData);
@@ -119,9 +126,10 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
     } else if (orderId) {
       payload = currentData;
     } else {
+      // Для нового заказа обязательно добавляем created_by
       payload = {
         ...currentData,
-        created_by: creatorId
+        created_by: creatorId // Гарантируем, что это не NULL
       };
     }
 
@@ -148,6 +156,7 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
             dimensions: formData.dimensions,
             material: formData.material,
             source_link: formData.source_link,
+            creator_id: creatorId, // Передаем ID создателя
           });
         } catch (err: any) {
           console.error('Ошибка Telegram:', err);

@@ -10,6 +10,7 @@ interface OrderData {
   dimensions?: string;
   material?: string;
   source_link?: string;
+  creator_id?: string; // ID пользователя, создавшего заказ
 }
 
 /**
@@ -27,6 +28,32 @@ export async function notifyNewOrderToGroup(orderData: OrderData) {
   }
 
   try {
+    // Получаем информацию о создателе заказа
+    let creatorName = 'Неизвестный пользователь';
+    if (orderData.creator_id) {
+      try {
+        // Динамический импорт Supabase (только на server-side)
+        const { createClient } = await import('@supabase/supabase-js');
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+          process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+        );
+        
+        const { data: creator } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', orderData.creator_id)
+          .single();
+        
+        if (creator?.full_name) {
+          creatorName = creator.full_name;
+        }
+      } catch (err) {
+        console.error('⚠️ Не удалось получить информацию о создателе:', err);
+        // Продолжаем с значением по умолчанию
+      }
+    }
+
     // Формирование красивого HTML сообщения
     const departmentLabel = orderData.department === 'print' ? '🖨 Печать' : '🛠 Монтаж';
     const typeLabel = orderData.is_general ? '🌍 Общий' : '👤 Личный';
@@ -49,6 +76,7 @@ ${orderData.dimensions ? `📐 <b>Размеры:</b> ${escapeHtml(orderData.dim
 ${orderData.material ? `🎨 <b>Материал:</b> ${escapeHtml(orderData.material)}` : ''}
 ${orderData.source_link ? `🔗 <b>Ссылка на макет:</b> <a href="${orderData.source_link}">открыть</a>` : ''}
 
+👤 <b>Создал:</b> ${escapeHtml(creatorName)}
 ⏱ Время создания: ${new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Almaty' })}
     `.trim();
 
