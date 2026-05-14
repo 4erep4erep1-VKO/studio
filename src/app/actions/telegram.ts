@@ -10,7 +10,9 @@ interface OrderData {
   dimensions?: string;
   material?: string;
   source_link?: string;
-  creator_id?: string; // ID пользователя, создавшего заказ
+  creator_id?: string; // ID пользователя, создавшего заказ в клиентских запросах
+  created_by?: string; // ID пользователя, создавшего заказ из строки заказа в БД
+  creator_full_name?: string; // Если профиль уже был подтянут ранее
 }
 
 /**
@@ -29,8 +31,9 @@ export async function notifyNewOrderToGroup(orderData: OrderData) {
 
   try {
     // Получаем информацию о создателе заказа
-    let creatorName = 'Неизвестный пользователь';
-    if (orderData.creator_id) {
+    let creatorName = orderData.creator_full_name || 'Неизвестный пользователь';
+    const creatorId = orderData.created_by || orderData.creator_id;
+    if (creatorId) {
       try {
         // Динамический импорт Supabase (только на server-side)
         const { createClient } = await import('@supabase/supabase-js');
@@ -39,14 +42,14 @@ export async function notifyNewOrderToGroup(orderData: OrderData) {
           process.env.SUPABASE_SERVICE_ROLE_KEY || ''
         );
         
-        const { data: creator } = await supabase
+        const { data: profile } = await supabase
           .from('profiles')
           .select('full_name')
-          .eq('id', orderData.creator_id)
+          .eq('id', creatorId)
           .single();
         
-        if (creator?.full_name) {
-          creatorName = creator.full_name;
+        if (profile?.full_name) {
+          creatorName = profile.full_name;
         }
       } catch (err) {
         console.error('⚠️ Не удалось получить информацию о создателе:', err);
