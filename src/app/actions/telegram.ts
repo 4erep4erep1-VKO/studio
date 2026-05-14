@@ -10,54 +10,53 @@ interface OrderData {
   dimensions?: string;
   material?: string;
   source_link?: string;
-  creator_id?: string; // ID пользователя, создавшего заказ в клиентских запросах
-  created_by?: string; // ID пользователя, создавшего заказ из строки заказа в БД
-  creator_full_name?: string; // Если профиль уже был подтянут ранее
+  creator_id?: string; 
+  created_by?: string; 
+  creator_full_name?: string; // Самый надежный способ — передать имя сразу
 }
 
-/**
- * Отправляет уведомление о новом заказе в Telegram группу
- * Используется для уведомления всей команды о создании заказа на сайте
- */
 export async function notifyNewOrderToGroup(orderData: OrderData) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const groupChatId = process.env.TELEGRAM_GROUP_CHAT_ID;
 
-  // Проверка наличия необходимых переменных окружения
   if (!botToken || !groupChatId) {
-    console.warn('⚠️ Telegram config missing. Set TELEGRAM_BOT_TOKEN and TELEGRAM_GROUP_CHAT_ID in .env');
-    return { success: false, error: 'Telegram config not configured' };
+    console.warn('⚠️ Telegram config missing');
+    return { success: false, error: 'Telegram config missing' };
   }
 
   try {
-    // Получаем информацию о создателе заказа
-    let creatorName = orderData.creator_full_name || 'Неизвестный пользователь';
+    // 1. Пытаемся взять имя, если оно уже передано (самый быстрый вариант)
+    let creatorName = orderData.creator_full_name;
+
+    // 2. Если имени нет, но есть ID — идем в базу
     const creatorId = orderData.created_by || orderData.creator_id;
-    if (creatorId) {
+    
+    if (!creatorName && creatorId) {
       try {
-        // Динамический импорт Supabase (только на server-side)
         const { createClient } = await import('@supabase/supabase-js');
         const supabase = createClient(
           process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-          process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+          process.env.SUPABASE_SERVICE_ROLE_KEY || '' // Проверь, что этот ключ есть в .env!
         );
         
-        const { data: profile } = await supabase
+        const { data: profile, error } = await supabase
           .from('profiles')
           .select('full_name')
           .eq('id', creatorId)
           .single();
         
+        if (error) console.error('❌ Ошибка запроса профиля:', error.message);
         if (profile?.full_name) {
           creatorName = profile.full_name;
         }
       } catch (err) {
-        console.error('⚠️ Не удалось получить информацию о создателе:', err);
-        // Продолжаем с значением по умолчанию
+        console.error('⚠️ Ошибка при подключении к Supabase в Telegram Action:', err);
       }
     }
 
-    // Формирование красивого HTML сообщения
+    // Если всё равно пусто — пишем дефолт
+    const finalCreatorName = creatorName || 'Неизвестный пользователь';
+
     const departmentLabel = orderData.department === 'print' ? '🖨 Печать' : '🛠 Монтаж';
     const typeLabel = orderData.is_general ? '🌍 Общий' : '👤 Личный';
     const deadline = orderData.deadline 
@@ -68,7 +67,6 @@ export async function notifyNewOrderToGroup(orderData: OrderData) {
 🆕 <b>Новый заказ (создан на сайте)</b>
 
 📦 <b>Название:</b> ${escapeHtml(orderData.title)}
-
 ${orderData.description ? `📝 <b>Описание:</b> ${escapeHtml(orderData.description)}` : ''}
 
 🏢 <b>Отдел:</b> ${departmentLabel}
@@ -79,16 +77,13 @@ ${orderData.dimensions ? `📐 <b>Размеры:</b> ${escapeHtml(orderData.dim
 ${orderData.material ? `🎨 <b>Материал:</b> ${escapeHtml(orderData.material)}` : ''}
 ${orderData.source_link ? `🔗 <b>Ссылка на макет:</b> <a href="${orderData.source_link}">открыть</a>` : ''}
 
-👤 <b>Создал:</b> ${escapeHtml(creatorName)}
-⏱ Время создания: ${new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Almaty' })}
+👤 <b>Создал:</b> ${escapeHtml(finalCreatorName)}
+⏱ Время: ${new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Almaty' })}
     `.trim();
 
-    // Отправка POST запроса к Telegram Bot API
     const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: groupChatId,
         text: messageText,
@@ -97,92 +92,29 @@ ${orderData.source_link ? `🔗 <b>Ссылка на макет:</b> <a href="${
       }),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ Telegram API Error:', errorData);
-      return {
-        success: false,
-        error: `Telegram API Error: ${errorData.description || 'Unknown error'}`,
-      };
-    }
-
-    const result = await response.json();
-    
-    if (result.ok) {
-      console.log('✅ Telegram notification sent successfully:', result.result.message_id);
-      return { success: true, messageId: result.result.message_id };
-    } else {
-      console.error('❌ Telegram API returned error:', result);
-      return { success: false, error: result.description };
-    }
+    return { success: response.ok };
   } catch (error) {
     console.error('❌ Error sending Telegram notification:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: 'Internal error' };
   }
 }
 
-/**
- * Отправляет уведомление конкретному пользователю (исполнителю)
- * Используется для уведомления назначенного на заказ монтажника
- */
+/** Вспомогательные функции **/
 export async function notifyOrderToUser(chatId: string, title: string) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  if (!botToken) return { success: false };
 
-  if (!botToken) {
-    console.warn('⚠️ TELEGRAM_BOT_TOKEN not set in .env');
-    return { success: false, error: 'Telegram config not configured' };
-  }
+  const messageText = `🔔 <b>ЛИЧНЫЙ ЗАКАЗ!</b>\n\nТебе назначили новый объект: <b>${escapeHtml(title)}</b>\n\nЗайди в «📦 Мои заказы».`;
 
-  try {
-    const messageText = `🔔 <b>ЛИЧНЫЙ ЗАКАЗ!</b>\n\nТебе назначили новый объект: <b>${escapeHtml(title)}</b>\n\nЗайди в раздел «📦 Мои заказы», чтобы посмотреть детали.`;
-
-    const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: messageText,
-        parse_mode: 'HTML',
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ Telegram API Error:', errorData);
-      return { success: false, error: errorData.description };
-    }
-
-    const result = await response.json();
-
-    if (result.ok) {
-      console.log('✅ Personal notification sent successfully');
-      return { success: true, messageId: result.result.message_id };
-    } else {
-      return { success: false, error: result.description };
-    }
-  } catch (error) {
-    console.error('❌ Error sending personal notification:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
-  }
+  const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, text: messageText, parse_mode: 'HTML' }),
+  });
+  return { success: response.ok };
 }
 
-/**
- * Экранирует специальные символы для HTML в Telegram
- */
 function escapeHtml(text: string): string {
   if (!text) return '';
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
