@@ -14,6 +14,7 @@ export interface Order {
   title: string;
   description: string;
   status: OrderStatus;
+  department?: 'installation' | 'print' | 'production';
   assigned_to: string; // ID монтажника из таблицы profiles
   created_at: string;
   updated_at: string;

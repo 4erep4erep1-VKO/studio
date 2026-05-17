@@ -57,7 +57,7 @@ export async function notifyNewOrderToGroup(orderData: OrderData) {
     // Если всё равно пусто — пишем дефолт
     const finalCreatorName = creatorName || 'Неизвестный пользователь';
 
-    const departmentLabel = orderData.department === 'print' ? '🖨 Печать' : '🛠 Монтаж';
+    const departmentLabel = orderData.department === 'installation' ? '🛠 Монтаж' : orderData.department === 'production' ? '🏭 Изготовление' : '🖨 Печать';
     const typeLabel = orderData.is_general ? '🌍 Общий' : '👤 Личный';
     const deadline = orderData.deadline 
       ? new Date(orderData.deadline).toLocaleDateString('ru-RU')

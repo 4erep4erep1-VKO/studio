@@ -135,7 +135,7 @@ export default function OrderMiniPage() {
                     }
 
                     // 2. Всегда шлем в общую группу для истории
-                    let groupText = `🔥 <b>НОВЫЙ ЗАКАЗ (Mini App)</b>\n\n📍 Объект: <b>${title}</b>\n📅 Срок: ${deadline}\n🏢 Отдел: ${department === 'installation' ? '🛠 Монтаж' : '🖨 Печать'}`;
+                    let groupText = `🔥 <b>НОВЫЙ ЗАКАЗ (Mini App)</b>\n\n📍 Объект: <b>${title}</b>\n📅 Срок: ${deadline}\n🏢 Отдел: ${department === 'installation' ? '🛠 Монтаж' : department === 'production' ? '🏭 Изготовление' : '🖨 Печать'}`;
                     groupText += `\n👤 Кому: ${isGeneral ? '🌍 Общий заказ' : (installers.find(i => i.id === assignedTo)?.full_name || 'Не назначен')}`;
                     if (description) groupText += `\n📝 Описание: ${description}`;
 
@@ -205,6 +205,7 @@ export default function OrderMiniPage() {
                     <select value={department} onChange={e => setDepartment(e.target.value)} style={inputStyle}>
                         <option value="installation">🛠 Монтаж</option>
                         <option value="print">🖨 Печать</option>
+                        <option value="production">🏭 Изготовление</option>
                     </select>
                 </div>
                 <div style={{ flex: 1 }}>

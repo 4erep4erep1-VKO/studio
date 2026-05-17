@@ -156,8 +156,8 @@ export default function OrderListManager({
               >
                 <div>
                   <div className="flex items-center justify-between gap-1 mb-1">
-                    <span className={`text-[8px] px-1 rounded font-black uppercase ${order.department === 'print' ? 'bg-purple-500/20 text-purple-500' : 'bg-blue-500/20 text-blue-500'}`}>
-                      {order.department === 'print' ? 'ПЕЧАТЬ' : 'МОНТАЖ'}
+                    <span className={`text-[8px] px-1 rounded font-black uppercase ${order.department === 'print' ? 'bg-purple-500/20 text-purple-500' : order.department === 'production' ? 'bg-orange-500/20 text-orange-500' : 'bg-blue-500/20 text-blue-500'}`}>
+                      {order.department === 'print' ? 'ПЕЧАТЬ' : order.department === 'production' ? 'ИЗГОТОВЛЕНИЕ' : 'МОНТАЖ'}
                     </span>
                     <span className="text-[10px]">{order.status === 'completed' ? '✅' : order.status === 'in_progress' ? '⏳' : '🆕'}</span>
                   </div>
@@ -194,8 +194,8 @@ export default function OrderListManager({
                   </div>
                   <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
                     {order.deadline && <span className="flex items-center gap-1 whitespace-nowrap">📅 {new Date(order.deadline).toLocaleDateString('ru-RU')}</span>}
-                    <span className={`text-[10px] font-bold ${order.department === 'print' ? 'text-purple-400' : 'text-blue-400'}`}>
-                       {order.department === 'print' ? '🖨 ПЕЧАТЬ' : '🛠 МОНТАЖ'}
+                    <span className={`text-[10px] font-bold ${order.department === 'print' ? 'text-purple-400' : order.department === 'production' ? 'text-orange-400' : 'text-blue-400'}`}>
+                       {order.department === 'print' ? '🖨 ПЕЧАТЬ' : order.department === 'production' ? '🏭 ИЗГОТОВЛЕНИЕ' : '🛠 МОНТАЖ'}
                     </span>
                   </div>
                 </div>

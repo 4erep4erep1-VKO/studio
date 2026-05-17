@@ -37,7 +37,7 @@ export default function Dashboard() {
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [activeTab, setActiveTab] = useState<'active' | 'general' | 'completed' | 'all'>('all');
+  const [activeTab, setActiveTab] = useState<'active' | 'general' | 'completed' | 'production' | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewingOrder, setViewingOrder] = useState<any | null>(null);
 
@@ -269,7 +269,7 @@ export default function Dashboard() {
       'Описание': o.description || '-',
       'Статус': o.status === 'completed' ? 'Завершен' : o.status === 'in_progress' ? 'В работе' : 'Новый',
       'Дедлайн': o.deadline ? new Date(o.deadline).toLocaleDateString() : '-',
-      'Отдел': o.department === 'installation' ? 'Монтаж' : 'Печать',
+      'Отдел': o.department === 'installation' ? 'Монтаж' : o.department === 'print' ? 'Печать' : o.department === 'production' ? 'Изготовление' : 'Не указан',
       'Тип заказа': o.is_general ? 'Общий' : 'Личный',
       'Исполнитель': o.profiles?.full_name || 'Не назначен',
       'Создал (Админ)': o.creator_name || 'Система',
@@ -323,6 +323,7 @@ export default function Dashboard() {
     if (activeTab === 'active') return o.status === 'new' || o.status === 'in_progress';
     if (activeTab === 'completed') return o.status === 'completed';
     if (activeTab === 'general') return o.is_general === true;
+    if (activeTab === 'production') return o.department === 'production';
     return true;
   });
 
@@ -435,9 +436,9 @@ export default function Dashboard() {
                 <div className="flex flex-col md:flex-row gap-4 mb-6">
                   <input placeholder="Поиск..." className="flex-grow w-full md:max-w-md p-2 bg-card border border-border rounded-lg outline-none focus:border-primary" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                   <div className="flex flex-wrap gap-2 bg-card p-1 rounded-lg border border-border w-full md:w-auto">
-                    {['active', 'general', 'completed', 'all'].map(t => (
+                    {['active', 'general', 'production', 'completed', 'all'].map(t => (
                       <button key={t} onClick={() => setActiveTab(t as any)} className={`flex-1 md:flex-none px-4 py-1.5 rounded-md text-xs font-bold transition ${activeTab === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>
-                        {t === 'active' ? '🔥 Актив' : t === 'general' ? '🌍 Общие' : t === 'completed' ? '✅ Архив' : '📦 Все'}
+                        {t === 'active' ? '🔥 Актив' : t === 'general' ? '🌍 Общие' : t === 'production' ? '🏭 Изготовление' : t === 'completed' ? '✅ Архив' : '📦 Все'}
                       </button>
                     ))}
                   </div>
@@ -590,8 +591,8 @@ export default function Dashboard() {
                 <div>
                   <h3 className="font-bold text-lg text-primary mb-2">{viewingOrder.title}</h3>
                   <div className="flex gap-2 flex-wrap mb-3">
-                    <span className={`text-[10px] px-3 py-1 rounded font-bold uppercase ${viewingOrder.department === 'print' ? 'bg-purple-500/20 text-purple-500' : 'bg-blue-500/20 text-blue-500'}`}>
-                      {viewingOrder.department === 'print' ? '🖨 Печать' : '🛠 Монтаж'}
+                    <span className={`text-[10px] px-3 py-1 rounded font-bold uppercase ${viewingOrder.department === 'print' ? 'bg-purple-500/20 text-purple-500' : viewingOrder.department === 'production' ? 'bg-orange-500/20 text-orange-500' : 'bg-blue-500/20 text-blue-500'}`}>
+                      {viewingOrder.department === 'print' ? '🖨 Печать' : viewingOrder.department === 'production' ? '🏭 Изготовление' : '🛠 Монтаж'}
                     </span>
                     <span className={`text-[10px] px-3 py-1 rounded font-bold uppercase ${
                       viewingOrder.status === 'completed' ? 'bg-emerald-500/20 text-emerald-600' : 

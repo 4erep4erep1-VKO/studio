@@ -201,6 +201,7 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
               <select className="w-full p-2 bg-background text-foreground border border-border rounded focus:border-primary outline-none transition" value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})}>
                 <option value="installation">🛠 На монтаж</option>
                 <option value="print">🖨 На печать</option>
+                <option value="production">🏭 Изготовление</option>
               </select>
             </div>
           </div>
