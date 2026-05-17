@@ -124,7 +124,6 @@ function formatOrderSummary(order: any, assignedName: string | null) {
   const deadline = order.deadline ? new Date(order.deadline).toLocaleDateString('ru-RU') : 'Не указан';
 
   return `
-<b>№${escapeHtml(order.id)}</b>
 ${escapeHtml(order.title)}
 ${departmentLabel} (${statusLabel})
 В работе: ${assignedLabel}
@@ -339,7 +338,7 @@ async function handleActiveOrders(chatId: number | string) {
 
   const assignedNames = await getAssignedNames(orders);
   const text = orders.map(order => [
-    `<b>№${escapeHtml(order.id)}</b>: ${escapeHtml(order.title)}`,
+    `${escapeHtml(order.title)}`,
     `${order.department === 'installation' ? '🛠 Монтаж' : order.department === 'production' ? '🏭 Изготовление' : '🖨 Печать'} (${escapeHtml(order.status)})`,
     `В работе: ${escapeHtml(assignedNames[order.assigned_to] || 'Общий')}`,
     `Дедлайн: ${order.deadline ? escapeHtml(new Date(order.deadline).toLocaleDateString('ru-RU')) : 'Не указан'}`,
@@ -370,7 +369,7 @@ async function handleFreeOrders(chatId: number | string) {
   }
 
   const text = orders.map(order => [
-    `<b>№${escapeHtml(order.id)}</b>: ${escapeHtml(order.title)}`,
+    `${escapeHtml(order.title)}`,
     `${order.department === 'installation' ? '🛠 Монтаж' : order.department === 'production' ? '🏭 Изготовление' : '🖨 Печать'}`,
     `Дедлайн: ${order.deadline ? escapeHtml(new Date(order.deadline).toLocaleDateString('ru-RU')) : 'Не указан'}`,
   ].join('\n')).join('\n\n');
@@ -489,7 +488,6 @@ async function handlePrintQueue(chatId: number | string) {
 
   for (const order of orders) {
     const text = `
-<b>№${escapeHtml(order.id)}</b>
 ${escapeHtml(order.title)}
 Дедлайн: ${order.deadline ? escapeHtml(new Date(order.deadline).toLocaleDateString('ru-RU')) : 'Не указан'}
 `.trim();
