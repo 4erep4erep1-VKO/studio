@@ -53,32 +53,7 @@ function escapeHtml(text: string) {
     .replace(/'/g, '&#039;');
 }
 
-function normalizeDepartment(text: string) {
-  const normalized = text.trim().toLowerCase();
-  if (['print', 'печать', 'пк', 'печатник'].includes(normalized)) return 'print';
-  if (['production', 'изготовление', 'цех', 'продакшн'].includes(normalized)) return 'production';
-  if (['installation', 'монтаж', 'монтажник', 'установка'].includes(normalized)) return 'installation';
-  return null;
-}
 
-function extractOrderDraft(replyText: string) {
-  const titleMatch = /Название:\s*«([^»]+)»/.exec(replyText);
-  const descriptionMatch = /Описание:\s*«([^»]+)»/.exec(replyText);
-  const deadlineMatch = /Дедлайн:\s*([^\n]+)/.exec(replyText);
-
-  return {
-    title: titleMatch?.[1]?.trim() || null,
-    description: descriptionMatch?.[1]?.trim() || null,
-    deadline: deadlineMatch?.[1]?.trim() || null,
-  };
-}
-
-function parseDeadline(text: string) {
-  const raw = text.trim().replace(/\./g, '-').replace(/\s+/g, ' ');
-  const parsed = new Date(raw);
-  if (!isNaN(parsed.getTime())) return parsed.toISOString();
-  return null;
-}
 
 async function findProfileByTelegramId(telegramId: string) {
   const { data, error } = await supabase
@@ -96,8 +71,12 @@ async function findProfileByTelegramId(telegramId: string) {
 }
 
 function buildMenuKeyboard(role: string | null) {
-  const keyboard = [
-    [{ text: '➕ Создать заказ' }, { text: '📋 Активные заказы' }],
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://studio-cherepok.vercel.app';
+  const keyboard: any[] = [
+    [
+      { text: '➕ Создать заказ', web_app: { url: siteUrl } },
+      { text: '📋 Активные заказы' },
+    ],
     [{ text: '🔓 Свободные заказы' }, { text: '💼 Мои заказы' }],
     [{ text: '📊 Рейтинг' }, { text: '👤 Мой профиль' }],
   ];
@@ -112,6 +91,7 @@ function buildMenuKeyboard(role: string | null) {
     one_time_keyboard: false,
   };
 }
+
 
 function formatOrderSummary(order: any, assignedName: string | null) {
   const departmentLabel = order.department === 'installation'
@@ -137,118 +117,7 @@ async function sendMainMenu(chatId: string | number, role: string | null) {
   });
 }
 
-async function handleOrderCreateReply(message: any, profile: any, chatId: number | string) {
-  const prompt = message.reply_to_message?.text || '';
-  const promptParts = extractOrderDraft(prompt);
-  const text = message.text?.trim();
-
-  if (!text) {
-    await sendTelegram(chatId, 'Пожалуйста, отправьте текст в ответ на запрос.');
-    return;
-  }
-
-  if (prompt.includes('Название заказа')) {
-    const title = text;
-    await sendTelegram(chatId, `📝 Отлично! Название сохранено.\nНазвание: «${escapeHtml(title)}»\n\nОтправьте <b>краткое описание заказа</b> в ответ на это сообщение.`, {
-      reply_markup: { force_reply: true },
-    });
-    return;
-  }
-
-  if (prompt.includes('Описание заказа')) {
-    const title = promptParts.title;
-    if (!title) {
-      await sendTelegram(chatId, 'Не удалось прочитать название заказа. Начните создание заново.');
-      return;
-    }
-
-    const description = text;
-    await sendTelegram(chatId, `📅 Отлично! Описание сохранено.
-Название: «${escapeHtml(title)}»
-Описание: «${escapeHtml(description)}»
-
-Отправьте <b>дедлайн</b> в формате 2025-01-15 или 15.01.2025 в ответ на это сообщение.`, {
-      reply_markup: { force_reply: true },
-    });
-    return;
-  }
-
-  if (prompt.includes('Дедлайн заказа')) {
-    const { title, description } = promptParts;
-    if (!title || !description) {
-      await sendTelegram(chatId, 'Не удалось прочитать предыдущие данные. Начните создание заново.');
-      return;
-    }
-
-    const deadline = parseDeadline(text);
-    if (!deadline) {
-      await sendTelegram(chatId, 'Неверный формат даты. Укажите дедлайн как 2025-01-15 или 15.01.2025.');
-      return;
-    }
-
-    await sendTelegram(chatId, `🏢 Отлично! Дедлайн сохранен.
-Название: «${escapeHtml(title)}»
-Описание: «${escapeHtml(description)}»
-Дедлайн: ${new Date(deadline).toLocaleDateString('ru-RU')}
-
-Выберите отдел заказа, отправив одну из кнопок ниже.`, {
-      reply_markup: {
-        keyboard: [
-          [{ text: 'Печать' }, { text: 'Изготовление' }, { text: 'Монтаж' }],
-        ],
-        resize_keyboard: true,
-        one_time_keyboard: true,
-      },
-    });
-    return;
-  }
-
-  if (prompt.includes('Выберите отдел заказа')) {
-    const { title, description, deadline } = promptParts;
-    if (!title || !description || !deadline) {
-      await sendTelegram(chatId, 'Не удалось прочитать предыдущие данные. Начните создание заново.');
-      return;
-    }
-
-    const department = normalizeDepartment(text);
-    if (!department) {
-      await sendTelegram(chatId, 'Неверный отдел. Выберите: Печать, Изготовление или Монтаж.');
-      return;
-    }
-
-    const { data, error } = await supabase.from('orders').insert({
-      title,
-      description,
-      deadline,
-      department,
-      status: 'new',
-      assigned_to: null,
-      image_urls: [],
-    }).select().single();
-
-    if (error) {
-      console.error('Order creation error:', error.message);
-      await sendTelegram(chatId, 'Не удалось создать заказ. Попробуйте позже.');
-      return;
-    }
-
-    await sendTelegram(chatId, `✅ Заказ создан: №${escapeHtml(data.id)}
-<b>${escapeHtml(data.title)}</b>
-Отдел: ${escapeHtml(department)}
-Дедлайн: ${new Date(deadline).toLocaleDateString('ru-RU')}`);
-    await notifyGroup(`🆕 <b>Новый заказ</b>
-
-<b>№${escapeHtml(data.id)}</b>: ${escapeHtml(data.title)}
-Отдел: ${escapeHtml(department)}
-Дедлайн: ${new Date(deadline).toLocaleDateString('ru-RU')}
-
-Создан пользователем: ${escapeHtml(profile.name || profile.full_name || 'Неизвестный')}`);
-    await sendMainMenu(chatId, profile.role);
-    return;
-  }
-
-  await sendMainMenu(chatId, profile.role);
-}
+// Order creation moved to Web App (Mini App). Multi-step reply-based flow removed.
 
 async function notifyGroup(text: string) {
   if (!GROUP_CHAT_ID) {
@@ -784,17 +653,12 @@ export async function POST(request: Request) {
     }
 
     const text = message.text?.trim();
-    const replyTo = message.reply_to_message?.text || '';
 
     if (message.photo?.length && profile) {
       await handlePhotoMessage(message, profile, chatId);
       return NextResponse.json({ ok: true });
     }
 
-    if (replyTo) {
-      await handleOrderCreateReply(message, profile, chatId);
-      return NextResponse.json({ ok: true });
-    }
 
     switch (text) {
       case '/start':
@@ -802,11 +666,7 @@ export async function POST(request: Request) {
       case 'Меню':
         await sendMainMenu(chatId, profile.role);
         break;
-      case '➕ Создать заказ':
-        await sendTelegram(chatId, '📝 Начинаем создание заказа. В ответ на это сообщение отправьте название заказа.', {
-          reply_markup: { force_reply: true },
-        });
-        break;
+      // '➕ Создать заказ' handled via Telegram Web App button (Mini App)
       case '📋 Активные заказы':
         await handleActiveOrders(chatId);
         break;

@@ -70,6 +70,26 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
     loadData();
   }, [orderId]);
 
+  // Ensure Telegram WebApp script is available when this form is opened inside Telegram Mini App
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const w = window as any;
+    if (w.Telegram && w.Telegram.WebApp) return; // already present
+
+    const scriptId = 'telegram-web-app-script';
+    if (document.getElementById(scriptId)) return;
+
+    const s = document.createElement('script');
+    s.id = scriptId;
+    s.src = 'https://telegram.org/js/telegram-web-app.js';
+    s.async = true;
+    document.head.appendChild(s);
+
+    return () => {
+      try { document.head.removeChild(s); } catch (e) { /* ignore */ }
+    };
+  }, []);
+
   const uploadImages = async (files: FileList | File[]) => {
     setLoading(true);
     const newUrls: string[] = [];
@@ -178,6 +198,17 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
 
       router.refresh(); // Принудительно обновляем данные на странице (чтобы перекинулись отделы)
       onSave();
+      // Если форма открыта внутри Telegram Mini App — закрываем окно
+      try {
+        if (typeof window !== 'undefined') {
+          const w = window as any;
+          if (w?.Telegram?.WebApp && typeof w.Telegram.WebApp.close === 'function') {
+            w.Telegram.WebApp.close();
+          }
+        }
+      } catch (e) {
+        console.warn('Telegram WebApp close failed', e);
+      }
     } else {
       alert('Ошибка базы: ' + error.message);
     }
