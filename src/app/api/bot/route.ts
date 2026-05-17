@@ -72,9 +72,10 @@ async function findProfileByTelegramId(telegramId: string) {
 
 function buildMenuKeyboard(role: string | null) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://studio-cherepok.vercel.app';
+  const webAppUrl = `${siteUrl.replace(/\/$/, '')}/order-mini`;
   const keyboard: any[] = [
     [
-      { text: '➕ Создать заказ', web_app: { url: siteUrl } },
+      { text: '➕ Создать заказ', web_app: { url: webAppUrl } },
       { text: '📋 Активные заказы' },
     ],
     [{ text: '🔓 Свободные заказы' }, { text: '💼 Мои заказы' }],
