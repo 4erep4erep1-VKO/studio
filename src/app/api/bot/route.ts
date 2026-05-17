@@ -58,7 +58,7 @@ function escapeHtml(text: string) {
 async function findProfileByTelegramId(telegramId: string) {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, role, name, full_name')
+    .select('id, can_print, name, full_name')
     .eq('telegram_chat_id', telegramId)
     .single();
 
@@ -70,7 +70,7 @@ async function findProfileByTelegramId(telegramId: string) {
   return data;
 }
 
-function buildMenuKeyboard(role: string | null) {
+function buildMenuKeyboard(canPrint: boolean | null) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://studio-cherepok.vercel.app';
   const webAppUrl = `${siteUrl.replace(/\/$/, '')}/order-mini`;
   const keyboard: any[] = [
@@ -82,7 +82,7 @@ function buildMenuKeyboard(role: string | null) {
     [{ text: '📊 Рейтинг' }, { text: '👤 Мой профиль' }],
   ];
 
-  if (role === 'printer') {
+  if (canPrint === true) {
     keyboard.splice(2, 0, [{ text: '🖨 Очередь на печать' }]);
   }
 
@@ -112,9 +112,9 @@ ${departmentLabel} (${statusLabel})
 `.trim();
 }
 
-async function sendMainMenu(chatId: string | number, role: string | null) {
+async function sendMainMenu(chatId: string | number, canPrint: boolean | null) {
   await sendTelegram(chatId, 'Главное меню Montazhka PRO. Выберите действие.', {
-    reply_markup: buildMenuKeyboard(role),
+    reply_markup: buildMenuKeyboard(canPrint),
   });
 }
 
@@ -410,7 +410,7 @@ async function handleCallbackQuery(callback: any) {
 }
 
 async function takePrintOrder(orderId: string, profile: any) {
-  if (profile.role !== 'printer') {
+  if (profile.can_print !== true) {
     return 'Только печатник может брать заказы из этой очереди.';
   }
 
@@ -665,7 +665,7 @@ export async function POST(request: Request) {
       case '/start':
       case 'Главное меню':
       case 'Меню':
-        await sendMainMenu(chatId, profile.role);
+        await sendMainMenu(chatId, profile.can_print ?? false);
         break;
       // '➕ Создать заказ' handled via Telegram Web App button (Mini App)
       case '📋 Активные заказы':
@@ -684,14 +684,14 @@ export async function POST(request: Request) {
         await handleProfile(chatId, profile);
         break;
       case '🖨 Очередь на печать':
-        if (profile.role === 'printer') {
+        if (profile.can_print === true) {
           await handlePrintQueue(chatId);
         } else {
-          await sendMainMenu(chatId, profile.role);
+          await sendMainMenu(chatId, profile.can_print ?? false);
         }
         break;
       default:
-        await sendMainMenu(chatId, profile.role);
+        await sendMainMenu(chatId, profile.can_print ?? false);
     }
 
     return NextResponse.json({ ok: true });
