@@ -37,7 +37,7 @@ export default function Dashboard() {
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [activeTab, setActiveTab] = useState<'active' | 'general' | 'completed' | 'production' | 'all'>('all');
+  const [activeTab, setActiveTab] = useState<'active' | 'general' | 'completed' | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewingOrder, setViewingOrder] = useState<any | null>(null);
 
@@ -323,7 +323,6 @@ export default function Dashboard() {
     if (activeTab === 'active') return o.status === 'new' || o.status === 'in_progress';
     if (activeTab === 'completed') return o.status === 'completed';
     if (activeTab === 'general') return o.is_general === true;
-    if (activeTab === 'production') return o.department === 'production';
     return true;
   });
 
@@ -436,9 +435,9 @@ export default function Dashboard() {
                 <div className="flex flex-col md:flex-row gap-4 mb-6">
                   <input placeholder="Поиск..." className="flex-grow w-full md:max-w-md p-2 bg-card border border-border rounded-lg outline-none focus:border-primary" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                   <div className="flex flex-wrap gap-2 bg-card p-1 rounded-lg border border-border w-full md:w-auto">
-                    {['active', 'general', 'production', 'completed', 'all'].map(t => (
+                    {['active', 'general', 'completed', 'all'].map(t => (
                       <button key={t} onClick={() => setActiveTab(t as any)} className={`flex-1 md:flex-none px-4 py-1.5 rounded-md text-xs font-bold transition ${activeTab === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>
-                        {t === 'active' ? '🔥 Актив' : t === 'general' ? '🌍 Общие' : t === 'production' ? '🏭 Изготовление' : t === 'completed' ? '✅ Архив' : '📦 Все'}
+                        {t === 'active' ? '🔥 Актив' : t === 'general' ? '🌍 Общие' : t === 'completed' ? '✅ Архив' : '📦 Все'}
                       </button>
                     ))}
                   </div>
