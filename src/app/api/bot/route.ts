@@ -634,6 +634,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: 'Invalid request body' }, { status: 400 });
   }
 
+  const incomingChatType = update.message?.chat?.type || update.callback_query?.message?.chat?.type;
+  if (incomingChatType && incomingChatType !== 'private') {
+    return NextResponse.json({ ok: true });
+  }
+
   if (update.callback_query) {
     return handleCallbackQuery(update.callback_query);
   }
