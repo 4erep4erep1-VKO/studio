@@ -10,6 +10,7 @@ interface OrderData {
   dimensions?: string;
   material?: string;
   source_link?: string;
+  image_urls?: string[];
   creator_id?: string; 
   created_by?: string; 
   creator_full_name?: string; // Самый надежный способ — передать имя сразу
@@ -81,16 +82,41 @@ ${orderData.source_link ? `🔗 <b>Ссылка на макет:</b> <a href="${
 ⏱ Время: ${new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Almaty' })}
     `.trim();
 
-    const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    const hasPhoto = Array.isArray(orderData.image_urls) && orderData.image_urls.length > 0 && typeof orderData.image_urls[0] === 'string';
+    const endpoint = hasPhoto ? 'sendPhoto' : 'sendMessage';
+    const body = hasPhoto
+      ? {
+          chat_id: groupChatId,
+          photo: orderData.image_urls![0],
+          caption: messageText,
+          parse_mode: 'HTML',
+          disable_notification: false,
+        }
+      : {
+          chat_id: groupChatId,
+          text: messageText,
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+        };
+
+    let response = await fetch(`https://api.telegram.org/bot${botToken}/${endpoint}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: groupChatId,
-        text: messageText,
-        parse_mode: 'HTML',
-        disable_web_page_preview: true,
-      }),
+      body: JSON.stringify(body),
     });
+
+    if (!response.ok && hasPhoto) {
+      response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: groupChatId,
+          text: messageText,
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+        }),
+      });
+    }
 
     return { success: response.ok };
   } catch (error) {

@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 
 // Настройки
 const BOT_TOKEN = process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN; 
-const GROUP_ID = "-1003935954352";
+const GROUP_ID = process.env.NEXT_PUBLIC_TELEGRAM_GROUP_CHAT_ID;
 
 export default function OrderMiniPage() {
     const [title, setTitle] = useState('');
@@ -139,11 +139,28 @@ export default function OrderMiniPage() {
                     groupText += `\n👤 Кому: ${isGeneral ? '🌍 Общий заказ' : (installers.find(i => i.id === assignedTo)?.full_name || 'Не назначен')}`;
                     if (description) groupText += `\n📝 Описание: ${description}`;
 
-                    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                    if (GROUP_ID) {
+                      const hasPhoto = imageUrls.length > 0;
+                      const body = hasPhoto
+                        ? {
+                            chat_id: GROUP_ID,
+                            photo: imageUrls[0],
+                            caption: groupText,
+                            parse_mode: 'HTML',
+                          }
+                        : {
+                            chat_id: GROUP_ID,
+                            text: groupText,
+                            parse_mode: 'HTML',
+                            disable_web_page_preview: true,
+                          };
+
+                      await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${hasPhoto ? 'sendPhoto' : 'sendMessage'}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ chat_id: GROUP_ID, text: groupText, parse_mode: 'HTML' })
-                    });
+                        body: JSON.stringify(body),
+                      });
+                    }
                 }
 
                 tg.showPopup({

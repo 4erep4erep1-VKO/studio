@@ -43,6 +43,15 @@ async function answerCallbackQuery(callbackQueryId: string, text?: string) {
   });
 }
 
+async function editTelegramMessage(chatId: number | string, messageId: number, text: string, reply_markup?: any) {
+  if (!TELEGRAM_TOKEN) return null;
+  return fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/editMessageText`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML', reply_markup }),
+  });
+}
+
 function escapeHtml(text: string) {
   if (!text) return '';
   return text
@@ -379,8 +388,23 @@ async function handleCallbackQuery(callback: any) {
     return NextResponse.json({ ok: false, error: 'profile not found' }, { status: 404 });
   }
 
-  const [action, orderId] = data.split(':');
   let answerText = 'Действие не распознано.';
+
+  if (data.startsWith('take_')) {
+    const freeOrderId = data.slice(5);
+    answerText = await takeFreeOrder(freeOrderId, profile, callback);
+    await answerCallbackQuery(callback.id, answerText);
+    return NextResponse.json({ ok: true });
+  }
+
+  if (data.startsWith('take_')) {
+    const freeOrderId = data.slice(5);
+    answerText = await takeFreeOrder(freeOrderId, profile, callback);
+    await answerCallbackQuery(callback.id, answerText);
+    return NextResponse.json({ ok: true });
+  }
+
+  const [action, orderId] = data.split(':');
 
   switch (action) {
     case 'take_print':
@@ -443,8 +467,65 @@ async function takePrintOrder(orderId: string, profile: any) {
     return 'Не удалось взять заказ в работу. Попробуйте позже.';
   }
 
-  await notifyGroup(`🖨 <b>Заказ №${escapeHtml(order.id)}</b> взят в работу печатником ${escapeHtml(profile.name || profile.full_name || 'Сотрудник')}.`);
+  await notifyGroup(`🖨 <b>Заказ ${escapeHtml(order.title)}</b> взят в работу печатником ${escapeHtml(profile.name || profile.full_name || 'Сотрудник')}.`);
   return 'Вы взяли заказ в работу. Он появился в «Мои заказы».' ;
+}
+
+async function takeFreeOrder(orderId: string, profile: any, callback: any) {
+  const { data: order, error } = await supabase
+    .from('orders')
+    .select('*')
+    .eq('id', orderId)
+    .single();
+
+  if (error || !order) {
+    console.error('Free order lookup failed:', error?.message);
+    return 'Заказ не найден.';
+  }
+
+  if (order.assigned_to) {
+    return 'Этот заказ уже взят.';
+  }
+
+  if (order.status === 'completed') {
+    return 'Этот заказ уже завершен.';
+  }
+
+  const { error: updateError } = await supabase
+    .from('orders')
+    .update({ assigned_to: profile.id, status: 'in_progress' })
+    .eq('id', orderId);
+
+  if (updateError) {
+    console.error('Take free order failed:', updateError.message);
+    return 'Не удалось взять заказ в работу. Попробуйте позже.';
+  }
+
+  await notifyGroup(`🟡 <b>Заказ ${escapeHtml(order.title)}</b> взят в работу исполнителем ${escapeHtml(profile.name || profile.full_name || 'Сотрудник')}.`);
+
+  const messageText = [
+    `✅ Вы взяли заказ в работу!`,
+    `${escapeHtml(order.title)}`,
+    `${order.department === 'installation' ? '🛠 Монтаж' : order.department === 'production' ? '🏭 Изготовление' : '🖨 Печать'}`,
+    `Дедлайн: ${order.deadline ? escapeHtml(new Date(order.deadline).toLocaleDateString('ru-RU')) : 'Не указан'}`,
+  ].join('\n');
+
+  const replyMarkup = order.department === 'print'
+    ? { inline_keyboard: [[
+        { text: '🏢 В ОФИС', callback_data: `print_to_office:${order.id}` },
+        { text: '🔨 ИЗГОТОВЛЕНИЕ', callback_data: `print_to_production:${order.id}` },
+        { text: '🚚 НА МОНТАЖ', callback_data: `print_to_installation:${order.id}` },
+      ]] }
+    : { inline_keyboard: [[
+        { text: '✅ ЗАВЕРШИТЬ ЗАКАЗ', callback_data: `finish_with_photo:${order.id}` },
+        { text: '🚫 ЗАВЕРШИТЬ БЕЗ ФОТО', callback_data: `finish_without_photo:${order.id}` },
+      ]] };
+
+  if (callback?.message?.message_id) {
+    await editTelegramMessage(callback.message.chat.id, callback.message.message_id, messageText, replyMarkup);
+  }
+
+  return 'Заказ взят в работу. Он появился в «Мои заказы».';
 }
 
 async function movePrintOrder(orderId: string, profile: any, target: 'office' | 'production' | 'installation') {
@@ -549,7 +630,7 @@ async function completeOrderWithoutPhoto(orderId: string, profile: any) {
     return 'Не удалось завершить заказ. Попробуйте позже.';
   }
 
-  await notifyGroup(`✅ <b>Заказ №${escapeHtml(order.id)}</b> завершен без фотоотчета.`);
+  await notifyGroup(`✅ <b>Заказ ${escapeHtml(order.title)}</b> завершен без фото.`);
   return 'Заказ завершен без фото.';
 }
 
@@ -616,8 +697,9 @@ async function handlePhotoMessage(message: any, profile: any, chatId: number | s
   }
 
   if (uploadedUrls.length) {
-    await notifyGroup(`📷 <b>Фотоотчет по заказу №${escapeHtml(order.id)}</b>
+    await notifyGroup(`✅ <b>Заказ ${escapeHtml(order.title)}</b> завершен.
 
+Фотоотчет:
 ${uploadedUrls.map(url => escapeHtml(url)).join('\n')}`);
   }
 

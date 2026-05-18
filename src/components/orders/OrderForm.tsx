@@ -43,7 +43,18 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
           .from('profiles')
           .select('id, full_name, telegram_chat_id')
           .in('role', ['installer', 'admin']);
-        if (inst) setInstallers(inst);
+
+        let installersData: any[] = inst ?? [];
+        if (creatorId && !installersData.some(i => i.id === creatorId)) {
+          const { data: creatorProfile } = await supabase
+            .from('profiles')
+            .select('id, full_name, telegram_chat_id')
+            .eq('id', creatorId)
+            .single();
+          if (creatorProfile) installersData.push(creatorProfile);
+        }
+
+        setInstallers(installersData);
 
         if (orderId) {
           const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
@@ -146,10 +157,11 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
     } else if (orderId) {
       payload = currentData;
     } else {
-      // Для нового заказа обязательно добавляем created_by
+      // Для нового заказа обязательно добавляем created_by и начальный статус
       payload = {
         ...currentData,
-        created_by: creatorId // Гарантируем, что это не NULL
+        created_by: creatorId,
+        status: 'new',
       };
     }
 
@@ -176,6 +188,7 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
             dimensions: formData.dimensions,
             material: formData.material,
             source_link: formData.source_link,
+            image_urls: formData.image_urls,
             creator_id: creatorId, // Передаем ID создателя
           });
         } catch (err: any) {
