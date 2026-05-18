@@ -104,10 +104,18 @@ async function sendMainMenu(chatId: string | number, canPrint: boolean) {
 }
 
 function buildOrderPreview(order: any) {
-  return `<b>${escapeHtml(order.title)}</b>`;
+  let text = `<b>${escapeHtml(order.title)}</b>`;
+  if (order.deadline) {
+    try {
+      const date = new Date(order.deadline);
+      text += `\n📅 Дедлайн: <b>${date.toLocaleDateString('ru-RU')}</b>`;
+    } catch (e) {
+      text += `\n📅 Дедлайн: <b>${escapeHtml(order.deadline)}</b>`;
+    }
+  }
+  return text;
 }
 
-// ДОБАВИЛИ КНОПКУ ОПИСАНИЯ ДЛЯ ВСЕХ ТИПОВ ЗАКАЗОВ В РАБОТЕ
 function buildOrderButtons(order: any) {
   const buttons: any[][] = [];
   if (order.department === 'print') {
@@ -119,10 +127,7 @@ function buildOrderButtons(order: any) {
   } else if (order.department === 'production' || order.department === 'installation') {
     buttons.push([{ text: '✅ ЗАВЕРШИТЬ ЗАКАЗ', callback_data: `complete_${order.id}` }]);
   }
-  
-  // Кнопка описания аккуратно встает вторым рядом под основными кнопками управления
   buttons.push([{ text: '📄 ОПИСАНИЕ ЗАКАЗА', callback_data: `desc_${order.id}` }]);
-  
   return buttons.length ? { inline_keyboard: buttons } : undefined;
 }
 
@@ -136,11 +141,39 @@ async function handleStartCommand(chatId: number | string, telegramId: string, u
   await sendMainMenu(chatId, Boolean(profile.can_print));
 }
 
+// ВЫВОД ПОЛНОЙ ИНФОРМАЦИИ ОБ АКТИВНЫХ ЗАКАЗАХ (СТАТУС + ИСПОЛНИТЕЛЬ)
 async function handleActiveOrders(chatId: number | string) {
-  const { data: orders } = await supabase.from('orders').select('id, title, department, status, image_urls').neq('status', 'completed').order('deadline', { ascending: true });
+  const { data: orders } = await supabase
+    .from('orders')
+    .select('id, title, department, status, image_urls, deadline, assigned_to:profiles(name, full_name)')
+    .neq('status', 'completed')
+    .order('deadline', { ascending: true });
+
   if (!orders || !orders.length) return sendTelegramMessage(chatId, 'Активных заказов нет.');
+
+  const statusMap: Record<string, string> = {
+    new: 'Новый',
+    in_progress: 'В работе',
+    awaiting_photos: 'Ожидание фотоотчета',
+    completed: 'Завершен'
+  };
+
   for (const order of orders) {
-    const text = [`<b>📋 Активный заказ</b>`, buildOrderPreview(order)].join('\n');
+    let text = [`<b>📋 Активный заказ</b>`, buildOrderPreview(order)].join('\n');
+    
+    // Добавляем текущий статус
+    const statusText = statusMap[order.status] || order.status;
+    text += `\n⚡ Статус: <b>${escapeHtml(statusText)}</b>`;
+    
+    // Добавляем текущего исполнителя из связанной таблицы профилей
+    const executor = order.assigned_to as any;
+    if (executor) {
+      const empName = executor.name || executor.full_name || 'Сотрудник';
+      text += `\n👤 Исполнитель: <b>${escapeHtml(empName)}</b>`;
+    } else {
+      text += `\n👤 Исполнитель: <b>Не назначен (Свободный)</b>`;
+    }
+
     const photoUrl = Array.isArray(order.image_urls) && order.image_urls.length > 0 ? order.image_urls[0] : null;
     await sendTelegramMessageOrPhoto(chatId, text, undefined, photoUrl);
   }
@@ -158,7 +191,7 @@ async function handleFreeOrders(chatId: number | string) {
 }
 
 async function handleMyOrders(chatId: number | string, profile: any) {
-  const { data: orders } = await supabase.from('orders').select('id, title, department, status, image_urls').eq('assigned_to', profile.id).neq('status', 'completed').order('deadline', { ascending: true });
+  const { data: orders } = await supabase.from('orders').select('id, title, department, status, image_urls, deadline').eq('assigned_to', profile.id).neq('status', 'completed').order('deadline', { ascending: true });
   
   const filteredOrders = (orders || []).filter(order => {
     if (order.department === 'print' && order.status === 'new') {
@@ -267,16 +300,11 @@ async function handleCallbackQuery(callbackQuery: any) {
   const { action, id: orderId } = parseCallbackData(callbackData);
   if (!orderId) return answerCallbackQuery(callbackId, 'Ошибка команды.');
 
-  // ЛОГИКА ОПЕРАТИВНОГО ВЫВОДА ОПИСАНИЯ ОБЪЕКТА ТЕКСТОМ
   if (action === 'desc') {
     const { data: order } = await supabase.from('orders').select('title, description').eq('id', orderId).single();
     let descText = order?.description || 'Описание отсутствует.';
-    
-    // Чистим текст от системных альбомных маркеров, чтобы они не выводились юзеру
     descText = descText.replace(/\[album:.*?\]/g, '').trim();
-    
     const fullMsg = `<b>📄 Описание объекта:</b> ${escapeHtml(order?.title || '')}\n\n${escapeHtml(descText || 'Деталей нет.')}`;
-    
     if (callbackQuery.message?.chat?.id) {
       await sendTelegramMessage(callbackQuery.message.chat.id, fullMsg);
     }
