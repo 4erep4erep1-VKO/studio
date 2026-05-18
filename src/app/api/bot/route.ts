@@ -133,7 +133,7 @@ async function handleStartCommand(chatId: number | string, telegramId: string, u
 
 async function handleActiveOrders(chatId: number | string) {
   const { data: orders } = await supabase.from('orders').select('id, title, department, status, image_urls').neq('status', 'completed').order('deadline', { ascending: true });
-  if (!orders || !orders.length) return sendTelegramMessage(chatId, 'Активных заказов нет.');
+  if (!orders || !orders.length) return sendTelegramMessage(chatId, 'Active orders list empty.');
   for (const order of orders) {
     const text = [`<b>📋 Активный заказ</b>`, buildOrderPreview(order)].join('\n');
     const photoUrl = Array.isArray(order.image_urls) && order.image_urls.length > 0 ? order.image_urls[0] : null;
@@ -143,7 +143,7 @@ async function handleActiveOrders(chatId: number | string) {
 
 async function handleFreeOrders(chatId: number | string) {
   const { data: orders } = await supabase.from('orders').select('id, title, deadline, department, image_urls').is('assigned_to', null).neq('status', 'completed').order('deadline', { ascending: true });
-  if (!orders || !orders.length) return sendTelegramMessage(chatId, 'Свободных заказов пока нет.');
+  if (!orders || !orders.length) return sendTelegramMessage(chatId, 'Free orders empty.');
   for (const order of orders) {
     const itemText = [`<b>🔓 Свободный заказ</b>`, buildOrderPreview(order)].join('\n');
     const replyMarkup = { inline_keyboard: [[{ text: 'Забрать заказ', callback_data: `take_${order.id}` }]] };
@@ -162,7 +162,7 @@ async function handleMyOrders(chatId: number | string, profile: any) {
     return true;
   });
 
-  if (!filteredOrders || !filteredOrders.length) return sendTelegramMessage(chatId, 'У вас пока нет активных заказов в работе.');
+  if (!filteredOrders || !filteredOrders.length) return sendTelegramMessage(chatId, 'No items found.');
   for (const order of filteredOrders) {
     const text = [`<b>💼 Мой заказ</b>`, buildOrderPreview(order)].join('\n');
     const photoUrl = Array.isArray(order.image_urls) && order.image_urls.length > 0 ? order.image_urls[0] : null;
@@ -171,34 +171,66 @@ async function handleMyOrders(chatId: number | string, profile: any) {
   }
 }
 
-async function handleIncomingPhoto(chatId: number | string, telegramId: string, photoArray: any[]) {
+// УМНЫЙ ПЕРЕХВАТ МНОЖЕСТВЕННЫХ ФОТО И АЛЬБОМОВ
+async function handleIncomingPhoto(chatId: number | string, telegramId: string, photoArray: any[], mediaGroupId?: string) {
+  // Искусственный разнос конкурентных запросов альбома во избежание race condition
+  await new Promise(resolve => setTimeout(resolve, Math.random() * 800));
+
   const profile = await findProfileByTelegramId(telegramId);
   if (!profile) return;
 
-  const { data: order } = await supabase.from('orders').select('*').eq('assigned_to', profile.id).eq('status', 'awaiting_photos').limit(1).maybeSingle();
+  // 1. Ищем заказ, который прямо сейчас ждет фотоотчета
+  let { data: order } = await supabase.from('orders').select('*').eq('assigned_to', profile.id).eq('status', 'awaiting_photos').limit(1).maybeSingle();
+  let isAlbumAppend = false;
+
+  // 2. Если не нашли, но это альбом — ищем заказ, который только что перевели в completed первым потоком
+  if (!order && mediaGroupId) {
+    const { data: recentCompleted } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('assigned_to', profile.id)
+      .eq('status', 'completed')
+      .order('id', { ascending: false })
+      .limit(1);
+
+    if (recentCompleted && recentCompleted.length > 0) {
+      order = recentCompleted[0];
+      isAlbumAppend = true;
+    }
+  }
+
   if (!order) {
     return sendTelegramMessage(chatId, 'У вас нет заказов, ожидающих фотоотчета. Чтобы закрыть заказ, нажмите кнопку "✅ ЗАВЕРШИТЬ ЗАКАЗ" в меню "Мои заказы".');
   }
 
-  await sendTelegramMessage(chatId, '🔄 Загружаю фотоотчет и закрываю заказ, секунду...');
   const photo = photoArray[photoArray.length - 1];
   const fileRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/getFile?file_id=${photo.file_id}`).then(r => r.json());
-  
-  if (!fileRes.ok) return sendTelegramMessage(chatId, '❌ Ошибка скачивания фото.');
+  if (!fileRes.ok) return;
 
   const blob = await fetch(`https://api.telegram.org/file/bot${TELEGRAM_TOKEN}/${fileRes.result.file_path}`).then(r => r.blob());
   const storagePath = `completed/${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
   
   const { error: uploadErr } = await supabase.storage.from('order-photos').upload(storagePath, blob, { contentType: 'image/jpeg' });
-  if (uploadErr) return sendTelegramMessage(chatId, '❌ Не удалось сохранить фото в базу.');
+  if (uploadErr) return;
 
   const { data: urlData } = supabase.storage.from('order-photos').getPublicUrl(storagePath);
   
-  await supabase.from('orders').update({ status: 'completed', image_urls: [urlData.publicUrl] }).eq('id', order.id);
+  // Дописываем фотку в существующий массив картинок объекта
+  const currentImages = Array.isArray(order.image_urls) ? order.image_urls : [];
+  const updatedImages = [...currentImages, urlData.publicUrl];
+
+  await supabase.from('orders').update({ status: 'completed', image_urls: updatedImages }).eq('id', order.id);
   
   const empName = profile.name || profile.full_name || 'Сотрудник';
-  await notifyGroup(`✅ Заказ <b>${escapeHtml(order.title)}</b> успешно завершен с фотоотчетом от ${escapeHtml(empName)}.`, urlData.publicUrl);
-  await sendTelegramMessage(chatId, `🎉 Объект <b>${escapeHtml(order.title)}</b> успешно закрыт! Фотоотчет отправлен в группу.`);
+
+  if (isAlbumAppend) {
+    // Последующие фотки из пакета просто докидываем в общую группу без дублирования текста закрытия
+    await notifyGroup(`📸 Дополнительное фото к объекту <b>${escapeHtml(order.title)}</b> от ${escapeHtml(empName)}`, urlData.publicUrl);
+  } else {
+    // Первая фотка альбома (или одиночная) закрывает заказ и шлет главный рапорт
+    await notifyGroup(`✅ Заказ <b>${escapeHtml(order.title)}</b> успешно завершен с фотоотчетом от ${escapeHtml(empName)}.`, urlData.publicUrl);
+    await sendTelegramMessage(chatId, `🎉 Объект <b>${escapeHtml(order.title)}</b> успешно закрыт! Фотоотчет отправлен в группу.`);
+  }
 }
 
 async function handleCallbackQuery(callbackQuery: any) {
@@ -207,9 +239,9 @@ async function handleCallbackQuery(callbackQuery: any) {
   const telegramId = String(callbackQuery.from?.id || '');
   const profile = await findProfileByTelegramId(telegramId);
 
-  if (!profile) return answerCallbackQuery(callbackId, 'Профиль не найден.');
+  if (!profile) return answerCallbackQuery(callbackId, 'Profile error.');
   const { action, id: orderId } = parseCallbackData(callbackData);
-  if (!orderId) return answerCallbackQuery(callbackId, 'Неверная команда.');
+  if (!orderId) return answerCallbackQuery(callbackId, 'Command error.');
 
   let msg = 'Выполнено.';
   if (action === 'take' || action === 'take_print') msg = await handleTakeOrder(orderId, profile, callbackQuery);
@@ -355,7 +387,7 @@ async function handleMoveToInstallation(orderId: string, profile: any, callbackQ
 
 async function handlePrintQueue(chatId: number | string, profile: any) {
   const { data: orders, error } = await supabase.from('orders').select('id, title, deadline, image_urls, assigned_to, status').eq('department', 'print').neq('status', 'completed').order('deadline', { ascending: true });
-  if (error) return sendTelegramMessage(chatId, 'Не удалось получить очередь на печать.');
+  if (error) return sendTelegramMessage(chatId, 'Error loading list.');
 
   const filteredOrders = (orders || []).filter(order => !order.assigned_to || (order.assigned_to === profile.id && order.status === 'new'));
   if (!filteredOrders.length) return sendTelegramMessage(chatId, 'Очередь на печать пуста.');
@@ -392,7 +424,7 @@ export async function POST(request: Request) {
 
     try {
       if (update.message.photo) {
-        await handleIncomingPhoto(chatId, telegramId, update.message.photo);
+        await handleIncomingPhoto(chatId, telegramId, update.message.photo, update.message.media_group_id);
         return new Response('OK', { status: 200 });
       }
 
