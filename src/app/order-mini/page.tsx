@@ -73,12 +73,14 @@ export default function OrderMiniPage() {
         }
     }, [title, deadline, uploading, loading]);
 
-    // Актуализируем функцию отправки в рефе, чтобы не переподписывать событие клика кнопки
+    // Актуализируем функцию отправки в рефе
     useEffect(() => {
         submitRef.current = async () => {
             if (!title || !deadline || uploading || loading) return;
             
             const tg = window.Telegram?.WebApp;
+            const tgUserId = tg?.initDataUnsafe?.user?.id; // Забираем ID того, кто создает заказ
+            
             if (tg) tg.MainButton.showProgress();
             setLoading(true);
 
@@ -107,6 +109,7 @@ export default function OrderMiniPage() {
                         is_general: isGeneral,
                         assigned_to: isGeneral ? null : assignedTo,
                         image_urls: imageUrls,
+                        creator_id: tgUserId ? String(tgUserId) : undefined, // Передаем ID в экшен
                     });
                 } catch (notifyError) {
                     console.error('Ошибка уведомления в группу Telegram:', notifyError);
@@ -123,7 +126,6 @@ export default function OrderMiniPage() {
                     }
                 }
 
-                // Красивое закрытие без дедлока нативного UI
                 if (tg) {
                     tg.MainButton.hideProgress();
                     tg.MainButton.setText("ГОТОВО!");
@@ -170,7 +172,7 @@ export default function OrderMiniPage() {
         if (tg) tg.MainButton.hideProgress();
     };
 
-    // Общие стили для полей (нативные из Telegram)
+    // Общие стили для полей
     const inputStyle = {
         width: '100%',
         padding: '12px',
@@ -200,7 +202,6 @@ export default function OrderMiniPage() {
             fontFamily: 'sans-serif',
             paddingBottom: '80px'
         }}>
-            
             <label style={labelStyle}>Объект *</label>
             <input required value={title} onChange={e => setTitle(e.target.value)} placeholder="Название..." style={inputStyle} />
 
@@ -231,12 +232,7 @@ export default function OrderMiniPage() {
                 alignItems: 'center',
                 gap: '10px'
             }}>
-                <input 
-                    type="checkbox" 
-                    checked={isGeneral} 
-                    onChange={e => setIsGeneral(e.target.checked)} 
-                    style={{ width: '20px', height: '20px' }} 
-                />
+                <input type="checkbox" checked={isGeneral} onChange={e => setIsGeneral(e.target.checked)} style={{ width: '20px', height: '20px' }} />
                 <span style={{ fontSize: '14px', fontWeight: 'bold' }}>Общий заказ (для всех)</span>
             </div>
 
@@ -254,15 +250,7 @@ export default function OrderMiniPage() {
 
             <div>
                 <label style={labelStyle}>Фото / Эскиз {uploading && '(Загрузка...)'}</label>
-                <input 
-                    type="file" 
-                    accept="image/*" 
-                    multiple 
-                    onChange={e => handleImageUpload(e.target.files)} 
-                    style={{ ...inputStyle, padding: '8px' }} 
-                    disabled={uploading}
-                />
-                
+                <input type="file" accept="image/*" multiple onChange={e => handleImageUpload(e.target.files)} style={{ ...inputStyle, padding: '8px' }} disabled={uploading} />
                 {imageUrls.length > 0 && (
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
                         {imageUrls.map((url, idx) => (
@@ -271,7 +259,6 @@ export default function OrderMiniPage() {
                     </div>
                 )}
             </div>
-
         </div>
     );
 }
