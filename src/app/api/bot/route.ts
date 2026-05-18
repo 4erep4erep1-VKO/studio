@@ -5,7 +5,13 @@ const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const GROUP_CHAT_ID = process.env.TELEGRAM_GROUP_CHAT_ID;
-const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL || 'https://studio-cherepok.vercel.app').replace(/\/$/, '');
+
+// ГАРАНТИРУЕМ НАЛИЧИЕ HTTPS:// ДЛЯ ССЫЛОК ВЕРСЕЛА
+let rawUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL || 'https://studio-cherepok.vercel.app';
+if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
+  rawUrl = `https://${rawUrl}`;
+}
+const SITE_URL = rawUrl.replace(/\/$/, '');
 const ORDER_FORM_PATH = '/order-mini';
 const WEB_APP_URL = `${SITE_URL}${ORDER_FORM_PATH}`;
 
@@ -28,11 +34,22 @@ async function sendTelegram(chatId: string | number, payload: Record<string, any
     return null;
   }
 
-  return fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/${payload.method}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload.body),
-  });
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/${payload.method}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload.body),
+    });
+    
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(`❌ Telegram API Error [${payload.method}]:`, errText);
+    }
+    return res;
+  } catch (err) {
+    console.error(`❌ Fetch to Telegram API failed [${payload.method}]:`, err);
+    return null;
+  }
 }
 
 async function sendTelegramMessage(chatId: string | number, text: string, extra: Record<string, any> = {}) {
@@ -362,6 +379,7 @@ async function handleProfile(chatId: number | string, profile: any) {
 
   const deadlineText = deadlines.length ? deadlines.join('\n') : 'Нет ближайших дедлайнов.';
 
+  await sendMainMenu(chatId, Boolean(profile.can_print));
   await sendTelegramMessage(chatId, `<b>👤 Мой профиль</b>\nВ работе: ${activeOrders?.length || 0}\nЗавершено: ${completedOrders?.length || 0}\n\n<b>Ближайшие дедлайны</b>:\n${deadlineText}`);
 }
 
