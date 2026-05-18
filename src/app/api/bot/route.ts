@@ -57,7 +57,6 @@ async function sendTelegramPhoto(chatId: string | number, photoUrl: string, capt
   });
 }
 
-// УМНЫЙ ХЕЛПЕР ДЛЯ ОТПРАВКИ ОДИНОЧНЫХ ФОТО ИЛИ АЛЬБОМОВ
 async function sendOrderToTelegram(chatId: string | number, text: string, replyMarkup: any, imageUrls: any) {
   const images = Array.isArray(imageUrls) ? imageUrls.filter(Boolean) : [];
   
@@ -69,7 +68,6 @@ async function sendOrderToTelegram(chatId: string | number, text: string, replyM
     return sendTelegramPhoto(chatId, images[0], text, { reply_markup: replyMarkup });
   }
   
-  // Если картинок несколько, отправляем их пачкой (до 10 штук по лимитам API)
   const media = images.slice(0, 10).map((url, index) => ({
     type: 'photo',
     media: url,
@@ -82,7 +80,6 @@ async function sendOrderToTelegram(chatId: string | number, text: string, replyM
     body: { chat_id: chatId, media }
   });
   
-  // Так как к альбому кнопки не вяжутся, шлем их следом отдельным коротким сообщением
   if (replyMarkup) {
     return sendTelegramMessage(chatId, '🎛 <b>Действия с заказом:</b>', { reply_markup: replyMarkup });
   }
@@ -326,7 +323,6 @@ async function handleCallbackQuery(callbackQuery: any) {
   await answerCallbackQuery(callbackId, msg);
 }
 
-// ИСПРАВЛЕНО: УБРАНО ЛЕВОЕ ПОЛЕ IS_GENERAL И ДОБАВЛЕНО СТРОГОЕ ЛОГИРОВАНИЕ ОШИБОК
 async function handleTakeOrder(orderId: string, profile: any, callbackQuery: any) {
   const { data: order, error: fetchError } = await supabase.from('orders').select('*').eq('id', orderId).single();
   if (fetchError || !order || order.status === 'completed' || (order.assigned_to && order.status !== 'new')) {
@@ -403,6 +399,7 @@ async function handleCompleteOrder(orderId: string, profile: any, withoutPhoto =
   return 'Заказ успешно завершен.';
 }
 
+// ИСПРАВЛЕНО: Добавлены закрывающие фигурные скобки во всех трех функциях ниже
 async function handleMoveToOffice(orderId: string, profile: any, callbackQuery: any) {
   const { error: updateError } = await supabase.from('orders').update({ status: 'completed' }).eq('id', orderId);
   if (updateError) console.error('❌ Ошибка передачи в офис:', updateError);
@@ -415,7 +412,7 @@ async function handleMoveToOffice(orderId: string, profile: any, callbackQuery: 
     const chatId = callbackQuery.message.chat.id;
     const messageId = callbackQuery.message.message_id;
     const isPhoto = Boolean(callbackQuery.message.photo || callbackQuery.message.document);
-    const text = `<b>🏢 Передано в офис</b>\n${buildOrderPreview(order}`;
+    const text = `<b>🏢 Передано в офис</b>\n${buildOrderPreview(order)}`;
     
     await sendTelegram({
       method: isPhoto ? 'editMessageCaption' : 'editMessageText',
@@ -437,7 +434,7 @@ async function handleMoveToProduction(orderId: string, profile: any, callbackQue
     const chatId = callbackQuery.message.chat.id;
     const messageId = callbackQuery.message.message_id;
     const isPhoto = Boolean(callbackQuery.message.photo || callbackQuery.message.document);
-    const text = `<b>🏭 Передано в изготовление</b>\n${buildOrderPreview(order}`;
+    const text = `<b>🏭 Передано в изготовление</b>\n${buildOrderPreview(order)}`;
     
     await sendTelegram({
       method: isPhoto ? 'editMessageCaption' : 'editMessageText',
@@ -459,7 +456,7 @@ async function handleMoveToInstallation(orderId: string, profile: any, callbackQ
     const chatId = callbackQuery.message.chat.id;
     const messageId = callbackQuery.message.message_id;
     const isPhoto = Boolean(callbackQuery.message.photo || callbackQuery.message.document);
-    const text = `<b>🛠 Передано на монтаж</b>\n${buildOrderPreview(order}`;
+    const text = `<b>🛠 Передано на монтаж</b>\n${buildOrderPreview(order)}`;
     
     await sendTelegram({
       method: isPhoto ? 'editMessageCaption' : 'editMessageText',
