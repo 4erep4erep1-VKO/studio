@@ -523,25 +523,25 @@ async function takeFreeOrder(orderId: string, profile: any, callback: any) {
     return 'Этот заказ уже завершен.';
   }
 
-  const telegramId = String(callback.from?.id || '');
-  const { data: assignedProfile, error: profileError } = await supabase
+  const chatId = callback.from?.id;
+  const { data: profileResult, error: profileError } = await supabase
     .from('profiles')
-    .select('id, name, full_name')
-    .eq('telegram_chat_id', telegramId)
+    .select('id')
+    .eq('telegram_chat_id', chatId)
     .single();
 
-  if (profileError || !assignedProfile) {
-    console.error('Free order profile lookup failed:', profileError?.message);
+  if (profileError || !profileResult) {
+    console.error('Ошибка поиска профиля:', profileError);
     return 'Не удалось определить ваш профиль. Обратитесь к администратору.';
   }
 
   const { error: updateError } = await supabase
     .from('orders')
-    .update({ assigned_to: assignedProfile.id, status: 'in_progress' })
+    .update({ status: 'in_progress', assigned_to: profileResult.id })
     .eq('id', orderId);
 
   if (updateError) {
-    console.error('Take free order failed:', updateError.message);
+    console.error('Ошибка обновления заказа:', updateError);
     return 'Не удалось взять заказ в работу. Попробуйте позже.';
   }
 
