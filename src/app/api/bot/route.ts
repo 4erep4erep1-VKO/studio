@@ -271,15 +271,21 @@ async function handleFreeOrders(chatId: number | string) {
     return;
   }
 
-  const text = orders.map(order => [
-    `${escapeHtml(order.title)}`,
-    `${order.department === 'installation' ? '🛠 Монтаж' : order.department === 'production' ? '🏭 Изготовление' : '🖨 Печать'}`,
-    `Дедлайн: ${order.deadline ? escapeHtml(new Date(order.deadline).toLocaleDateString('ru-RU')) : 'Не указан'}`,
-  ].join('\n')).join('\n\n');
+  for (const order of orders) {
+    const text = [
+      `${escapeHtml(order.title)}`,
+      `${order.department === 'installation' ? '🛠 Монтаж' : order.department === 'production' ? '🏭 Изготовление' : '🖨 Печать'}`,
+      `Дедлайн: ${order.deadline ? escapeHtml(new Date(order.deadline).toLocaleDateString('ru-RU')) : 'Не указан'}`,
+    ].join('\n');
 
-  await sendTelegram(chatId, `<b>🔓 Свободные заказы</b>
+    await sendTelegram(chatId, `<b>🔓 Свободный заказ</b>
 
-${text}`);
+${text}`, {
+      reply_markup: {
+        inline_keyboard: [[{ text: 'Забрать заказ', callback_data: `take_${order.id}` }]],
+      },
+    });
+  }
 }
 
 async function handleRating(chatId: number | string) {
