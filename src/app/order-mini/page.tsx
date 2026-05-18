@@ -79,7 +79,13 @@ export default function OrderMiniPage() {
             if (!title || !deadline || uploading || loading) return;
             
             const tg = window.Telegram?.WebApp;
-            const tgUserId = tg?.initDataUnsafe?.user?.id; // Забираем ID того, кто создает заказ
+            const tgUser = tg?.initDataUnsafe?.user;
+            const tgUserId = tgUser?.id;
+            
+            // Собираем имя из телеграма, если оно есть
+            const tgFullName = tgUser 
+                ? `${tgUser.first_name}${tgUser.last_name ? ' ' + tgUser.last_name : ''}`
+                : undefined;
             
             if (tg) tg.MainButton.showProgress();
             setLoading(true);
@@ -109,7 +115,8 @@ export default function OrderMiniPage() {
                         is_general: isGeneral,
                         assigned_to: isGeneral ? null : assignedTo,
                         image_urls: imageUrls,
-                        creator_id: tgUserId ? String(tgUserId) : undefined, // Передаем ID в экшен
+                        creator_id: tgUserId ? String(tgUserId) : undefined,
+                        creator_full_name: tgFullName, // Передаем имя напрямую из Телеграма
                     });
                 } catch (notifyError) {
                     console.error('Ошибка уведомления в группу Telegram:', notifyError);
