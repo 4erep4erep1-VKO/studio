@@ -89,14 +89,19 @@ async function findProfileByTelegramIdentity(telegramId: string, username?: stri
   return data;
 }
 
-function buildMainMenuKeyboard(canPrint: boolean) {
-  const keyboard = [[{ text: '➕ Создать заказ', web_app: { url: WEB_APP_URL } }, { text: '📋 Активные заказы' }], [{ text: '🔓 Свободные заказы' }, { text: '💼 Мои заказы' }], [{ text: '📊 Рейтинг' }, { text: '👤 Мой профиль' }]];
+// ДОБАВИЛИ ПЕРЕДАЧУ TG_ID В ССЫЛКУ МИНИ АППА
+function buildMainMenuKeyboard(canPrint: boolean, chatId: string | number) {
+  const keyboard = [
+    [{ text: '➕ Создать заказ', web_app: { url: `${WEB_APP_URL}?tg_id=${chatId}` } }, { text: '📋 Активные заказы' }], 
+    [{ text: '🔓 Свободные заказы' }, { text: '💼 Мои заказы' }], 
+    [{ text: '📊 Рейтинг' }, { text: '👤 Мой профиль' }]
+  ];
   if (canPrint) keyboard.splice(2, 0, [{ text: '🖨 Очередь на печать' }]);
   return { keyboard, resize_keyboard: true };
 }
 
 async function sendMainMenu(chatId: string | number, canPrint: boolean) {
-  await sendTelegramMessage(chatId, 'Главное меню. Выберите опцию ниже.', { reply_markup: buildMainMenuKeyboard(canPrint) });
+  await sendTelegramMessage(chatId, 'Главное меню. Выберите опцию ниже.', { reply_markup: buildMainMenuKeyboard(canPrint, chatId) });
 }
 
 function buildOrderPreview(order: any) {
@@ -108,7 +113,6 @@ function buildOrderButtons(order: any) {
   if (order.department === 'print') {
     buttons.push([{ text: '🏢 В ОФИС', callback_data: `office_${order.id}` }, { text: '🔨 ИЗГОТОВЛЕНИЕ', callback_data: `print_${order.id}` }, { text: '🚚 НА МОНТАЖ', callback_data: `install_${order.id}` }]);
   } else if (order.department === 'production' || order.department === 'installation') {
-    // ОСТАВЛЯЕМ ТОЛЬКО ОДНУ КНОПКУ ЗАВЕРШЕНИЯ
     buttons.push([{ text: '✅ ЗАВЕРШИТЬ ЗАКАЗ', callback_data: `complete_${order.id}` }]);
   }
   return buttons.length ? { inline_keyboard: buttons } : undefined;
@@ -156,7 +160,6 @@ async function handleMyOrders(chatId: number | string, profile: any) {
   }
 }
 
-// ПЕРЕХВАТ И ЗАГРУЗКА ФОТООТЧЕТОВ ИЗ ЧАТА БОТА
 async function handleIncomingPhoto(chatId: number | string, telegramId: string, photoArray: any[]) {
   const profile = await findProfileByTelegramId(telegramId);
   if (!profile) return;
@@ -212,7 +215,6 @@ async function handleTakeOrder(orderId: string, profile: any, callbackQuery: any
   const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
   if (!order || order.status === 'completed' || order.assigned_to) return 'Заказ недоступен.';
 
-  // ЖЕСТКО СКИДЫВАЕМ ФЛАГ ОБЩЕГО ЗАКАЗА (is_general: false)
   await supabase.from('orders').update({ assigned_to: profile.id, status: 'in_progress', is_general: false }).eq('id', orderId);
 
   const employeeName = profile.name || profile.full_name || 'Сотрудник';
@@ -232,7 +234,6 @@ async function handleTakeOrder(orderId: string, profile: any, callbackQuery: any
   return 'Вы успешно взяли заказ.';
 }
 
-// ВЫЗОВ РЕЖИМА ОЖИДАНИЯ ФОТО
 async function handleRequestPhotoOrder(orderId: string, profile: any, callbackQuery: any) {
   const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
   if (!order || order.assigned_to !== profile.id) return 'Ошибка доступа.';
@@ -279,7 +280,6 @@ async function handleCompleteOrder(orderId: string, profile: any, withoutPhoto =
   return 'Заказ успешно завершен.';
 }
 
-// ОСТАЛЬНЫЕ МЕТОДЫ ПЕРЕВОДА ЭТАПОВ
 async function handleMoveToOffice(orderId: string, profile: any) {
   const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
   if (!order || order.assigned_to !== profile.id) return 'Ошибка.';
@@ -304,10 +304,6 @@ async function handleMoveToInstallation(orderId: string, profile: any) {
   return 'Заказ переведен на монтаж.';
 }
 
-function handleRating(chatId: any) { /* остался старый рабочий код рейтинга */ }
-function handleProfile(chatId: any, profile: any) { /* остался старый рабочий код профиля */ }
-function handlePrintQueue(chatId: any) { /* остался старый рабочий код очереди */ }
-
 function parseCallbackData(data: string) {
   const normalized = data.replace(/:/g, '_');
   const knownActions = ['complete_without_photo', 'complete_with_photo', 'finish_without_photo', 'print_to_office', 'print_to_production', 'print_to_installation', 'take_print', 'take', 'office', 'print', 'install', 'complete'];
@@ -331,7 +327,6 @@ export async function POST(request: Request) {
     if (!chatId) return NextResponse.json({ ok: false }, { status: 400 });
 
     try {
-      // ЕСЛИ ПРИШЛО ФОТО — ПРОВЕРЯЕМ РЕЖИМ ОЖИДАНИЯ
       if (update.message.photo) {
         await handleIncomingPhoto(chatId, telegramId, update.message.photo);
         return new Response('OK', { status: 200 });

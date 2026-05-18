@@ -18,11 +18,40 @@ export default function OrderMiniPage() {
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
     
-    // Сюда железно сохранится твой профиль из Телеграма
-    const [tgUser, setTgUser] = useState<any>(null);
+    // Стейты для железного определения автора заказа
+    const [creatorName, setCreatorName] = useState('Неизвестный пользователь');
+    const [creatorTgId, setCreatorTgId] = useState('');
+    const [creatorUuid, setCreatorUuid] = useState('');
+    
     const submitRef = useRef<() => void>(() => {});
 
-    // Загружаем профили сотрудников из базы
+    // ПОЛУЧАЕМ TG_ID ИЗ ССЫЛКИ И СРАЗУ ИЩЕМ АВТОРА В БАЗЕ
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        
+        const params = new URLSearchParams(window.location.search);
+        const tgId = params.get('tg_id');
+        
+        if (tgId) {
+            async function loadCreatorProfile() {
+                const { data } = await supabase
+                    .from('profiles')
+                    .select('id, full_name, name')
+                    .eq('telegram_chat_id', tgId)
+                    .limit(1)
+                    .maybeSingle();
+                
+                if (data) {
+                    setCreatorName(data.full_name || data.name || 'Сотрудник');
+                    setCreatorTgId(tgId);
+                    setCreatorUuid(data.id); // UUID из базы
+                }
+            }
+            loadCreatorProfile();
+        }
+    }, []);
+
+    // Загружаем список сотрудников для выпадающего списка
     useEffect(() => {
         async function loadProfiles() {
             const { data } = await supabase
@@ -34,29 +63,36 @@ export default function OrderMiniPage() {
         loadProfiles();
     }, []);
 
-    // БУЛЛЕТПРУФ ПОЛЛИНГ ДЛЯ АКТИВАЦИИ TELEGRAM SDK И ЗАХВАТА ПРОФИЛЯ
+    // Инициализация интерфейса ТГ
     useEffect(() => {
         const syncTelegramSDK = () => {
             const tg = window.Telegram?.WebApp;
             if (tg) {
-                // ЖЕСТКИЙ ПИНОК ДЛЯ ТЕЛЕГРАМА — БЕЗ ЭТОГО ДАННЫЕ ЮЗЕРА БЛОКИРУЮТСЯ
                 tg.ready(); 
                 tg.expand();
-                
-                if (tg.initDataUnsafe?.user && !tgUser) {
-                    setTgUser(tg.initDataUnsafe.user);
-                    clearInterval(interval);
-                }
+                clearInterval(interval);
             }
         };
-
         const interval = setInterval(syncTelegramSDK, 300);
         syncTelegramSDK();
-
         return () => clearInterval(interval);
-    }, [tgUser]);
+    }, []);
 
-    // Управление кнопкой отправки на основе валидации
+    // Клик на главную кнопку
+    useEffect(() => {
+        const tg = window.Telegram?.WebApp;
+        if (tg) {
+            tg.MainButton.text = "СОЗДАТЬ И ОПОВЕСТИТЬ";
+            tg.MainButton.show();
+            
+            const handleMainButtonClick = () => submitRef.current();
+            tg.MainButton.onClick(handleMainButtonClick);
+            
+            return () => tg.MainButton.offClick(handleMainButtonClick);
+        }
+    }, []);
+
+    // Управление доступностью кнопки
     useEffect(() => {
         const tg = window.Telegram?.WebApp;
         if (!tg) return;
@@ -76,14 +112,6 @@ export default function OrderMiniPage() {
             if (!title || !deadline || uploading || loading) return;
             
             const tg = window.Telegram?.WebApp;
-            // Вытаскиваем юзера из стейта поллинга или напрямую из объекта
-            const activeUser = tgUser || tg?.initDataUnsafe?.user;
-            const tgUserId = activeUser?.id;
-            
-            const tgFullName = activeUser 
-                ? `${activeUser.first_name}${activeUser.last_name ? ' ' + activeUser.last_name : ''}`
-                : undefined;
-            
             if (tg) tg.MainButton.showProgress();
             setLoading(true);
 
@@ -97,12 +125,13 @@ export default function OrderMiniPage() {
                     department,
                     assigned_to: isGeneral ? null : (assignedTo || null),
                     image_urls: imageUrls,
+                    created_by: creatorUuid || null, // ТЕПЕРЬ НА САЙТЕ АВТОР БУДЕТ ВЫСВЕЧИВАТЬСЯ ПРАВИЛЬНО
                 };
 
                 const { error } = await supabase.from('orders').insert([payload]);
                 if (error) throw error;
 
-                // ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ С ГАРАНТИРОВАННЫМ ИМЕНЕМ ИЗ ТГ
+                // ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ С ГАРАНТИРОВАННЫМ ИМЕНЕМ ИЗ БАЗЫ
                 try {
                     await notifyNewOrderToGroup({
                         title,
@@ -112,8 +141,8 @@ export default function OrderMiniPage() {
                         is_general: isGeneral,
                         assigned_to: isGeneral ? null : assignedTo,
                         image_urls: imageUrls,
-                        creator_id: tgUserId ? String(tgUserId) : undefined,
-                        creator_full_name: tgFullName, 
+                        creator_id: creatorTgId || undefined,
+                        creator_full_name: creatorName, 
                     });
                 } catch (notifyError) {
                     console.error('Ошибка уведомления в группу Telegram:', notifyError);
@@ -149,7 +178,7 @@ export default function OrderMiniPage() {
                 setLoading(false);
             }
         };
-    }, [title, description, deadline, department, assignedTo, isGeneral, imageUrls, uploading, installers, loading, tgUser]);
+    }, [title, description, deadline, department, assignedTo, isGeneral, imageUrls, uploading, installers, loading, creatorName, creatorTgId, creatorUuid]);
 
     const handleImageUpload = async (files: FileList | null) => {
         if (!files || files.length === 0) return;
@@ -197,11 +226,7 @@ export default function OrderMiniPage() {
 
     return (
         <>
-            {/* ОФИЦИАЛЬНЫЙ НАДЁЖНЫЙ СКРИПТ TELEGRAM MINI APP */}
-            <Script 
-                src="https://telegram.org/js/telegram-web-app.js" 
-                strategy="afterInteractive"
-            />
+            <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
 
             <div style={{
                 backgroundColor: 'var(--tg-theme-bg-color, #ffffff)',
