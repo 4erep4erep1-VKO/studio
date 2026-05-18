@@ -172,7 +172,7 @@ async function handleActiveOrders(chatId: number | string) {
     .order('deadline', { ascending: true });
 
   if (error) console.error('❌ Ошибка загрузки активных заказов:', error);
-  if (!orders || !orders.length) return sendTelegramMessage(chatId, 'Активных заказов нет.');
+  if (!orders || !orders.length) return sendTelegramMessage(chatId, 'Active orders empty.');
 
   const statusMap: Record<string, string> = {
     new: 'Новый',
@@ -329,9 +329,10 @@ async function handleTakeOrder(orderId: string, profile: any, callbackQuery: any
     return 'Заказ недоступен или уже кем-то занят.';
   }
 
+  // ИСПРАВЛЕНО: Вернули сброс флага общего заказа в false, чтобы на сайте пропадала надпись ОБЩИЙ ЗАКАЗ
   const { error: updateError } = await supabase
     .from('orders')
-    .update({ assigned_to: profile.id, status: 'in_progress' })
+    .update({ assigned_to: profile.id, status: 'in_progress', is_general: false })
     .eq('id', orderId);
 
   if (updateError) {
@@ -399,7 +400,6 @@ async function handleCompleteOrder(orderId: string, profile: any, withoutPhoto =
   return 'Заказ успешно завершен.';
 }
 
-// ИСПРАВЛЕНО: Добавлены закрывающие фигурные скобки во всех трех функциях ниже
 async function handleMoveToOffice(orderId: string, profile: any, callbackQuery: any) {
   const { error: updateError } = await supabase.from('orders').update({ status: 'completed' }).eq('id', orderId);
   if (updateError) console.error('❌ Ошибка передачи в офис:', updateError);
