@@ -141,11 +141,11 @@ async function handleStartCommand(chatId: number | string, telegramId: string, u
   await sendMainMenu(chatId, Boolean(profile.can_print));
 }
 
-// ВЫВОД ПОЛНОЙ ИНФОРМАЦИИ ОБ АКТИВНЫХ ЗАКАЗАХ (СТАТУС + ИСПОЛНИТЕЛЬ)
 async function handleActiveOrders(chatId: number | string) {
+  // ИСПРАВЛЕНО: Явно связываем через внешний ключ assigned_to, чтобы подтягивать исполнителя, а не создателя
   const { data: orders } = await supabase
     .from('orders')
-    .select('id, title, department, status, image_urls, deadline, assigned_to:profiles(name, full_name)')
+    .select('id, title, department, status, image_urls, deadline, executor:profiles!assigned_to(name, full_name)')
     .neq('status', 'completed')
     .order('deadline', { ascending: true });
 
@@ -161,12 +161,10 @@ async function handleActiveOrders(chatId: number | string) {
   for (const order of orders) {
     let text = [`<b>📋 Активный заказ</b>`, buildOrderPreview(order)].join('\n');
     
-    // Добавляем текущий статус
     const statusText = statusMap[order.status] || order.status;
     text += `\n⚡ Статус: <b>${escapeHtml(statusText)}</b>`;
     
-    // Добавляем текущего исполнителя из связанной таблицы профилей
-    const executor = order.assigned_to as any;
+    const executor = order.executor as any;
     if (executor) {
       const empName = executor.name || executor.full_name || 'Сотрудник';
       text += `\n👤 Исполнитель: <b>${escapeHtml(empName)}</b>`;
@@ -245,7 +243,7 @@ async function handleIncomingPhoto(chatId: number | string, telegramId: string, 
   }
 
   if (!order) {
-    return sendTelegramMessage(chatId, '⚠️ Не удалось связать фото с активным заказом. Убедитесь, что нажали кнопку "✅ ЗАВЕРШИТЬ ЗАКАЗ" в меню "Мои заказы".');
+    return sendTelegramMessage(chatId, '⚠️ Не удалось связать фото с активным заказом. Убедитесь, что нажали кнопку "✅ ЗАВЕРШИТЬ ЗАКАЗ" in меню "Мои заказы".');
   }
 
   const photo = photoArray[photoArray.length - 1];
