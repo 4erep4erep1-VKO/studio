@@ -2,83 +2,19 @@ import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const GROUP_CHAT_ID = process.env.TELEGRAM_GROUP_CHAT_ID;
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const PHOTO_BUCKET = process.env.SUPABASE_ORDER_PHOTO_BUCKET || 'order-photos';
-const COMPLETION_BUCKET = process.env.SUPABASE_COMPLETION_PHOTO_BUCKET || 'completion-photos';
+const GROUP_CHAT_ID = process.env.TELEGRAM_GROUP_CHAT_ID;
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL || 'https://studio-cherepok.vercel.app').replace(/\/$/, '');
+const ORDER_FORM_PATH = '/order-mini';
+const WEB_APP_URL = `${SITE_URL}${ORDER_FORM_PATH}`;
 
 const supabase = createClient(SUPABASE_URL || '', SUPABASE_SERVICE_ROLE_KEY || '', {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-async function sendTelegram(chatId: string | number, text: string, extra: Record<string, any> = {}) {
-  if (!TELEGRAM_TOKEN) {
-    console.error('Telegram token missing');
-    return null;
-  }
-
-  const payload = {
-    chat_id: chatId,
-    text,
-    parse_mode: 'HTML',
-    disable_web_page_preview: true,
-    ...extra,
-  };
-
-  const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-
-  return response.ok ? await response.json() : null;
-}
-
-async function sendTelegramPhoto(chatId: string | number, photo: string, caption: string, extra: Record<string, any> = {}) {
-  if (!TELEGRAM_TOKEN) {
-    console.error('Telegram token missing');
-    return null;
-  }
-
-  const payload = {
-    chat_id: chatId,
-    photo,
-    caption,
-    parse_mode: 'HTML',
-    ...extra,
-  };
-
-  const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendPhoto`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-
-  return response.ok ? await response.json() : null;
-}
-
-async function answerCallbackQuery(callbackQueryId: string, text?: string) {
-  if (!TELEGRAM_TOKEN) return null;
-  return fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/answerCallbackQuery`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ callback_query_id: callbackQueryId, text, show_alert: false }),
-  });
-}
-
-async function editTelegramMessage(chatId: number | string, messageId: number, text: string, reply_markup?: any) {
-  if (!TELEGRAM_TOKEN) return null;
-  return fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/editMessageText`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML', reply_markup }),
-  });
-}
-
-function escapeHtml(text: string) {
-  if (!text) return '';
-  return text
+function escapeHtml(value: string): string {
+  return value
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -86,9 +22,82 @@ function escapeHtml(text: string) {
     .replace(/'/g, '&#039;');
 }
 
+async function sendTelegram(chatId: string | number, payload: Record<string, any>) {
+  if (!TELEGRAM_TOKEN) {
+    console.error('Telegram token is not configured');
+    return null;
+  }
 
+  return fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/${payload.method}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload.body),
+  });
+}
+
+async function sendTelegramMessage(chatId: string | number, text: string, extra: Record<string, any> = {}) {
+  return sendTelegram(chatId, {
+    method: 'sendMessage',
+    body: {
+      chat_id: chatId,
+      text,
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+      ...extra,
+    },
+  });
+}
+
+async function sendTelegramPhoto(chatId: string | number, photoUrl: string, caption: string, extra: Record<string, any> = {}) {
+  return sendTelegram(chatId, {
+    method: 'sendPhoto',
+    body: {
+      chat_id: chatId,
+      photo: photoUrl,
+      caption,
+      parse_mode: 'HTML',
+      ...extra,
+    },
+  });
+}
+
+async function sendTelegramMessageOrPhoto(chatId: string | number, text: string, replyMarkup?: Record<string, any>, photoUrl?: string | null) {
+  if (photoUrl) {
+    return sendTelegramPhoto(chatId, photoUrl, text, { reply_markup: replyMarkup });
+  }
+
+  return sendTelegramMessage(chatId, text, { reply_markup: replyMarkup });
+}
+
+async function answerCallbackQuery(callbackQueryId: string, text: string) {
+  if (!TELEGRAM_TOKEN) {
+    return null;
+  }
+
+  return sendTelegram(null as any, {
+    method: 'answerCallbackQuery',
+    body: { callback_query_id: callbackQueryId, text, show_alert: false },
+  });
+}
+
+async function notifyGroup(text: string, photoUrl?: string | null) {
+  if (!GROUP_CHAT_ID) {
+    console.warn('GROUP_CHAT_ID is not configured, group notification skipped');
+    return null;
+  }
+
+  if (photoUrl) {
+    return sendTelegramPhoto(GROUP_CHAT_ID, photoUrl, text);
+  }
+
+  return sendTelegramMessage(GROUP_CHAT_ID, text);
+}
 
 async function findProfileByTelegramId(telegramId: string) {
+  if (!telegramId) {
+    return null;
+  }
+
   const { data, error } = await supabase
     .from('profiles')
     .select('id, can_print, name, full_name')
@@ -96,26 +105,30 @@ async function findProfileByTelegramId(telegramId: string) {
     .single();
 
   if (error) {
-    console.error('Supabase profile lookup error:', error.message);
+    console.error('findProfileByTelegramId error:', error.message);
     return null;
   }
 
   return data;
 }
 
-function buildMenuKeyboard(canPrint: boolean | null) {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://studio-cherepok.vercel.app';
-  const webAppUrl = `${siteUrl.replace(/\/$/, '')}/order-mini`;
+function buildMainMenuKeyboard(canPrint: boolean) {
   const keyboard: any[] = [
     [
-      { text: '➕ Создать заказ', web_app: { url: webAppUrl } },
+      { text: '➕ Создать заказ', web_app: { url: WEB_APP_URL } },
       { text: '📋 Активные заказы' },
     ],
-    [{ text: '🔓 Свободные заказы' }, { text: '💼 Мои заказы' }],
-    [{ text: '📊 Рейтинг' }, { text: '👤 Мой профиль' }],
+    [
+      { text: '🔓 Свободные заказы' },
+      { text: '💼 Мои заказы' },
+    ],
+    [
+      { text: '📊 Рейтинг' },
+      { text: '👤 Мой профиль' },
+    ],
   ];
 
-  if (canPrint === true) {
+  if (canPrint) {
     keyboard.splice(2, 0, [{ text: '🖨 Очередь на печать' }]);
   }
 
@@ -126,165 +139,126 @@ function buildMenuKeyboard(canPrint: boolean | null) {
   };
 }
 
-
-function formatOrderSummary(order: any, assignedName: string | null) {
-  const departmentLabel = order.department === 'installation'
-    ? '🛠 Монтаж'
-    : order.department === 'production'
-      ? '🏭 Изготовление'
-      : '🖨 Печать';
-  const statusLabel = order.status === 'completed' ? '✅ Завершен' : order.status === 'awaiting_photos' ? '📷 Ждёт фото' : '⏳ В работе';
-  const assignedLabel = assignedName ? escapeHtml(assignedName) : 'Общий';
-  const deadline = order.deadline ? new Date(order.deadline).toLocaleDateString('ru-RU') : 'Не указан';
-
-  return `
-${escapeHtml(order.title)}
-${departmentLabel} (${statusLabel})
-В работе: ${assignedLabel}
-Дедлайн: ${escapeHtml(deadline)}
-`.trim();
-}
-
-async function sendMainMenu(chatId: string | number, canPrint: boolean | null) {
-  await sendTelegram(chatId, 'Главное меню Montazhka PRO. Выберите действие.', {
-    reply_markup: buildMenuKeyboard(canPrint),
+async function sendMainMenu(chatId: string | number, canPrint: boolean) {
+  await sendTelegramMessage(chatId, 'Главное меню. Выберите опцию ниже.', {
+    reply_markup: buildMainMenuKeyboard(canPrint),
   });
 }
 
-// Order creation moved to Web App (Mini App). Multi-step reply-based flow removed.
+function buildOrderPreview(order: any) {
+  return `<b>${escapeHtml(order.title)}</b>`;
+}
 
-async function notifyGroup(text: string) {
-  if (!GROUP_CHAT_ID) {
-    console.error('Group chat ID missing');
-    return null;
+function buildOrderButtons(order: any) {
+  const buttons: any[][] = [];
+
+  if (order.department === 'print') {
+    buttons.push([
+      { text: '🏢 В ОФИС', callback_data: `office_${order.id}` },
+      { text: '🔨 ИЗГОТОВЛЕНИЕ', callback_data: `print_${order.id}` },
+      { text: '🚚 НА МОНТАЖ', callback_data: `install_${order.id}` },
+    ]);
+  } else if (order.department === 'production' || order.department === 'installation') {
+    buttons.push([
+      { text: '✅ ЗАВЕРШИТЬ ЗАКАЗ', callback_data: `complete_${order.id}` },
+      { text: '🚫 ЗАВЕРШИТЬ БЕЗ ФОТО', callback_data: `complete_without_photo_${order.id}` },
+    ]);
   }
 
-  return sendTelegram(GROUP_CHAT_ID, text, { disable_web_page_preview: false });
+  return buttons.length ? { inline_keyboard: buttons } : undefined;
 }
 
-async function getAssignedNames(orders: any[]) {
-  const assignedTo = Array.from(new Set(orders.map(o => o.assigned_to).filter(Boolean)));
-  if (!assignedTo.length) return {};
+async function handleStartCommand(chatId: number | string, telegramId: string) {
+  const profile = await findProfileByTelegramId(telegramId);
 
-  const { data: profiles } = await supabase
-    .from('profiles')
-    .select('id, name, full_name')
-    .in('id', assignedTo);
-
-  return (profiles || []).reduce((acc: Record<string, string>, profile: any) => {
-    acc[profile.id] = profile.name || profile.full_name || 'Сотрудник';
-    return acc;
-  }, {});
-}
-
-async function handleMyOrders(chatId: number | string, profile: any) {
-  const { data: orders, error } = await supabase
-    .from('orders')
-    .select('*')
-    .eq('assigned_to', profile.id)
-    .neq('status', 'completed')
-    .order('deadline', { ascending: true });
-
-  if (error) {
-    console.error('My orders query failed:', error.message);
-    await sendTelegram(chatId, 'Ошибка при получении ваших заказов. Попробуйте позже.');
+  if (!profile) {
+    await sendTelegramMessage(chatId, 'Ваш профиль не найден. Обратитесь к администратору и убедитесь, что telegram_chat_id указан в таблице profiles.');
     return;
   }
 
-  if (!orders?.length) {
-    await sendTelegram(chatId, 'У вас пока нет заказов в работе.');
-    return;
-  }
-
-  for (const order of orders) {
-    const text = formatOrderSummary(order, profile.name || profile.full_name);
-    let reply_markup;
-
-    if (order.department === 'print') {
-      reply_markup = {
-        inline_keyboard: [[
-          { text: '🏢 В ОФИС', callback_data: `print_to_office:${order.id}` },
-          { text: '🔨 ИЗГОТОВЛЕНИЕ', callback_data: `print_to_production:${order.id}` },
-          { text: '🚚 НА МОНТАЖ', callback_data: `print_to_installation:${order.id}` },
-        ]],
-      };
-    } else if (['installation', 'production'].includes(order.department)) {
-      reply_markup = {
-        inline_keyboard: [[
-          { text: '✅ ЗАВЕРШИТЬ ЗАКАЗ', callback_data: `complete_with_photo_${order.id}` },
-          { text: '🚫 ЗАВЕРШИТЬ БЕЗ ФОТО', callback_data: `finish_without_photo:${order.id}` },
-        ]],
-      };
-    }
-
-    await sendTelegram(chatId, text, { reply_markup });
-  }
+  await sendMainMenu(chatId, Boolean(profile.can_print));
 }
 
 async function handleActiveOrders(chatId: number | string) {
   const { data: orders, error } = await supabase
     .from('orders')
-    .select('*')
+    .select('id, title, department, status, image_urls')
     .neq('status', 'completed')
     .order('deadline', { ascending: true });
 
   if (error) {
-    console.error('Active orders query failed:', error.message);
-    await sendTelegram(chatId, 'Ошибка при получении активных заказов.');
+    console.error('handleActiveOrders error:', error.message);
+    await sendTelegramMessage(chatId, 'Не удалось получить активные заказы. Попробуйте позже.');
     return;
   }
 
-  if (!orders?.length) {
-    await sendTelegram(chatId, 'Активных заказов нет.');
+  if (!orders || !orders.length) {
+    await sendTelegramMessage(chatId, 'Активных заказов нет.');
     return;
   }
 
-  const assignedNames = await getAssignedNames(orders);
-  const text = orders.map(order => [
-    `${escapeHtml(order.title)}`,
-    `${order.department === 'installation' ? '🛠 Монтаж' : order.department === 'production' ? '🏭 Изготовление' : '🖨 Печать'} (${escapeHtml(order.status)})`,
-    `В работе: ${escapeHtml(assignedNames[order.assigned_to] || 'Общий')}`,
-    `Дедлайн: ${order.deadline ? escapeHtml(new Date(order.deadline).toLocaleDateString('ru-RU')) : 'Не указан'}`,
-  ].join('\n')).join('\n\n');
-
-  await sendTelegram(chatId, `<b>📋 Активные заказы</b>
-
-${text}`);
+  for (const order of orders) {
+    const text = [`<b>📋 Активный заказ</b>`, buildOrderPreview(order)].join('\n');
+    const photoUrl = Array.isArray(order.image_urls) && order.image_urls.length > 0 ? order.image_urls[0] : null;
+    await sendTelegramMessageOrPhoto(chatId, text, undefined, photoUrl);
+  }
 }
 
 async function handleFreeOrders(chatId: number | string) {
   const { data: orders, error } = await supabase
     .from('orders')
-    .select('*')
+    .select('id, title, deadline, department, image_urls')
     .is('assigned_to', null)
     .neq('status', 'completed')
     .order('deadline', { ascending: true });
 
   if (error) {
-    console.error('Free orders query failed:', error.message);
-    await sendTelegram(chatId, 'Ошибка при получении свободных заказов.');
+    console.error('handleFreeOrders error:', error.message);
+    await sendTelegramMessage(chatId, 'Не удалось получить свободные заказы. Попробуйте позже.');
     return;
   }
 
-  if (!orders?.length) {
-    await sendTelegram(chatId, 'Свободных заказов пока нет.');
+  if (!orders || !orders.length) {
+    await sendTelegramMessage(chatId, 'Свободных заказов пока нет.');
     return;
   }
 
   for (const order of orders) {
-    const text = [
-      `${escapeHtml(order.title)}`,
-      `${order.department === 'installation' ? '🛠 Монтаж' : order.department === 'production' ? '🏭 Изготовление' : '🖨 Печать'}`,
-      `Дедлайн: ${order.deadline ? escapeHtml(new Date(order.deadline).toLocaleDateString('ru-RU')) : 'Не указан'}`,
-    ].join('\n');
+    const itemText = [`<b>🔓 Свободный заказ</b>`, buildOrderPreview(order)].join('\n');
+    const replyMarkup = {
+      inline_keyboard: [[{ text: 'Забрать заказ', callback_data: `take_${order.id}` }]],
+    };
+    const photoUrl = Array.isArray(order.image_urls) && order.image_urls.length > 0 ? order.image_urls[0] : null;
 
-    await sendTelegram(chatId, `<b>🔓 Свободный заказ</b>
+    await sendTelegramMessageOrPhoto(chatId, itemText, replyMarkup, photoUrl);
+  }
+}
 
-${text}`, {
-      reply_markup: {
-        inline_keyboard: [[{ text: 'Забрать заказ', callback_data: `take_${order.id}` }]],
-      },
-    });
+async function handleMyOrders(chatId: number | string, profile: any) {
+  const { data: orders, error } = await supabase
+    .from('orders')
+    .select('id, title, department, status, image_urls')
+    .eq('assigned_to', profile.id)
+    .neq('status', 'completed')
+    .order('deadline', { ascending: true });
+
+  if (error) {
+    console.error('handleMyOrders error:', error.message);
+    await sendTelegramMessage(chatId, 'Не удалось получить ваши заказы. Попробуйте позже.');
+    return;
+  }
+
+  if (!orders || !orders.length) {
+    await sendTelegramMessage(chatId, 'У вас пока нет заказов в работе.');
+    return;
+  }
+
+  for (const order of orders) {
+    const text = [`<b>💼 Мой заказ</b>`, buildOrderPreview(order)].join('\n');
+    const photoUrl = Array.isArray(order.image_urls) && order.image_urls.length > 0 ? order.image_urls[0] : null;
+    const replyMarkup = buildOrderButtons(order);
+
+    await sendTelegramMessageOrPhoto(chatId, text, replyMarkup, photoUrl);
   }
 }
 
@@ -295,198 +269,191 @@ async function handleRating(chatId: number | string) {
     .eq('status', 'completed');
 
   if (error) {
-    console.error('Rating query failed:', error.message);
-    await sendTelegram(chatId, 'Ошибка при подсчете рейтинга.');
+    console.error('handleRating error:', error.message);
+    await sendTelegramMessage(chatId, 'Не удалось получить рейтинг. Попробуйте позже.');
     return;
   }
 
-  const counts = (data || []).reduce((acc: Record<string, number>, order: any) => {
+  const counts = (data || []).reduce<Record<string, number>>((acc, order) => {
     if (!order.assigned_to) return acc;
     acc[order.assigned_to] = (acc[order.assigned_to] || 0) + 1;
     return acc;
   }, {});
 
-  const sorted = Object.entries(counts)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 10);
+  const sorted = Object.entries(counts).sort(([, a], [, b]) => b - a).slice(0, 10);
 
   if (!sorted.length) {
-    await sendTelegram(chatId, 'Рейтинг пока пуст. Ни один заказ ещё не завершен.');
+    await sendTelegramMessage(chatId, 'Рейтинг пока пуст. Никто ещё не завершил заказ.');
     return;
   }
 
   const ids = sorted.map(([id]) => id);
   const { data: profiles } = await supabase.from('profiles').select('id, name, full_name').in('id', ids);
-  const byId = (profiles || []).reduce((acc: Record<string, string>, profile: any) => {
+  const namesById = (profiles || []).reduce<Record<string, string>>((acc, profile) => {
     acc[profile.id] = profile.name || profile.full_name || 'Сотрудник';
     return acc;
   }, {});
 
-  const text = sorted.map(([id, count], index) => `${index + 1}. ${escapeHtml(byId[id] || 'Сотрудник')} — ${count}`).join('\n');
-  await sendTelegram(chatId, `<b>📊 Рейтинг сотрудников</b>
-
-${text}`);
+  const lines = sorted.map(([id, count], index) => `${index + 1}. ${escapeHtml(namesById[id] || 'Сотрудник')} — ${count}`);
+  await sendTelegramMessage(chatId, `<b>📊 Рейтинг</b>\n${lines.join('\n')}`);
 }
 
 async function handleProfile(chatId: number | string, profile: any) {
-  const { data: activeOrders, error } = await supabase
-    .from('orders')
-    .select('id, deadline')
-    .eq('assigned_to', profile.id)
-    .neq('status', 'completed')
-    .order('deadline', { ascending: true });
+  const [{ data: activeOrders, error }, { data: completedOrders, error: completedError }] = await Promise.all([
+    supabase.from('orders').select('id, deadline').eq('assigned_to', profile.id).neq('status', 'completed'),
+    supabase.from('orders').select('id').eq('assigned_to', profile.id).eq('status', 'completed'),
+  ]);
 
   if (error) {
-    console.error('Profile query failed:', error.message);
-    await sendTelegram(chatId, 'Ошибка при получении профиля.');
+    console.error('handleProfile activeOrders error:', error.message);
+    await sendTelegramMessage(chatId, 'Не удалось загрузить профиль. Попробуйте позже.');
     return;
   }
-
-  const { data: completedOrders, error: completedError } = await supabase
-    .from('orders')
-    .select('id')
-    .eq('assigned_to', profile.id)
-    .eq('status', 'completed');
 
   if (completedError) {
-    console.error('Completed count error:', completedError.message);
-    await sendTelegram(chatId, 'Ошибка при подсчете завершенных заказов.');
+    console.error('handleProfile completedOrders error:', completedError.message);
+    await sendTelegramMessage(chatId, 'Не удалось загрузить профиль. Попробуйте позже.');
     return;
   }
 
-  const nearestDeadlines = (activeOrders || [])
-    .filter((order: any) => order.deadline)
-    .map((order: any) => new Date(order.deadline))
-    .filter(date => !isNaN(date.getTime()))
+  const deadlines = (activeOrders || [])
+    .map((order: any) => order.deadline)
+    .filter(Boolean)
+    .map((value: string) => new Date(value))
+    .filter((date: Date) => !Number.isNaN(date.getTime()))
     .sort((a, b) => a.getTime() - b.getTime())
     .slice(0, 3)
-    .map(date => date.toLocaleDateString('ru-RU'));
+    .map((date: Date) => escapeHtml(date.toLocaleDateString('ru-RU')));
 
-  const deadlineText = nearestDeadlines.length
-    ? nearestDeadlines.join('\n')
-    : 'Нет ближайших дедлайнов.';
+  const deadlineText = deadlines.length ? deadlines.join('\n') : 'Нет ближайших дедлайнов.';
 
-  await sendTelegram(chatId, `<b>👤 Мой профиль</b>
-
-В работе сейчас: ${activeOrders?.length || 0}
-Всего изготовлено: ${completedOrders?.length || 0}
-
-<b>Ближайшие дедлайны</b>:
-${escapeHtml(deadlineText)}`);
+  await sendTelegramMessage(chatId, `<b>👤 Мой профиль</b>\nВ работе: ${activeOrders?.length || 0}\nЗавершено: ${completedOrders?.length || 0}\n\n<b>Ближайшие дедлайны</b>:\n${deadlineText}`);
 }
 
 async function handlePrintQueue(chatId: number | string) {
   const { data: orders, error } = await supabase
     .from('orders')
-    .select('*')
+    .select('id, title, deadline, image_urls')
     .eq('department', 'print')
     .is('assigned_to', null)
     .neq('status', 'completed')
     .order('deadline', { ascending: true });
 
   if (error) {
-    console.error('Print queue query failed:', error.message);
-    await sendTelegram(chatId, 'Ошибка при получении очереди на печать.');
+    console.error('handlePrintQueue error:', error.message);
+    await sendTelegramMessage(chatId, 'Не удалось получить очередь на печать. Попробуйте позже.');
     return;
   }
 
-  if (!orders?.length) {
-    await sendTelegram(chatId, 'Очередь на печать сейчас пуста.');
+  if (!orders || !orders.length) {
+    await sendTelegramMessage(chatId, 'Очередь на печать пуста.');
     return;
   }
 
   for (const order of orders) {
-    const text = `
-${escapeHtml(order.title)}
-Дедлайн: ${order.deadline ? escapeHtml(new Date(order.deadline).toLocaleDateString('ru-RU')) : 'Не указан'}
-`.trim();
-    await sendTelegram(chatId, text, {
-      reply_markup: {
-        inline_keyboard: [[{ text: 'Взять в работу', callback_data: `take_print:${order.id}` }]],
-      },
-    });
+    const text = [`<b>🖨 Очередь на печать</b>`, buildOrderPreview(order)].join('\n');
+    const replyMarkup = { inline_keyboard: [[{ text: 'Взять в работу', callback_data: `take_${order.id}` }]] };
+    const photoUrl = Array.isArray(order.image_urls) && order.image_urls.length > 0 ? order.image_urls[0] : null;
+    await sendTelegramMessageOrPhoto(chatId, text, replyMarkup, photoUrl);
   }
 }
 
-async function handleCallbackQuery(callback: any) {
-  const chatId = callback.from?.id || callback.message?.chat?.id;
-  const profile = await findProfileByTelegramId(String(callback.from?.id || ''));
-  const data = callback.data || '';
+function parseCallbackData(data: string) {
+  const normalized = data.replace(/:/g, '_');
+  const knownActions = [
+    'complete_without_photo',
+    'complete_with_photo',
+    'finish_without_photo',
+    'print_to_office',
+    'print_to_production',
+    'print_to_installation',
+    'take_print',
+    'take',
+    'office',
+    'print',
+    'install',
+    'complete',
+  ];
 
-  if (!chatId || !profile) {
-    await answerCallbackQuery(callback.id, 'Профиль не найден. Обратитесь к администратору.');
-    return NextResponse.json({ ok: false, error: 'profile not found' }, { status: 404 });
+  for (const action of knownActions) {
+    if (normalized.startsWith(`${action}_`)) {
+      return { action, id: normalized.slice(action.length + 1) };
+    }
   }
 
-  let answerText = 'Действие не распознано.';
+  const [action, ...rest] = normalized.split('_');
+  return { action, id: rest.join('_') };
+}
 
-  if (data.startsWith('take_')) {
-    const freeOrderId = data.slice(5);
-    answerText = await takeFreeOrder(freeOrderId, profile, callback);
-    await answerCallbackQuery(callback.id, answerText);
-    return NextResponse.json({ ok: true });
+async function handleCallbackQuery(callbackQuery: any) {
+  const callbackData = String(callbackQuery.data || '');
+  const callbackId = String(callbackQuery.id || '');
+  const telegramId = String(callbackQuery.from?.id || '');
+  const profile = await findProfileByTelegramId(telegramId);
+
+  if (!profile) {
+    await answerCallbackQuery(callbackId, 'Профиль не найден. Обратитесь к администратору.');
+    return;
   }
 
-  if (data.startsWith('complete_with_photo_') || data.startsWith('complete_with_photo:')) {
-    const orderId = data.includes(':')
-      ? data.split(':')[1]
-      : data.slice('complete_with_photo_'.length);
-    answerText = await requestPhotoReport(orderId, profile);
-    await answerCallbackQuery(callback.id, answerText);
-    return NextResponse.json({ ok: true });
+  const { action, id: orderId } = parseCallbackData(callbackData);
+
+  if (!orderId) {
+    await answerCallbackQuery(callbackId, 'Неверная команда.');
+    return;
   }
 
-  const [action, orderId] = data.split(':');
+  let resultMessage = 'Команда выполнена.';
 
   switch (action) {
+    case 'take':
     case 'take_print':
-      answerText = await takePrintOrder(orderId, profile);
+      resultMessage = await handleTakeOrder(orderId, profile, callbackQuery);
       break;
+    case 'office':
     case 'print_to_office':
-      answerText = await movePrintOrder(orderId, profile, 'office');
+      resultMessage = await handleMoveToOffice(orderId, profile);
       break;
+    case 'print':
     case 'print_to_production':
-      answerText = await movePrintOrder(orderId, profile, 'production');
+      resultMessage = await handleMoveToPrint(orderId, profile);
       break;
+    case 'install':
     case 'print_to_installation':
-      answerText = await movePrintOrder(orderId, profile, 'installation');
+      resultMessage = await handleMoveToInstallation(orderId, profile);
       break;
-    case 'finish_with_photo':
-      answerText = await requestPhotoReport(orderId, profile);
+    case 'complete':
+      resultMessage = await handleCompleteOrder(orderId, profile);
       break;
+    case 'complete_without_photo':
     case 'finish_without_photo':
-      answerText = await completeOrderWithoutPhoto(orderId, profile);
+      resultMessage = await handleCompleteOrder(orderId, profile, true);
+      break;
+    case 'complete_with_photo':
+      resultMessage = await handleRequestPhotoOrder(orderId, profile);
       break;
     default:
-      break;
+      await answerCallbackQuery(callbackId, 'Команда не распознана.');
+      return;
   }
 
-  await answerCallbackQuery(callback.id, answerText);
-  return NextResponse.json({ ok: true });
+  await answerCallbackQuery(callbackId, resultMessage);
 }
 
-async function takePrintOrder(orderId: string, profile: any) {
-  if (profile.can_print !== true) {
-    return 'Только печатник может брать заказы из этой очереди.';
-  }
-
-  const { data: order, error } = await supabase
-    .from('orders')
-    .select('*')
-    .eq('id', orderId)
-    .single();
+async function handleTakeOrder(orderId: string, profile: any, callbackQuery: any) {
+  const { data: order, error } = await supabase.from('orders').select('*').eq('id', orderId).single();
 
   if (error || !order) {
-    console.error('Print order lookup failed:', error?.message);
+    console.error('handleTakeOrder lookup error:', error?.message);
     return 'Заказ не найден.';
   }
 
-  if (order.assigned_to) {
-    return 'Этот заказ уже в работе.';
+  if (order.status === 'completed') {
+    return 'Этот заказ уже завершен.';
   }
 
-  if (order.department !== 'print') {
-    return 'Этот заказ уже не в очереди на печать.';
+  if (order.assigned_to) {
+    return 'Этот заказ уже взят в работу.';
   }
 
   const { error: updateError } = await supabase
@@ -495,173 +462,31 @@ async function takePrintOrder(orderId: string, profile: any) {
     .eq('id', orderId);
 
   if (updateError) {
-    console.error('Assign print order failed:', updateError.message);
-    return 'Не удалось взять заказ в работу. Попробуйте позже.';
+    console.error('handleTakeOrder update error:', updateError.message);
+    return 'Не удалось взять заказ. Попробуйте позже.';
   }
 
-  await notifyGroup(`🖨 <b>Заказ ${escapeHtml(order.title)}</b> взят в работу печатником ${escapeHtml(profile.name || profile.full_name || 'Сотрудник')}.`);
-  return 'Вы взяли заказ в работу. Он появился в «Мои заказы».' ;
+  await notifyGroup(`🟡 Заказ <b>${escapeHtml(order.title)}</b> взят в работу исполнителем ${escapeHtml(profile.name || profile.full_name || 'Сотрудник')}.`);
+
+  if (callbackQuery?.message?.chat?.id && callbackQuery?.message?.message_id) {
+    const text = `<b>✅ Заказ принят</b>\n${buildOrderPreview(order)}`;
+    const replyMarkup = buildOrderButtons(order);
+    await sendTelegramMessage(String(callbackQuery.message.chat.id), text, { reply_markup: replyMarkup });
+  }
+
+  return 'Вы успешно взяли заказ в работу.';
 }
 
-async function takeFreeOrder(orderId: string, profile: any, callback: any) {
-  const { data: order, error } = await supabase
-    .from('orders')
-    .select('*')
-    .eq('id', orderId)
-    .single();
-
-  if (error || !order) {
-    console.error('Free order lookup failed:', error?.message);
-    return 'Заказ не найден.';
-  }
-
-  if (order.assigned_to) {
-    return 'Этот заказ уже взят.';
-  }
-
-  if (order.status === 'completed') {
-    return 'Этот заказ уже завершен.';
-  }
-
-  const chatId = callback.from?.id;
-  const { data: profileResult, error: profileError } = await supabase
-    .from('profiles')
-    .select('id')
-    .eq('telegram_chat_id', chatId)
-    .single();
-
-  if (profileError || !profileResult) {
-    console.error('Ошибка поиска профиля:', profileError);
-    return 'Не удалось определить ваш профиль. Обратитесь к администратору.';
-  }
-
-  const { error: updateError } = await supabase
-    .from('orders')
-    .update({ status: 'in_progress', assigned_to: profileResult.id })
-    .eq('id', orderId);
-
-  if (updateError) {
-    console.error('Ошибка обновления заказа:', updateError);
-    return 'Не удалось взять заказ в работу. Попробуйте позже.';
-  }
-
-  await notifyGroup(`🟡 <b>Заказ ${escapeHtml(order.title)}</b> взят в работу исполнителем ${escapeHtml(assignedProfile.name || assignedProfile.full_name || 'Сотрудник')}.`);
-
-  const messageText = [
-    `✅ Вы взяли заказ в работу!`,
-    `${escapeHtml(order.title)}`,
-    `${order.department === 'installation' ? '🛠 Монтаж' : order.department === 'production' ? '🏭 Изготовление' : '🖨 Печать'}`,
-    `Дедлайн: ${order.deadline ? escapeHtml(new Date(order.deadline).toLocaleDateString('ru-RU')) : 'Не указан'}`,
-  ].join('\n');
-
-  const replyMarkup = order.department === 'print'
-    ? { inline_keyboard: [[
-        { text: '🏢 В ОФИС', callback_data: `print_to_office:${order.id}` },
-        { text: '🔨 ИЗГОТОВЛЕНИЕ', callback_data: `print_to_production:${order.id}` },
-        { text: '🚚 НА МОНТАЖ', callback_data: `print_to_installation:${order.id}` },
-      ]] }
-    : { inline_keyboard: [[
-        { text: '✅ ЗАВЕРШИТЬ ЗАКАЗ', callback_data: `complete_with_photo_${order.id}` },
-        { text: '🚫 ЗАВЕРШИТЬ БЕЗ ФОТО', callback_data: `finish_without_photo:${order.id}` },
-      ]] };
-
-  if (callback?.message?.message_id) {
-    await editTelegramMessage(callback.message.chat.id, callback.message.message_id, messageText, replyMarkup);
-  }
-
-  return 'Заказ взят в работу. Он появился в «Мои заказы».';
-}
-
-async function movePrintOrder(orderId: string, profile: any, target: 'office' | 'production' | 'installation') {
+async function handleMoveToOffice(orderId: string, profile: any) {
   const { data: order, error } = await supabase.from('orders').select('*').eq('id', orderId).single();
+
   if (error || !order) {
-    console.error('Move print order lookup failed:', error?.message);
+    console.error('handleMoveToOffice lookup error:', error?.message);
     return 'Заказ не найден.';
   }
 
   if (order.assigned_to !== profile.id) {
-    return 'Этот заказ не закреплен за вами.';
-  }
-
-  if (order.department !== 'print') {
-    return 'Этот заказ уже не находится в отделе печати.';
-  }
-
-  if (target === 'office') {
-    const { error: updateError } = await supabase
-      .from('orders')
-      .update({ status: 'completed' })
-      .eq('id', orderId);
-
-    if (updateError) {
-      console.error('Complete print order failed:', updateError.message);
-      return 'Не удалось завершить заказ. Попробуйте позже.';
-    }
-
-    await notifyGroup(`🏢 <b>Печать по заказу №${escapeHtml(order.id)}</b> готова, передан в офис.`);
-    return 'Заказ завершен и отправлен в офис.';
-  }
-
-  const newDepartment = target === 'production' ? 'production' : 'installation';
-  const text = target === 'production'
-    ? `🔨 Заказ №${escapeHtml(order.id)} передан в цех на изготовление.`
-    : `🚚 Заказ №${escapeHtml(order.id)} передан в монтаж.`;
-
-  const { error: updateError } = await supabase
-    .from('orders')
-    .update({ department: newDepartment, assigned_to: null, status: 'new' })
-    .eq('id', orderId);
-
-  if (updateError) {
-    console.error('Forward print order failed:', updateError.message);
-    return 'Не удалось передать заказ. Попробуйте позже.';
-  }
-
-  await notifyGroup(text);
-  return 'Заказ передан дальше и теперь доступен для следующего отдела.';
-}
-
-async function requestPhotoReport(orderId: string, profile: any) {
-  const { data: order, error } = await supabase.from('orders').select('*').eq('id', orderId).single();
-  if (error || !order) {
-    console.error('Request photo report lookup failed:', error?.message);
-    return 'Заказ не найден.';
-  }
-
-  if (order.assigned_to !== profile.id) {
-    return 'Этот заказ не закреплен за вами.';
-  }
-
-  if (!['installation', 'production'].includes(order.department)) {
-    return 'Фотографический отчет возможен только для монтажных или производственных заказов.';
-  }
-
-  const { error: updateError } = await supabase
-    .from('orders')
-    .update({ status: 'awaiting_photos' })
-    .eq('id', orderId);
-
-  if (updateError) {
-    console.error('Request photo report failed:', updateError.message);
-    return 'Не удалось войти в режим фотоотчета. Попробуйте позже.';
-  }
-
-  return 'Отправьте, пожалуйста, пакет фотографий в ответ на это сообщение. Когда загрузка завершится, заказ будет отмечен как завершенный.';
-}
-
-async function completeOrderWithoutPhoto(orderId: string, profile: any) {
-  const { data: order, error } = await supabase.from('orders').select('*').eq('id', orderId).single();
-  if (error || !order) {
-    console.error('Complete without photo lookup failed:', error?.message);
-    return 'Заказ не найден.';
-  }
-
-  if (order.assigned_to !== profile.id) {
-    return 'Этот заказ не закреплен за вами.';
-  }
-
-  if (!['installation', 'production'].includes(order.department)) {
-    return 'Эта команда доступна только для монтажников и сборщиков.';
+    return 'Этот заказ закреплен не за вами.';
   }
 
   const { error: updateError } = await supabase
@@ -670,95 +495,125 @@ async function completeOrderWithoutPhoto(orderId: string, profile: any) {
     .eq('id', orderId);
 
   if (updateError) {
-    console.error('Complete without photo update failed:', updateError.message);
-    return 'Не удалось завершить заказ. Попробуйте позже.';
+    console.error('handleMoveToOffice update error:', updateError.message);
+    return 'Не удалось отметить заказ как переданный в офис.';
   }
 
-  await notifyGroup(`✅ <b>Заказ ${escapeHtml(order.title)}</b> завершен без фото.`);
-  return 'Заказ завершен без фото.';
+  await notifyGroup(`🏢 Заказ <b>${escapeHtml(order.title)}</b> передан в офис.`);
+  return 'Заказ передан в офис.';
 }
 
-async function handlePhotoMessage(message: any, profile: any, chatId: number | string) {
-  const { data: order, error } = await supabase
-    .from('orders')
-    .select('*')
-    .eq('assigned_to', profile.id)
-    .eq('status', 'awaiting_photos')
-    .order('updated_at', { ascending: false })
-    .limit(1)
-    .single();
+async function handleMoveToPrint(orderId: string, profile: any) {
+  const { data: order, error } = await supabase.from('orders').select('*').eq('id', orderId).single();
+
   if (error || !order) {
-    await sendTelegram(chatId, 'Нет заказа, ожидающего фотоотчет. Нажмите «Мои заказы» и выберите правильный заказ.');
-    return;
+    console.error('handleMoveToPrint lookup error:', error?.message);
+    return 'Заказ не найден.';
   }
 
-  const photoSizes = message.photo || [];
-  if (!photoSizes.length) {
-    await sendTelegram(chatId, 'Отправьте фотографию, пожалуйста.');
-    return;
+  if (order.assigned_to !== profile.id) {
+    return 'Этот заказ закреплен не за вами.';
   }
-
-  const largestPhoto = photoSizes[photoSizes.length - 1];
-  const fileId = largestPhoto.file_id;
-  const filePathResponse = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/getFile?file_id=${fileId}`);
-  const filePathData = await filePathResponse.json();
-  const filePath = filePathData?.result?.file_path;
-
-  if (!filePath) {
-    await sendTelegram(chatId, 'Не удалось получить файл из Telegram. Повторите попытку.');
-    return;
-  }
-
-  const fileResponse = await fetch(`https://api.telegram.org/file/bot${TELEGRAM_TOKEN}/${filePath}`);
-  const buffer = await fileResponse.arrayBuffer();
-  const fileName = `order-${order.id}/${Date.now()}-${fileId}.jpg`;
-  const { error: uploadError } = await supabase.storage
-    .from(COMPLETION_BUCKET)
-    .upload(fileName, new Uint8Array(buffer), { contentType: 'image/jpeg', upsert: false });
-
-  if (uploadError) {
-    console.error('Photo upload failed:', uploadError.message);
-    await sendTelegram(chatId, 'Не удалось загрузить фотографию. Повторите попытку.');
-    return;
-  }
-
-  const { data: publicUrlData } = supabase.storage.from(COMPLETION_BUCKET).getPublicUrl(fileName);
-  const publicUrl = publicUrlData?.publicUrl;
-  if (!publicUrl) {
-    await sendTelegram(chatId, 'Не удалось получить ссылку на фото. Повторите попытку.');
-    return;
-  }
-
-  const existingImages = Array.isArray(order.image_urls) ? order.image_urls : [];
-  const finalUrls = [...existingImages, publicUrl];
 
   const { error: updateError } = await supabase
     .from('orders')
-    .update({ image_urls: finalUrls, status: 'completed' })
-    .eq('id', order.id);
+    .update({ department: 'print', status: 'in_progress' })
+    .eq('id', orderId);
 
   if (updateError) {
-    console.error('Order completion update failed:', updateError.message);
-    await sendTelegram(chatId, 'Не удалось сохранить фотоотчет. Повторите попытку.');
-    return;
+    console.error('handleMoveToPrint update error:', updateError.message);
+    return 'Не удалось перевести заказ в печать.';
   }
 
-  await notifyGroupPhoto(publicUrl, `✅ <b>Заказ ${escapeHtml(order.title)}</b> завершен.\n\nФотоотчет:`);
-  await sendTelegram(chatId, 'Фотография принята, заказ завершен. Спасибо!');
+  await notifyGroup(`🖨 Заказ <b>${escapeHtml(order.title)}</b> переведен на печать.`);
+  return 'Заказ переведен на печать.';
 }
 
-async function notifyGroupPhoto(photoUrl: string, caption: string) {
-  if (!GROUP_CHAT_ID) {
-    console.error('Group chat ID missing');
-    return null;
+async function handleMoveToInstallation(orderId: string, profile: any) {
+  const { data: order, error } = await supabase.from('orders').select('*').eq('id', orderId).single();
+
+  if (error || !order) {
+    console.error('handleMoveToInstallation lookup error:', error?.message);
+    return 'Заказ не найден.';
   }
 
-  return sendTelegramPhoto(GROUP_CHAT_ID, photoUrl, caption);
+  if (order.assigned_to !== profile.id) {
+    return 'Этот заказ закреплен не за вами.';
+  }
+
+  const { error: updateError } = await supabase
+    .from('orders')
+    .update({ department: 'installation', status: 'in_progress' })
+    .eq('id', orderId);
+
+  if (updateError) {
+    console.error('handleMoveToInstallation update error:', updateError.message);
+    return 'Не удалось перевести заказ на монтаж.';
+  }
+
+  await notifyGroup(`🛠 Заказ <b>${escapeHtml(order.title)}</b> переведен на монтаж.`);
+  return 'Заказ переведен на монтаж.';
+}
+
+async function handleRequestPhotoOrder(orderId: string, profile: any) {
+  const { data: order, error } = await supabase.from('orders').select('*').eq('id', orderId).single();
+
+  if (error || !order) {
+    console.error('handleRequestPhotoOrder lookup error:', error?.message);
+    return 'Заказ не найден.';
+  }
+
+  if (order.assigned_to !== profile.id) {
+    return 'Этот заказ закреплен не за вами.';
+  }
+
+  if (!['installation', 'production'].includes(order.department)) {
+    return 'Запрос фотоотчета возможен только для монтажных или производственных заказов.';
+  }
+
+  const { error: updateError } = await supabase
+    .from('orders')
+    .update({ status: 'awaiting_photos' })
+    .eq('id', orderId);
+
+  if (updateError) {
+    console.error('handleRequestPhotoOrder update error:', updateError.message);
+    return 'Не удалось перейти в режим фотоотчета.';
+  }
+
+  return 'Пожалуйста, пришлите фотографию для завершения заказа.';
+}
+
+async function handleCompleteOrder(orderId: string, profile: any, withoutPhoto = false) {
+  const { data: order, error } = await supabase.from('orders').select('*').eq('id', orderId).single();
+
+  if (error || !order) {
+    console.error('handleCompleteOrder lookup error:', error?.message);
+    return 'Заказ не найден.';
+  }
+
+  if (order.assigned_to !== profile.id) {
+    return 'Этот заказ закреплен не за вами.';
+  }
+
+  const { error: updateError } = await supabase
+    .from('orders')
+    .update({ status: 'completed' })
+    .eq('id', orderId);
+
+  if (updateError) {
+    console.error('handleCompleteOrder update error:', updateError.message);
+    return 'Не удалось завершить заказ.';
+  }
+
+  const suffix = withoutPhoto ? 'без фото' : '';
+  await notifyGroup(`✅ Заказ <b>${escapeHtml(order.title)}</b> завершен${suffix ? ` ${suffix}` : ''}.`);
+  return withoutPhoto ? 'Заказ завершен без фото.' : 'Заказ отмечен как завершенный.';
 }
 
 export async function POST(request: Request) {
-  if (!TELEGRAM_TOKEN || !GROUP_CHAT_ID || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return NextResponse.json({ ok: false, error: 'Chatbot configuration missing' }, { status: 500 });
+  if (!TELEGRAM_TOKEN || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json({ ok: false, error: 'Bot configuration missing' }, { status: 500 });
   }
 
   const update = await request.json().catch(() => null);
@@ -766,73 +621,75 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: 'Invalid request body' }, { status: 400 });
   }
 
-  const incomingChatType = update.message?.chat?.type || update.callback_query?.message?.chat?.type;
-  if (incomingChatType && incomingChatType !== 'private') {
-    return NextResponse.json({ ok: true });
+  if (update.message && update.message.chat?.type !== 'private') {
+    return new Response('OK', { status: 200 });
   }
 
   if (update.callback_query) {
-    return handleCallbackQuery(update.callback_query);
+    await handleCallbackQuery(update.callback_query);
+    return new Response('OK', { status: 200 });
   }
 
   if (update.message) {
-    const message = update.message;
-    const chatId = message.chat?.id;
-    const telegramId = String(message.from?.id || '');
-    const profile = await findProfileByTelegramId(telegramId);
+    const chatId = update.message.chat?.id;
+    const telegramId = String(update.message.from?.id || '');
 
     if (!chatId) {
-      return NextResponse.json({ ok: false, error: 'Chat ID missing' }, { status: 400 });
+      return NextResponse.json({ ok: false, error: 'Chat id missing' }, { status: 400 });
     }
 
-    if (!profile) {
-      await sendTelegram(chatId, 'Ваш профиль не найден в системе. Попросите администратора зарегистрировать ваш telegram_chat_id в Supabase.');
-      return NextResponse.json({ ok: false, error: 'profile not found' }, { status: 404 });
-    }
-
-    const text = message.text?.trim();
-
-    if (message.photo?.length && profile) {
-      await handlePhotoMessage(message, profile, chatId);
-      return NextResponse.json({ ok: true });
-    }
-
+    const text = typeof update.message.text === 'string' ? update.message.text.trim() : '';
 
     switch (text) {
       case '/start':
-      case 'Главное меню':
-      case 'Меню':
-        await sendMainMenu(chatId, profile.can_print ?? false);
+        await handleStartCommand(chatId, telegramId);
         break;
-      // '➕ Создать заказ' handled via Telegram Web App button (Mini App)
       case '📋 Активные заказы':
         await handleActiveOrders(chatId);
         break;
       case '🔓 Свободные заказы':
         await handleFreeOrders(chatId);
         break;
-      case '💼 Мои заказы':
+      case '💼 Мои заказы': {
+        const profile = await findProfileByTelegramId(telegramId);
+        if (!profile) {
+          await sendTelegramMessage(chatId, 'Профиль не найден. Пройдите команду /start снова после регистрации.');
+          break;
+        }
         await handleMyOrders(chatId, profile);
         break;
+      }
       case '📊 Рейтинг':
         await handleRating(chatId);
         break;
-      case '👤 Мой профиль':
+      case '👤 Мой профиль': {
+        const profile = await findProfileByTelegramId(telegramId);
+        if (!profile) {
+          await sendTelegramMessage(chatId, 'Профиль не найден. Пройдите команду /start снова после регистрации.');
+          break;
+        }
         await handleProfile(chatId, profile);
         break;
-      case '🖨 Очередь на печать':
-        if (profile.can_print === true) {
+      }
+      case '🖨 Очередь на печать': {
+        const profile = await findProfileByTelegramId(telegramId);
+        if (!profile) {
+          await sendTelegramMessage(chatId, 'Профиль не найден. Пройдите команду /start снова после регистрации.');
+          break;
+        }
+        if (profile.can_print) {
           await handlePrintQueue(chatId);
         } else {
-          await sendMainMenu(chatId, profile.can_print ?? false);
+          await sendMainMenu(chatId, false);
         }
         break;
+      }
       default:
-        await sendMainMenu(chatId, profile.can_print ?? false);
+        await sendMainMenu(chatId, Boolean((await findProfileByTelegramId(telegramId))?.can_print));
     }
 
-    return NextResponse.json({ ok: true });
+    return new Response('OK', { status: 200 });
   }
 
-  return NextResponse.json({ ok: true });
+  return new Response('OK', { status: 200 });
 }
