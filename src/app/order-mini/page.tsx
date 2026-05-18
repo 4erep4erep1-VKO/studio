@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import Script from 'next/script';
 import { supabase } from '@/lib/supabase';
 import { notifyNewOrderToGroup, notifyOrderToUser } from '@/app/actions/telegram';
 
@@ -17,43 +18,11 @@ export default function OrderMiniPage() {
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
     
-    // Резервное хранилище для профиля, если Next.js сотрет хэш ссылки
-    const [tgUserBackup, setTgUserBackup] = useState<any>(null);
+    // Сюда железно сохранится твой профиль из Телеграма
+    const [tgUser, setTgUser] = useState<any>(null);
     const submitRef = useRef<() => void>(() => {});
 
-    // МГНОВЕННЫЙ ПЕРЕХВАТ ДАННЫХ ИЗ URL ДО ОЧИСТКИ РОУТЕРОМ
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-
-        const parseTgData = (rawString: string) => {
-            const params = new URLSearchParams(rawString);
-            const tgWebAppData = params.get('tgWebAppData');
-            if (tgWebAppData) {
-                const dataParams = new URLSearchParams(tgWebAppData);
-                const userStr = dataParams.get('user');
-                if (userStr) return JSON.parse(decodeURIComponent(userStr));
-            }
-            const directUser = params.get('user');
-            if (directUser) return JSON.parse(decodeURIComponent(directUser));
-            return null;
-        };
-
-        try {
-            // Ищем данные сначала в хэше (#), затем в обычных параметрах (?)
-            let user = parseTgData(window.location.hash.substring(1));
-            if (!user) {
-                user = parseTgData(window.location.search.substring(1));
-            }
-            if (user) {
-                setTgUserBackup(user);
-                console.log('✅ Профиль ТГ успешно перехвачен вручную:', user);
-            }
-        } catch (e) {
-            console.error('Ошибка ручного извлечения данных ТГ:', e);
-        }
-    }, []);
-
-    // Загружаем профили сотрудников при открытии
+    // Загружаем профили сотрудников из базы
     useEffect(() => {
         async function loadProfiles() {
             const { data } = await supabase
@@ -65,35 +34,29 @@ export default function OrderMiniPage() {
         loadProfiles();
     }, []);
 
-    // Инициализация скрипта ТГ и вешание клика
+    // БУЛЛЕТПРУФ ПОЛЛИНГ ДЛЯ АКТИВАЦИИ TELEGRAM SDK И ЗАХВАТА ПРОФИЛЯ
     useEffect(() => {
-        const script = document.createElement('script');
-        script.src = 'https://telegram.org/js/telegram-web-app.js';
-        script.async = true;
-        document.body.appendChild(script);
-
-        const handleMainButtonClick = () => {
-            submitRef.current();
-        };
-
-        script.onload = () => {
+        const syncTelegramSDK = () => {
             const tg = window.Telegram?.WebApp;
             if (tg) {
+                // ЖЕСТКИЙ ПИНОК ДЛЯ ТЕЛЕГРАМА — БЕЗ ЭТОГО ДАННЫЕ ЮЗЕРА БЛОКИРУЮТСЯ
+                tg.ready(); 
                 tg.expand();
-                tg.MainButton.text = "СОЗДАТЬ И ОПОВЕСТИТЬ";
-                tg.MainButton.show();
-                tg.MainButton.onClick(handleMainButtonClick);
+                
+                if (tg.initDataUnsafe?.user && !tgUser) {
+                    setTgUser(tg.initDataUnsafe.user);
+                    clearInterval(interval);
+                }
             }
         };
 
-        return () => {
-            if (window.Telegram?.WebApp) {
-                window.Telegram.WebApp.MainButton.offClick(handleMainButtonClick);
-            }
-        };
-    }, []);
+        const interval = setInterval(syncTelegramSDK, 300);
+        syncTelegramSDK();
 
-    // Управляем доступностью кнопки
+        return () => clearInterval(interval);
+    }, [tgUser]);
+
+    // Управление кнопкой отправки на основе валидации
     useEffect(() => {
         const tg = window.Telegram?.WebApp;
         if (!tg) return;
@@ -107,18 +70,18 @@ export default function OrderMiniPage() {
         }
     }, [title, deadline, uploading, loading]);
 
-    // Логика отправки данных
+    // Логика сабмита формы
     useEffect(() => {
         submitRef.current = async () => {
             if (!title || !deadline || uploading || loading) return;
             
             const tg = window.Telegram?.WebApp;
-            // Берем юзера либо из SDK, либо из нашего железного бэкапа
-            const tgUser = tg?.initDataUnsafe?.user || tgUserBackup;
-            const tgUserId = tgUser?.id;
+            // Вытаскиваем юзера из стейта поллинга или напрямую из объекта
+            const activeUser = tgUser || tg?.initDataUnsafe?.user;
+            const tgUserId = activeUser?.id;
             
-            const tgFullName = tgUser 
-                ? `${tgUser.first_name}${tgUser.last_name ? ' ' + tgUser.last_name : ''}`
+            const tgFullName = activeUser 
+                ? `${activeUser.first_name}${activeUser.last_name ? ' ' + activeUser.last_name : ''}`
                 : undefined;
             
             if (tg) tg.MainButton.showProgress();
@@ -139,7 +102,7 @@ export default function OrderMiniPage() {
                 const { error } = await supabase.from('orders').insert([payload]);
                 if (error) throw error;
 
-                // ОТПРАВКА УВЕДОМЛЕНИЯ С ПРОВЕРЕННЫМ АВТОРОМ
+                // ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ С ГАРАНТИРОВАННЫМ ИМЕНЕМ ИЗ ТГ
                 try {
                     await notifyNewOrderToGroup({
                         title,
@@ -150,7 +113,7 @@ export default function OrderMiniPage() {
                         assigned_to: isGeneral ? null : assignedTo,
                         image_urls: imageUrls,
                         creator_id: tgUserId ? String(tgUserId) : undefined,
-                        creator_full_name: tgFullName,
+                        creator_full_name: tgFullName, 
                     });
                 } catch (notifyError) {
                     console.error('Ошибка уведомления в группу Telegram:', notifyError);
@@ -186,9 +149,32 @@ export default function OrderMiniPage() {
                 setLoading(false);
             }
         };
-    }, [title, description, deadline, department, assignedTo, isGeneral, imageUrls, uploading, installers, loading, tgUserBackup]);
+    }, [title, description, deadline, department, assignedTo, isGeneral, imageUrls, uploading, installers, loading, tgUser]);
 
-    // Общие стили для полей
+    const handleImageUpload = async (files: FileList | null) => {
+        if (!files || files.length === 0) return;
+        setUploading(true);
+        const tg = window.Telegram?.WebApp;
+        if (tg) tg.MainButton.showProgress();
+
+        const newUrls: string[] = [];
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
+            const filePath = `previews/${fileName}`;
+            
+            const { error } = await supabase.storage.from('order-photos').upload(filePath, file);
+            if (!error) {
+                const { data } = supabase.storage.from('order-photos').getPublicUrl(filePath);
+                newUrls.push(data.publicUrl);
+            }
+        }
+
+        setImageUrls(prev => [...prev, ...newUrls]);
+        setUploading(false);
+        if (tg) tg.MainButton.hideProgress();
+    };
+
     const inputStyle = {
         width: '100%',
         padding: '12px',
@@ -210,71 +196,79 @@ export default function OrderMiniPage() {
     };
 
     return (
-        <div style={{
-            backgroundColor: 'var(--tg-theme-bg-color, #ffffff)',
-            color: 'var(--tg-theme-text-color, #000000)',
-            minHeight: '100vh',
-            padding: '20px',
-            fontFamily: 'sans-serif',
-            paddingBottom: '80px'
-        }}>
-            <label style={labelStyle}>Объект *</label>
-            <input required value={title} onChange={e => setTitle(e.target.value)} placeholder="Название..." style={inputStyle} />
-
-            <div style={{ display: 'flex', gap: '10px' }}>
-                <div style={{ flex: 1 }}>
-                    <label style={labelStyle}>Отдел</label>
-                    <select value={department} onChange={e => setDepartment(e.target.value)} style={inputStyle}>
-                        <option value="installation">🛠 Монтаж</option>
-                        <option value="print">🖨 Печать</option>
-                        <option value="production">🏭 Изготовление</option>
-                    </select>
-                </div>
-                <div style={{ flex: 1 }}>
-                    <label style={labelStyle}>Дедлайн *</label>
-                    <input type="date" required value={deadline} onChange={e => setDeadline(e.target.value)} style={inputStyle} />
-                </div>
-            </div>
-
-            <label style={labelStyle}>Описание</label>
-            <textarea rows={3} value={description} onChange={e => setDescription(e.target.value)} placeholder="Детали задачи..." style={{ ...inputStyle, resize: 'none' }} />
+        <>
+            {/* ОФИЦИАЛЬНЫЙ НАДЁЖНЫЙ СКРИПТ TELEGRAM MINI APP */}
+            <Script 
+                src="https://telegram.org/js/telegram-web-app.js" 
+                strategy="afterInteractive"
+            />
 
             <div style={{
-                backgroundColor: 'var(--tg-theme-secondary-bg-color, #f0f0f0)',
-                padding: '12px',
-                borderRadius: '10px',
-                marginBottom: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px'
+                backgroundColor: 'var(--tg-theme-bg-color, #ffffff)',
+                color: 'var(--tg-theme-text-color, #000000)',
+                minHeight: '100vh',
+                padding: '20px',
+                fontFamily: 'sans-serif',
+                paddingBottom: '80px'
             }}>
-                <input type="checkbox" checked={isGeneral} onChange={e => setIsGeneral(e.target.checked)} style={{ width: '20px', height: '20px' }} />
-                <span style={{ fontSize: '14px', fontWeight: 'bold' }}>Общий заказ (для всех)</span>
-            </div>
+                <label style={labelStyle}>Объект *</label>
+                <input required value={title} onChange={e => setTitle(e.target.value)} placeholder="Название..." style={inputStyle} />
 
-            {!isGeneral && (
-                <div>
-                    <label style={labelStyle}>Лично исполнителю</label>
-                    <select value={assignedTo} onChange={e => setAssignedTo(e.target.value)} style={inputStyle}>
-                        <option value="">Выберите сотрудника...</option>
-                        {installers.map(i => (
-                            <option key={i.id} value={i.id}>{i.full_name}</option>
-                        ))}
-                    </select>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                    <div style={{ flex: 1 }}>
+                        <label style={labelStyle}>Отдел</label>
+                        <select value={department} onChange={e => setDepartment(e.target.value)} style={inputStyle}>
+                            <option value="installation">🛠 Монтаж</option>
+                            <option value="print">🖨 Печать</option>
+                            <option value="production">🏭 Изготовление</option>
+                        </select>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                        <label style={labelStyle}>Дедлайн *</label>
+                        <input type="date" required value={deadline} onChange={e => setDeadline(e.target.value)} style={inputStyle} />
+                    </div>
                 </div>
-            )}
 
-            <div>
-                <label style={labelStyle}>Фото / Эскиз {uploading && '(Загрузка...)'}</label>
-                <input type="file" accept="image/*" multiple onChange={e => handleImageUpload(e.target.files)} style={{ ...inputStyle, padding: '8px' }} disabled={uploading} />
-                {imageUrls.length > 0 && (
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
-                        {imageUrls.map((url, idx) => (
-                            <img key={idx} src={url} alt="Превью" style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '8px' }} />
-                        ))}
+                <label style={labelStyle}>Описание</label>
+                <textarea rows={3} value={description} onChange={e => setDescription(e.target.value)} placeholder="Детали задачи..." style={{ ...inputStyle, resize: 'none' }} />
+
+                <div style={{
+                    backgroundColor: 'var(--tg-theme-secondary-bg-color, #f0f0f0)',
+                    padding: '12px',
+                    borderRadius: '10px',
+                    marginBottom: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px'
+                }}>
+                    <input type="checkbox" checked={isGeneral} onChange={e => setIsGeneral(e.target.checked)} style={{ width: '20px', height: '20px' }} />
+                    <span style={{ fontSize: '14px', fontWeight: 'bold' }}>Общий заказ (для всех)</span>
+                </div>
+
+                {!isGeneral && (
+                    <div>
+                        <label style={labelStyle}>Лично исполнителю</label>
+                        <select value={assignedTo} onChange={e => setAssignedTo(e.target.value)} style={inputStyle}>
+                            <option value="">Выберите сотрудника...</option>
+                            {installers.map(i => (
+                                <option key={i.id} value={i.id}>{i.full_name}</option>
+                            ))}
+                        </select>
                     </div>
                 )}
+
+                <div>
+                    <label style={labelStyle}>Фото / Эскиз {uploading && '(Загрузка...)'}</label>
+                    <input type="file" accept="image/*" multiple onChange={e => handleImageUpload(e.target.files)} style={{ ...inputStyle, padding: '8px' }} disabled={uploading} />
+                    {imageUrls.length > 0 && (
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+                            {imageUrls.map((url, idx) => (
+                                <img key={idx} src={url} alt="Превью" style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '8px' }} />
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
-        </div>
+        </>
     );
 }
