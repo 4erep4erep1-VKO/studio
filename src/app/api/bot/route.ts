@@ -89,7 +89,6 @@ async function findProfileByTelegramIdentity(telegramId: string, username?: stri
   return data;
 }
 
-// ДОБАВИЛИ ПЕРЕДАЧУ TG_ID В ССЫЛКУ МИНИ АППА
 function buildMainMenuKeyboard(canPrint: boolean, chatId: string | number) {
   const keyboard = [
     [{ text: '➕ Создать заказ', web_app: { url: `${WEB_APP_URL}?tg_id=${chatId}` } }, { text: '📋 Активные заказы' }], 
@@ -111,7 +110,11 @@ function buildOrderPreview(order: any) {
 function buildOrderButtons(order: any) {
   const buttons: any[][] = [];
   if (order.department === 'print') {
-    buttons.push([{ text: '🏢 В ОФИС', callback_data: `office_${order.id}` }, { text: '🔨 ИЗГОТОВЛЕНИЕ', callback_data: `print_${order.id}` }, { text: '🚚 НА МОНТАЖ', callback_data: `install_${order.id}` }]);
+    buttons.push([
+      { text: '🏢 В ОФИС', callback_data: `office_${order.id}` }, 
+      { text: '🔨 ИЗГОТОВЛЕНИЕ', callback_data: `production_${order.id}` }, 
+      { text: '🚚 НА МОНТАЖ', callback_data: `installation_${order.id}` }
+    ]);
   } else if (order.department === 'production' || order.department === 'installation') {
     buttons.push([{ text: '✅ ЗАВЕРШИТЬ ЗАКАЗ', callback_data: `complete_${order.id}` }]);
   }
@@ -151,8 +154,16 @@ async function handleFreeOrders(chatId: number | string) {
 
 async function handleMyOrders(chatId: number | string, profile: any) {
   const { data: orders } = await supabase.from('orders').select('id, title, department, status, image_urls').eq('assigned_to', profile.id).neq('status', 'completed').order('deadline', { ascending: true });
-  if (!orders || !orders.length) return sendTelegramMessage(chatId, 'У вас пока нет заказов в работе.');
-  for (const order of orders) {
+  
+  const filteredOrders = (orders || []).filter(order => {
+    if (order.department === 'print' && order.status === 'new') {
+      return false;
+    }
+    return true;
+  });
+
+  if (!filteredOrders || !filteredOrders.length) return sendTelegramMessage(chatId, 'У вас пока нет активных заказов в работе.');
+  for (const order of filteredOrders) {
     const text = [`<b>💼 Мой заказ</b>`, buildOrderPreview(order)].join('\n');
     const photoUrl = Array.isArray(order.image_urls) && order.image_urls.length > 0 ? order.image_urls[0] : null;
     const replyMarkup = buildOrderButtons(order);
@@ -202,9 +213,9 @@ async function handleCallbackQuery(callbackQuery: any) {
 
   let msg = 'Выполнено.';
   if (action === 'take' || action === 'take_print') msg = await handleTakeOrder(orderId, profile, callbackQuery);
-  else if (action === 'office' || action === 'print_to_office') msg = await handleMoveToOffice(orderId, profile);
-  else if (action === 'print' || action === 'print_to_production') msg = await handleMoveToPrint(orderId, profile);
-  else if (action === 'install' || action === 'print_to_installation') msg = await handleMoveToInstallation(orderId, profile);
+  else if (action === 'office' || action === 'print_to_office') msg = await handleMoveToOffice(orderId, profile, callbackQuery);
+  else if (action === 'production' || action === 'print_to_production') msg = await handleMoveToProduction(orderId, profile, callbackQuery);
+  else if (action === 'installation' || action === 'print_to_installation') msg = await handleMoveToInstallation(orderId, profile, callbackQuery);
   else if (action === 'complete') msg = await handleRequestPhotoOrder(orderId, profile, callbackQuery);
   else if (action === 'complete_without_photo' || action === 'finish_without_photo') msg = await handleCompleteOrder(orderId, profile, true, callbackQuery);
 
@@ -213,7 +224,7 @@ async function handleCallbackQuery(callbackQuery: any) {
 
 async function handleTakeOrder(orderId: string, profile: any, callbackQuery: any) {
   const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
-  if (!order || order.status === 'completed' || order.assigned_to) return 'Заказ недоступен.';
+  if (!order || order.status === 'completed' || (order.assigned_to && order.status !== 'new')) return 'Заказ недоступен.';
 
   await supabase.from('orders').update({ assigned_to: profile.id, status: 'in_progress', is_general: false }).eq('id', orderId);
 
@@ -224,11 +235,11 @@ async function handleTakeOrder(orderId: string, profile: any, callbackQuery: any
     const chatId = callbackQuery.message.chat.id;
     const messageId = callbackQuery.message.message_id;
     const isPhoto = Boolean(callbackQuery.message.photo || callbackQuery.message.document);
-    const text = `<b>✅ Заказ принят</b>\n${buildOrderPreview(order)}\nИсполнитель: ${escapeHtml(employeeName)}`;
+    const text = `<b>✅ Заказ принят в работу</b>\n${buildOrderPreview(order)}\nИсполнитель: ${escapeHtml(employeeName)}`;
     
     await sendTelegram({
       method: isPhoto ? 'editMessageCaption' : 'editMessageText',
-      body: { chat_id: chatId, message_id: messageId, [isPhoto ? 'caption' : 'text']: text, parse_mode: 'HTML', reply_markup: buildOrderButtons({ ...order, department: order.department }) || { inline_keyboard: [] } },
+      body: { chat_id: chatId, message_id: messageId, [isPhoto ? 'caption' : 'text']: text, parse_mode: 'HTML', reply_markup: buildOrderButtons({ ...order, department: order.department, status: 'in_progress' }) || { inline_keyboard: [] } },
     });
   }
   return 'Вы успешно взяли заказ.';
@@ -280,33 +291,86 @@ async function handleCompleteOrder(orderId: string, profile: any, withoutPhoto =
   return 'Заказ успешно завершен.';
 }
 
-async function handleMoveToOffice(orderId: string, profile: any) {
+async function handleMoveToOffice(orderId: string, profile: any, callbackQuery: any) {
   const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
   if (!order || order.assigned_to !== profile.id) return 'Ошибка.';
   await supabase.from('orders').update({ status: 'completed' }).eq('id', orderId);
   await notifyGroup(`🏢 Заказ <b>${escapeHtml(order.title)}</b> передан в офис.`);
+
+  if (callbackQuery?.message?.chat?.id && callbackQuery?.message?.message_id) {
+    const chatId = callbackQuery.message.chat.id;
+    const messageId = callbackQuery.message.message_id;
+    const isPhoto = Boolean(callbackQuery.message.photo || callbackQuery.message.document);
+    const text = `<b>🏢 Передано в офис</b>\n${buildOrderPreview(order)}`;
+    
+    await sendTelegram({
+      method: isPhoto ? 'editMessageCaption' : 'editMessageText',
+      body: { chat_id: chatId, message_id: messageId, [isPhoto ? 'caption' : 'text']: text, parse_mode: 'HTML', reply_markup: { inline_keyboard: [] } },
+    });
+  }
   return 'Заказ передан в офис.';
 }
 
-async function handleMoveToPrint(orderId: string, profile: any) {
+async function handleMoveToProduction(orderId: string, profile: any, callbackQuery: any) {
   const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
-  if (!order || order.assigned_to !== profile.id) return 'Ошибка.';
-  await supabase.from('orders').update({ department: 'print', status: 'in_progress' }).eq('id', orderId);
-  await notifyGroup(`🖨 Заказ <b>${escapeHtml(order.title)}</b> переведен на печать.`);
-  return 'Заказ переведен на печать.';
+  if (!order || order.assigned_to !== profile.id) return 'Ошибка доступа.';
+
+  await supabase.from('orders').update({ department: 'production', status: 'new', assigned_to: null }).eq('id', orderId);
+  await notifyGroup(`🏭 Заказ <b>${escapeHtml(order.title)}</b> переведен на изготовление.`);
+
+  if (callbackQuery?.message?.chat?.id && callbackQuery?.message?.message_id) {
+    const chatId = callbackQuery.message.chat.id;
+    const messageId = callbackQuery.message.message_id;
+    const isPhoto = Boolean(callbackQuery.message.photo || callbackQuery.message.document);
+    const text = `<b>🏭 Передано в изготовление</b>\n${buildOrderPreview(order)}`;
+    
+    await sendTelegram({
+      method: isPhoto ? 'editMessageCaption' : 'editMessageText',
+      body: { chat_id: chatId, message_id: messageId, [isPhoto ? 'caption' : 'text']: text, parse_mode: 'HTML', reply_markup: { inline_keyboard: [] } },
+    });
+  }
+  return 'Заказ переведен на изготовление.';
 }
 
-async function handleMoveToInstallation(orderId: string, profile: any) {
+async function handleMoveToInstallation(orderId: string, profile: any, callbackQuery: any) {
   const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
-  if (!order || order.assigned_to !== profile.id) return 'Ошибка.';
-  await supabase.from('orders').update({ department: 'installation', status: 'in_progress' }).eq('id', orderId);
+  if (!order || order.assigned_to !== profile.id) return 'Ошибка доступа.';
+
+  await supabase.from('orders').update({ department: 'installation', status: 'new', assigned_to: null }).eq('id', orderId);
   await notifyGroup(`🛠 Заказ <b>${escapeHtml(order.title)}</b> переведен на монтаж.`);
+
+  if (callbackQuery?.message?.chat?.id && callbackQuery?.message?.message_id) {
+    const chatId = callbackQuery.message.chat.id;
+    const messageId = callbackQuery.message.message_id;
+    const isPhoto = Boolean(callbackQuery.message.photo || callbackQuery.message.document);
+    const text = `<b>🛠 Передано на монтаж</b>\n${buildOrderPreview(order)}`;
+    
+    await sendTelegram({
+      method: isPhoto ? 'editMessageCaption' : 'editMessageText',
+      body: { chat_id: chatId, message_id: messageId, [isPhoto ? 'caption' : 'text']: text, parse_mode: 'HTML', reply_markup: { inline_keyboard: [] } },
+    });
+  }
   return 'Заказ переведен на монтаж.';
+}
+
+async function handlePrintQueue(chatId: number | string, profile: any) {
+  const { data: orders, error } = await supabase.from('orders').select('id, title, deadline, image_urls, assigned_to, status').eq('department', 'print').neq('status', 'completed').order('deadline', { ascending: true });
+  if (error) return sendTelegramMessage(chatId, 'Не удалось получить очередь на печать.');
+
+  const filteredOrders = (orders || []).filter(order => !order.assigned_to || (order.assigned_to === profile.id && order.status === 'new'));
+  if (!filteredOrders.length) return sendTelegramMessage(chatId, 'Очередь на печать пуста.');
+
+  for (const order of filteredOrders) {
+    const text = [`<b>🖨 Очередь на печать</b>`, buildOrderPreview(order)].join('\n');
+    const replyMarkup = { inline_keyboard: [[{ text: 'Взять в работу', callback_data: `take_${order.id}` }]] };
+    const photoUrl = Array.isArray(order.image_urls) && order.image_urls.length > 0 ? order.image_urls[0] : null;
+    await sendTelegramMessageOrPhoto(chatId, text, replyMarkup, photoUrl);
+  }
 }
 
 function parseCallbackData(data: string) {
   const normalized = data.replace(/:/g, '_');
-  const knownActions = ['complete_without_photo', 'complete_with_photo', 'finish_without_photo', 'print_to_office', 'print_to_production', 'print_to_installation', 'take_print', 'take', 'office', 'print', 'install', 'complete'];
+  const knownActions = ['complete_without_photo', 'complete_with_photo', 'finish_without_photo', 'print_to_office', 'print_to_production', 'print_to_installation', 'take_print', 'take', 'office', 'production', 'installation', 'complete'];
   for (const action of knownActions) { if (normalized.startsWith(`${action}_`)) return { action, id: normalized.slice(action.length + 1) }; }
   const [action, ...rest] = normalized.split('_');
   return { action, id: rest.join('_') };
@@ -366,7 +430,7 @@ export async function POST(request: Request) {
         }
         case '🖨 Очередь на печать': {
           const profile = await findProfileByTelegramId(telegramId);
-          if (profile?.can_print) await handlePrintQueue(chatId);
+          if (profile?.can_print) await handlePrintQueue(chatId, profile);
           else await sendMainMenu(chatId, false);
           break;
         }
