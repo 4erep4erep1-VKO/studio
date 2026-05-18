@@ -17,7 +17,7 @@ export default function OrderMiniPage() {
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
     
-    const mainButtonCallback = useRef<(() => void) | null>(null);
+    const submitRef = useRef<() => void>(() => {});
 
     // Загружаем профили сотрудников при открытии
     useEffect(() => {
@@ -31,11 +31,16 @@ export default function OrderMiniPage() {
         loadProfiles();
     }, []);
 
+    // Инициализация скрипта ТГ и ОДНОКРАТНОЕ вешание клика
     useEffect(() => {
         const script = document.createElement('script');
         script.src = 'https://telegram.org/js/telegram-web-app.js';
         script.async = true;
         document.body.appendChild(script);
+
+        const handleMainButtonClick = () => {
+            submitRef.current();
+        };
 
         script.onload = () => {
             const tg = window.Telegram?.WebApp;
@@ -43,62 +48,38 @@ export default function OrderMiniPage() {
                 tg.expand();
                 tg.MainButton.text = "СОЗДАТЬ И ОПОВЕСТИТЬ";
                 tg.MainButton.show();
+                tg.MainButton.onClick(handleMainButtonClick);
             }
         };
 
         return () => {
-            if (window.Telegram?.WebApp && mainButtonCallback.current) {
-                window.Telegram.WebApp.MainButton.offClick(mainButtonCallback.current);
+            if (window.Telegram?.WebApp) {
+                window.Telegram.WebApp.MainButton.offClick(handleMainButtonClick);
             }
         };
     }, []);
 
-    // Обработчик загрузки картинок
-    const handleImageUpload = async (files: FileList | null) => {
-        if (!files || files.length === 0) return;
-        setUploading(true);
-        const tg = window.Telegram?.WebApp;
-        if (tg) tg.MainButton.showProgress();
-
-        const newUrls: string[] = [];
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
-            const filePath = `previews/${fileName}`;
-            
-            const { error } = await supabase.storage.from('order-photos').upload(filePath, file);
-            if (!error) {
-                const { data } = supabase.storage.from('order-photos').getPublicUrl(filePath);
-                newUrls.push(data.publicUrl);
-            }
-        }
-
-        setImageUrls(prev => [...prev, ...newUrls]);
-        setUploading(false);
-        if (tg) tg.MainButton.hideProgress();
-    };
-
-    // Логика кнопки "Отправить"
+    // Управляем доступностью кнопки в зависимости от валидации полей
     useEffect(() => {
         const tg = window.Telegram?.WebApp;
         if (!tg) return;
 
-        if (mainButtonCallback.current) {
-            tg.MainButton.offClick(mainButtonCallback.current);
-        }
-
-        // Блокируем кнопку, если нет названия, дедлайна или идет загрузка картинки
-        if (!title || !deadline || uploading) {
+        if (!title || !deadline || uploading || loading) {
             tg.MainButton.disable();
             tg.MainButton.color = tg.themeParams.hint_color || "#999999";
         } else {
             tg.MainButton.enable();
             tg.MainButton.color = tg.themeParams.button_color || "#2481cc";
         }
+    }, [title, deadline, uploading, loading]);
 
-        const submitData = async () => {
-            if (!title || !deadline || uploading) return;
-            tg.MainButton.showProgress();
+    // Актуализируем функцию отправки в рефе, чтобы не переподписывать событие клика кнопки
+    useEffect(() => {
+        submitRef.current = async () => {
+            if (!title || !deadline || uploading || loading) return;
+            
+            const tg = window.Telegram?.WebApp;
+            if (tg) tg.MainButton.showProgress();
             setLoading(true);
 
             try {
@@ -126,7 +107,6 @@ export default function OrderMiniPage() {
                         is_general: isGeneral,
                         assigned_to: isGeneral ? null : assignedTo,
                         image_urls: imageUrls,
-                        creator_id: undefined,
                     });
                 } catch (notifyError) {
                     console.error('Ошибка уведомления в группу Telegram:', notifyError);
@@ -143,24 +123,52 @@ export default function OrderMiniPage() {
                     }
                 }
 
-                tg.showPopup({
-                    title: 'Успешно',
-                    message: 'Объект добавлен в базу!',
-                    buttons: [{ type: 'ok' }]
-                }, () => tg.close());
+                // Красивое закрытие без дедлока нативного UI
+                if (tg) {
+                    tg.MainButton.hideProgress();
+                    tg.MainButton.setText("ГОТОВО!");
+                }
+
+                setTimeout(() => {
+                    if (tg) tg.close();
+                }, 500);
 
             } catch (err) {
-                tg.showAlert('Ошибка при сохранении в базу');
+                console.error(err);
+                if (tg) {
+                    tg.MainButton.hideProgress();
+                    tg.showAlert('Ошибка при сохранении в базу');
+                }
             } finally {
-                tg.MainButton.hideProgress();
                 setLoading(false);
             }
         };
+    }, [title, description, deadline, department, assignedTo, isGeneral, imageUrls, uploading, installers, loading]);
 
-        mainButtonCallback.current = submitData;
-        tg.MainButton.onClick(submitData);
+    // Обработчик загрузки картинок
+    const handleImageUpload = async (files: FileList | null) => {
+        if (!files || files.length === 0) return;
+        setUploading(true);
+        const tg = window.Telegram?.WebApp;
+        if (tg) tg.MainButton.showProgress();
 
-    }, [title, description, deadline, department, assignedTo, isGeneral, imageUrls, uploading, installers]);
+        const newUrls: string[] = [];
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
+            const filePath = `previews/${fileName}`;
+            
+            const { error } = await supabase.storage.from('order-photos').upload(filePath, file);
+            if (!error) {
+                const { data } = supabase.storage.from('order-photos').getPublicUrl(filePath);
+                newUrls.push(data.publicUrl);
+            }
+        }
+
+        setImageUrls(prev => [...prev, ...newUrls]);
+        setUploading(false);
+        if (tg) tg.MainButton.hideProgress();
+    };
 
     // Общие стили для полей (нативные из Telegram)
     const inputStyle = {
@@ -190,7 +198,7 @@ export default function OrderMiniPage() {
             minHeight: '100vh',
             padding: '20px',
             fontFamily: 'sans-serif',
-            paddingBottom: '80px' // Отступ для нижней кнопки
+            paddingBottom: '80px'
         }}>
             
             <label style={labelStyle}>Объект *</label>
@@ -255,7 +263,6 @@ export default function OrderMiniPage() {
                     disabled={uploading}
                 />
                 
-                {/* Превью загруженных картинок */}
                 {imageUrls.length > 0 && (
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
                         {imageUrls.map((url, idx) => (
