@@ -107,6 +107,7 @@ function buildOrderPreview(order: any) {
   return `<b>${escapeHtml(order.title)}</b>`;
 }
 
+// ДОБАВИЛИ КНОПКУ ОПИСАНИЯ ДЛЯ ВСЕХ ТИПОВ ЗАКАЗОВ В РАБОТЕ
 function buildOrderButtons(order: any) {
   const buttons: any[][] = [];
   if (order.department === 'print') {
@@ -118,6 +119,10 @@ function buildOrderButtons(order: any) {
   } else if (order.department === 'production' || order.department === 'installation') {
     buttons.push([{ text: '✅ ЗАВЕРШИТЬ ЗАКАЗ', callback_data: `complete_${order.id}` }]);
   }
+  
+  // Кнопка описания аккуратно встает вторым рядом под основными кнопками управления
+  buttons.push([{ text: '📄 ОПИСАНИЕ ЗАКАЗА', callback_data: `desc_${order.id}` }]);
+  
   return buttons.length ? { inline_keyboard: buttons } : undefined;
 }
 
@@ -222,7 +227,6 @@ async function handleIncomingPhoto(chatId: number | string, telegramId: string, 
 
   const { data: urlData } = supabase.storage.from('order-photos').getPublicUrl(storagePath);
   
-  // Безопасный вызов: запрашиваем базу, но если там пусто/ошибка — берем массив из уже найденного объекта order (сохраняя эскиз)
   const { data: freshData } = await supabase.from('orders').select('image_urls, description').eq('id', order.id).maybeSingle();
   
   const currentImages = freshData && Array.isArray(freshData.image_urls)
@@ -246,7 +250,7 @@ async function handleIncomingPhoto(chatId: number | string, telegramId: string, 
   const empName = profile.name || profile.full_name || 'Сотрудник';
 
   if (isAlbumAppend) {
-    await notifyGroup(`📸 Дополнительное фото к объектy <b>${escapeHtml(order.title)}</b> от ${escapeHtml(empName)}`, urlData.publicUrl);
+    await notifyGroup(`📸 Дополнительное фото к объекту <b>${escapeHtml(order.title)}</b> от ${escapeHtml(empName)}`, urlData.publicUrl);
   } else {
     await notifyGroup(`✅ Заказ <b>${escapeHtml(order.title)}</b> успешно завершен с фотоотчетом от ${escapeHtml(empName)}.`, urlData.publicUrl);
     await sendTelegramMessage(chatId, `🎉 Объект <b>${escapeHtml(order.title)}</b> успешно закрыт! Фотоотчет отправлен в группу.`);
@@ -262,6 +266,23 @@ async function handleCallbackQuery(callbackQuery: any) {
   if (!profile) return answerCallbackQuery(callbackId, 'Ошибка профиля.');
   const { action, id: orderId } = parseCallbackData(callbackData);
   if (!orderId) return answerCallbackQuery(callbackId, 'Ошибка команды.');
+
+  // ЛОГИКА ОПЕРАТИВНОГО ВЫВОДА ОПИСАНИЯ ОБЪЕКТА ТЕКСТОМ
+  if (action === 'desc') {
+    const { data: order } = await supabase.from('orders').select('title, description').eq('id', orderId).single();
+    let descText = order?.description || 'Описание отсутствует.';
+    
+    // Чистим текст от системных альбомных маркеров, чтобы они не выводились юзеру
+    descText = descText.replace(/\[album:.*?\]/g, '').trim();
+    
+    const fullMsg = `<b>📄 Описание объекта:</b> ${escapeHtml(order?.title || '')}\n\n${escapeHtml(descText || 'Деталей нет.')}`;
+    
+    if (callbackQuery.message?.chat?.id) {
+      await sendTelegramMessage(callbackQuery.message.chat.id, fullMsg);
+    }
+    await answerCallbackQuery(callbackId, 'Описание выведено!');
+    return;
+  }
 
   let msg = 'Выполнено.';
   if (action === 'take' || action === 'take_print') msg = await handleTakeOrder(orderId, profile, callbackQuery);
@@ -422,7 +443,7 @@ async function handlePrintQueue(chatId: number | string, profile: any) {
 
 function parseCallbackData(data: string) {
   const normalized = data.replace(/:/g, '_');
-  const knownActions = ['complete_without_photo', 'complete_with_photo', 'finish_without_photo', 'print_to_office', 'print_to_production', 'print_to_installation', 'take_print', 'take', 'office', 'production', 'installation', 'complete'];
+  const knownActions = ['complete_without_photo', 'complete_with_photo', 'finish_without_photo', 'print_to_office', 'print_to_production', 'print_to_installation', 'take_print', 'take', 'office', 'production', 'installation', 'complete', 'desc'];
   for (const action of knownActions) { if (normalized.startsWith(`${action}_`)) return { action, id: normalized.slice(action.length + 1) }; }
   const [action, ...rest] = normalized.split('_');
   return { action, id: rest.join('_') };
