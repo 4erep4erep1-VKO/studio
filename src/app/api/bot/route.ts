@@ -171,9 +171,7 @@ async function handleMyOrders(chatId: number | string, profile: any) {
   }
 }
 
-// ТОТАЛЬНО ЗАЩИЩЕННЫЙ ПЕРЕХВАТЧИК АЛЬБОМОВ С ТОКЕНИЗАЦИЕЙ В БАЗУ ДАННЫХ
 async function handleIncomingPhoto(chatId: number | string, telegramId: string, photoArray: any[], mediaGroupId?: string) {
-  // Микрозадержка, чтобы разнести конкурентные потоки одного альбома
   await new Promise(resolve => setTimeout(resolve, Math.random() * 300));
 
   const profile = await findProfileByTelegramId(telegramId);
@@ -182,7 +180,6 @@ async function handleIncomingPhoto(chatId: number | string, telegramId: string, 
   let order = null;
   let isAlbumAppend = false;
 
-  // 1. Если прилетел кусок альбома, проверяем, не пометил ли другой поток какой-то заказ этим ID альбома
   if (mediaGroupId) {
     const { data } = await supabase
       .from('orders')
@@ -196,7 +193,6 @@ async function handleIncomingPhoto(chatId: number | string, telegramId: string, 
     }
   }
 
-  // 2. Если это одиночное фото или самый первый поток альбома — ищем заказ, который ждет закрытия прямо сейчас
   if (!order) {
     const { data } = await supabase
       .from('orders')
@@ -210,7 +206,6 @@ async function handleIncomingPhoto(chatId: number | string, telegramId: string, 
     }
   }
 
-  // 3. Жесткий барьер: если ничего не нашли, сбрасываем операцию, чтобы не испортить чужие/старые карточки заказов
   if (!order) {
     return sendTelegramMessage(chatId, '⚠️ Не удалось связать фото с активным заказом. Убедитесь, что нажали кнопку "✅ ЗАВЕРШИТЬ ЗАКАЗ" в меню "Мои заказы".');
   }
@@ -227,9 +222,13 @@ async function handleIncomingPhoto(chatId: number | string, telegramId: string, 
 
   const { data: urlData } = supabase.storage.from('order-photos').getPublicUrl(storagePath);
   
-  // Исключаем перезапись: берем самый свежий массив фоток прямо из базы перед сохранением
-  const { data: freshOrder } = await supabase.from('orders').select('image_urls, description').eq('id', order.id).single();
-  const currentImages = freshOrder && Array.isArray(freshOrder.image_urls) ? freshOrder.image_urls : [];
+  // Безопасный вызов: запрашиваем базу, но если там пусто/ошибка — берем массив из уже найденного объекта order (сохраняя эскиз)
+  const { data: freshData } = await supabase.from('orders').select('image_urls, description').eq('id', order.id).maybeSingle();
+  
+  const currentImages = freshData && Array.isArray(freshData.image_urls)
+    ? freshData.image_urls
+    : (order && Array.isArray(order.image_urls) ? order.image_urls : []);
+    
   const updatedImages = [...currentImages, urlData.publicUrl];
 
   const updatePayload: Record<string, any> = {
@@ -237,9 +236,8 @@ async function handleIncomingPhoto(chatId: number | string, telegramId: string, 
     image_urls: updatedImages
   };
 
-  // Если это старт загрузки альбома, намертво связываем этот заказ с ID альбома через description
   if (mediaGroupId && !isAlbumAppend) {
-    const currentDesc = freshOrder?.description || order.description || '';
+    const currentDesc = freshData?.description || order.description || '';
     updatePayload.description = `${currentDesc}\n[album:${mediaGroupId}]`.trim();
   }
 
@@ -248,7 +246,7 @@ async function handleIncomingPhoto(chatId: number | string, telegramId: string, 
   const empName = profile.name || profile.full_name || 'Сотрудник';
 
   if (isAlbumAppend) {
-    await notifyGroup(`📸 Дополнительное фото к объекту <b>${escapeHtml(order.title)}</b> от ${escapeHtml(empName)}`, urlData.publicUrl);
+    await notifyGroup(`📸 Дополнительное фото к объектy <b>${escapeHtml(order.title)}</b> от ${escapeHtml(empName)}`, urlData.publicUrl);
   } else {
     await notifyGroup(`✅ Заказ <b>${escapeHtml(order.title)}</b> успешно завершен с фотоотчетом от ${escapeHtml(empName)}.`, urlData.publicUrl);
     await sendTelegramMessage(chatId, `🎉 Объект <b>${escapeHtml(order.title)}</b> успешно закрыт! Фотоотчет отправлен в группу.`);
