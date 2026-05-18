@@ -6,6 +6,10 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABAS
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const GROUP_CHAT_ID = process.env.TELEGRAM_GROUP_CHAT_ID;
 
+// Оперативный кэш в памяти инстанса для защиты от race condition при загрузке альбомов
+const albumCache = new Map<string, string>(); // media_group_id -> order_id
+const userLastCompletedCache = new Map<string, string>(); // profile_id -> order_id
+
 let rawUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL || 'https://studio-cherepok.vercel.app';
 if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
   rawUrl = `https://${rawUrl}`;
@@ -133,7 +137,7 @@ async function handleStartCommand(chatId: number | string, telegramId: string, u
 
 async function handleActiveOrders(chatId: number | string) {
   const { data: orders } = await supabase.from('orders').select('id, title, department, status, image_urls').neq('status', 'completed').order('deadline', { ascending: true });
-  if (!orders || !orders.length) return sendTelegramMessage(chatId, 'Active orders list empty.');
+  if (!orders || !orders.length) return sendTelegramMessage(chatId, 'Активных заказов нет.');
   for (const order of orders) {
     const text = [`<b>📋 Активный заказ</b>`, buildOrderPreview(order)].join('\n');
     const photoUrl = Array.isArray(order.image_urls) && order.image_urls.length > 0 ? order.image_urls[0] : null;
@@ -143,7 +147,7 @@ async function handleActiveOrders(chatId: number | string) {
 
 async function handleFreeOrders(chatId: number | string) {
   const { data: orders } = await supabase.from('orders').select('id, title, deadline, department, image_urls').is('assigned_to', null).neq('status', 'completed').order('deadline', { ascending: true });
-  if (!orders || !orders.length) return sendTelegramMessage(chatId, 'Free orders empty.');
+  if (!orders || !orders.length) return sendTelegramMessage(chatId, 'Свободных заказов пока нет.');
   for (const order of orders) {
     const itemText = [`<b>🔓 Свободный заказ</b>`, buildOrderPreview(order)].join('\n');
     const replyMarkup = { inline_keyboard: [[{ text: 'Забрать заказ', callback_data: `take_${order.id}` }]] };
@@ -162,7 +166,7 @@ async function handleMyOrders(chatId: number | string, profile: any) {
     return true;
   });
 
-  if (!filteredOrders || !filteredOrders.length) return sendTelegramMessage(chatId, 'No items found.');
+  if (!filteredOrders || !filteredOrders.length) return sendTelegramMessage(chatId, 'У вас пока нет активных заказов в работе.');
   for (const order of filteredOrders) {
     const text = [`<b>💼 Мой заказ</b>`, buildOrderPreview(order)].join('\n');
     const photoUrl = Array.isArray(order.image_urls) && order.image_urls.length > 0 ? order.image_urls[0] : null;
@@ -171,26 +175,63 @@ async function handleMyOrders(chatId: number | string, profile: any) {
   }
 }
 
-// УМНЫЙ ПЕРЕХВАТ МНОЖЕСТВЕННЫХ ФОТО И АЛЬБОМОВ
+// УМНЫЙ ПОТОКОВЫЙ МЕНЕДЖЕР ФОТООТЧЕТОВ С КОНТРОЛЕМ ОЧЕРЕДИ СЕССИЙ
 async function handleIncomingPhoto(chatId: number | string, telegramId: string, photoArray: any[], mediaGroupId?: string) {
-  // Искусственный разнос конкурентных запросов альбома во избежание race condition
-  await new Promise(resolve => setTimeout(resolve, Math.random() * 800));
+  // Микропауза-джиттер, чтобы параллельные вебхуки альбома встали друг за другом
+  await new Promise(resolve => setTimeout(resolve, Math.random() * 400));
 
   const profile = await findProfileByTelegramId(telegramId);
   if (!profile) return;
 
-  // 1. Ищем заказ, который прямо сейчас ждет фотоотчета
-  let { data: order } = await supabase.from('orders').select('*').eq('assigned_to', profile.id).eq('status', 'awaiting_photos').limit(1).maybeSingle();
+  let order = null;
   let isAlbumAppend = false;
 
-  // 2. Если не нашли, но это альбом — ищем заказ, который только что перевели в completed первым потоком
+  // 1. Проверяем кэш по ID альбома (самый частый и точный перехват)
+  if (mediaGroupId && albumCache.has(mediaGroupId)) {
+    const { data } = await supabase.from('orders').select('*').eq('id', albumCache.get(mediaGroupId)).single();
+    if (data) {
+      order = data;
+      isAlbumAppend = true;
+    }
+  }
+
+  // 2. Проверяем кэш по последней закрытой задаче этого юзера в текущей сессии сервера
+  if (!order && mediaGroupId && userLastCompletedCache.has(profile.id)) {
+    const { data } = await supabase.from('orders').select('*').eq('id', userLastCompletedCache.get(profile.id)).single();
+    if (data) {
+      order = data;
+      isAlbumAppend = true;
+    }
+  }
+
+  // 3. Если кэш пуст, ищем заказ, который прямо сейчас висит на этом юзере и ждет фото
+  if (!order) {
+    const { data: awaitingOrder } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('assigned_to', profile.id)
+      .eq('status', 'awaiting_photos')
+      .limit(1)
+      .maybeSingle();
+
+    if (awaitingOrder) {
+      order = awaitingOrder;
+      if (mediaGroupId) {
+        albumCache.set(mediaGroupId, awaitingOrder.id);
+        setTimeout(() => albumCache.delete(mediaGroupId), 15000); // чистим память через 15 сек
+      }
+      userLastCompletedCache.set(profile.id, awaitingOrder.id);
+    }
+  }
+
+  // 4. Последний рубеж (база данных) — если кэш пролетел, сортируем ТОЛЬКО по времени создания, а не по ID!
   if (!order && mediaGroupId) {
     const { data: recentCompleted } = await supabase
       .from('orders')
       .select('*')
       .eq('assigned_to', profile.id)
       .eq('status', 'completed')
-      .order('id', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(1);
 
     if (recentCompleted && recentCompleted.length > 0) {
@@ -215,19 +256,25 @@ async function handleIncomingPhoto(chatId: number | string, telegramId: string, 
 
   const { data: urlData } = supabase.storage.from('order-photos').getPublicUrl(storagePath);
   
-  // Дописываем фотку в существующий массив картинок объекта
-  const currentImages = Array.isArray(order.image_urls) ? order.image_urls : [];
+  // Вычитываем свежий массив картинок из базы прямо перед записью, чтобы потоки не затирали друг друга
+  const { data: freshOrder } = await supabase.from('orders').select('image_urls').eq('id', order.id).single();
+  const currentImages = freshOrder && Array.isArray(freshOrder.image_urls) ? freshOrder.image_urls : [];
   const updatedImages = [...currentImages, urlData.publicUrl];
 
   await supabase.from('orders').update({ status: 'completed', image_urls: updatedImages }).eq('id', order.id);
   
+  // Обновляем/укрепляем оперативную память для следующих фоток пачки
+  if (mediaGroupId && !albumCache.has(mediaGroupId)) {
+    albumCache.set(mediaGroupId, order.id);
+    setTimeout(() => albumCache.delete(mediaGroupId), 15000);
+  }
+  userLastCompletedCache.set(profile.id, order.id);
+
   const empName = profile.name || profile.full_name || 'Сотрудник';
 
   if (isAlbumAppend) {
-    // Последующие фотки из пакета просто докидываем в общую группу без дублирования текста закрытия
     await notifyGroup(`📸 Дополнительное фото к объекту <b>${escapeHtml(order.title)}</b> от ${escapeHtml(empName)}`, urlData.publicUrl);
   } else {
-    // Первая фотка альбома (или одиночная) закрывает заказ и шлет главный рапорт
     await notifyGroup(`✅ Заказ <b>${escapeHtml(order.title)}</b> успешно завершен с фотоотчетом от ${escapeHtml(empName)}.`, urlData.publicUrl);
     await sendTelegramMessage(chatId, `🎉 Объект <b>${escapeHtml(order.title)}</b> успешно закрыт! Фотоотчет отправлен в группу.`);
   }
@@ -239,9 +286,9 @@ async function handleCallbackQuery(callbackQuery: any) {
   const telegramId = String(callbackQuery.from?.id || '');
   const profile = await findProfileByTelegramId(telegramId);
 
-  if (!profile) return answerCallbackQuery(callbackId, 'Profile error.');
+  if (!profile) return answerCallbackQuery(callbackId, 'Ошибка профиля.');
   const { action, id: orderId } = parseCallbackData(callbackData);
-  if (!orderId) return answerCallbackQuery(callbackId, 'Command error.');
+  if (!orderId) return answerCallbackQuery(callbackId, 'Ошибка команды.');
 
   let msg = 'Выполнено.';
   if (action === 'take' || action === 'take_print') msg = await handleTakeOrder(orderId, profile, callbackQuery);
@@ -309,6 +356,7 @@ async function handleCompleteOrder(orderId: string, profile: any, withoutPhoto =
 
   await supabase.from('orders').update({ status: 'completed' }).eq('id', orderId);
   await notifyGroup(`✅ Заказ <b>${escapeHtml(order.title)}</b> завершен${withoutPhoto ? ' без фото' : ''}.`);
+  userLastCompletedCache.set(profile.id, order.id);
 
   if (callbackQuery?.message?.chat?.id && callbackQuery?.message?.message_id) {
     const chatId = callbackQuery.message.chat.id;
@@ -328,6 +376,7 @@ async function handleMoveToOffice(orderId: string, profile: any, callbackQuery: 
   if (!order || order.assigned_to !== profile.id) return 'Ошибка.';
   await supabase.from('orders').update({ status: 'completed' }).eq('id', orderId);
   await notifyGroup(`🏢 Заказ <b>${escapeHtml(order.title)}</b> передан в офис.`);
+  userLastCompletedCache.set(profile.id, order.id);
 
   if (callbackQuery?.message?.chat?.id && callbackQuery?.message?.message_id) {
     const chatId = callbackQuery.message.chat.id;
@@ -387,7 +436,7 @@ async function handleMoveToInstallation(orderId: string, profile: any, callbackQ
 
 async function handlePrintQueue(chatId: number | string, profile: any) {
   const { data: orders, error } = await supabase.from('orders').select('id, title, deadline, image_urls, assigned_to, status').eq('department', 'print').neq('status', 'completed').order('deadline', { ascending: true });
-  if (error) return sendTelegramMessage(chatId, 'Error loading list.');
+  if (error) return sendTelegramMessage(chatId, 'Ошибка загрузки очереди.');
 
   const filteredOrders = (orders || []).filter(order => !order.assigned_to || (order.assigned_to === profile.id && order.status === 'new'));
   if (!filteredOrders.length) return sendTelegramMessage(chatId, 'Очередь на печать пуста.');
