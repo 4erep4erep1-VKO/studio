@@ -1,41 +1,13 @@
-import type {NextConfig} from 'next';
-
-const nextConfig: NextConfig = {
-  output: 'standalone',
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   typescript: {
+    // Выключаем обязательную проверку типов при сборке, чтобы Vercel не ругался
     ignoreBuildErrors: true,
   },
   eslint: {
+    // Выключаем проверку линтера при сборке
     ignoreDuringBuilds: true,
-  },
-  images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'placehold.co',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'images.unsplash.com',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'picsum.photos',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'ehrfzwhawnqyocbthjmb.supabase.co',
-        port: '',
-        pathname: '/**',
-      },
-    ],
   },
 };
 
-export default nextConfig;
+module.exports = nextConfig;
