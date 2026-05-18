@@ -116,6 +116,7 @@ function buildOrderPreview(order: any) {
   return text;
 }
 
+// Конструктор кнопок управления заказом
 function buildOrderButtons(order: any) {
   const buttons: any[][] = [];
   if (order.department === 'print') {
@@ -141,14 +142,15 @@ async function handleStartCommand(chatId: number | string, telegramId: string, u
   await sendMainMenu(chatId, Boolean(profile.can_print));
 }
 
+// БРОНЕБОЙНЫЙ ДВУХЭТАПНЫЙ ВЫВОД АКТИВНЫХ ЗАКАЗОВ
 async function handleActiveOrders(chatId: number | string) {
-  // ИСПРАВЛЕНО: Явно связываем через внешний ключ assigned_to, чтобы подтягивать исполнителя, а не создателя
-  const { data: orders } = await supabase
+  const { data: orders, error } = await supabase
     .from('orders')
-    .select('id, title, department, status, image_urls, deadline, executor:profiles!assigned_to(name, full_name)')
+    .select('id, title, department, status, image_urls, deadline, assigned_to')
     .neq('status', 'completed')
     .order('deadline', { ascending: true });
 
+  if (error) console.error('❌ Ошибка загрузки активных заказов из базы:', error);
   if (!orders || !orders.length) return sendTelegramMessage(chatId, 'Активных заказов нет.');
 
   const statusMap: Record<string, string> = {
@@ -158,16 +160,32 @@ async function handleActiveOrders(chatId: number | string) {
     completed: 'Завершен'
   };
 
+  // Вытаскиваем уникальные ID всех назначенных исполнителей
+  const userIds = Array.from(new Set(orders.map(o => o.assigned_to).filter(Boolean)));
+  const profilesMap: Record<string, string> = {};
+
+  // Собираем имена исполнителей одним быстрым запросом
+  if (userIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, name, full_name')
+      .in('id', userIds);
+
+    if (profiles) {
+      profiles.forEach(p => {
+        profilesMap[p.id] = p.name || p.full_name || 'Сотрудник';
+      });
+    }
+  }
+
   for (const order of orders) {
     let text = [`<b>📋 Активный заказ</b>`, buildOrderPreview(order)].join('\n');
     
     const statusText = statusMap[order.status] || order.status;
     text += `\n⚡ Статус: <b>${escapeHtml(statusText)}</b>`;
     
-    const executor = order.executor as any;
-    if (executor) {
-      const empName = executor.name || executor.full_name || 'Сотрудник';
-      text += `\n👤 Исполнитель: <b>${escapeHtml(empName)}</b>`;
+    if (order.assigned_to && profilesMap[order.assigned_to]) {
+      text += `\n👤 Исполнитель: <b>${escapeHtml(profilesMap[order.assigned_to])}</b>`;
     } else {
       text += `\n👤 Исполнитель: <b>Не назначен (Свободный)</b>`;
     }
@@ -243,7 +261,7 @@ async function handleIncomingPhoto(chatId: number | string, telegramId: string, 
   }
 
   if (!order) {
-    return sendTelegramMessage(chatId, '⚠️ Не удалось связать фото с активным заказом. Убедитесь, что нажали кнопку "✅ ЗАВЕРШИТЬ ЗАКАЗ" in меню "Мои заказы".');
+    return sendTelegramMessage(chatId, '⚠️ Не удалось связать фото с активным заказом. Убедитесь, что нажали кнопку "✅ ЗАВЕРШИТЬ ЗАКАЗ" в меню "Мои заказы".');
   }
 
   const photo = photoArray[photoArray.length - 1];
