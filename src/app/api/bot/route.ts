@@ -6,6 +6,7 @@ const GROUP_CHAT_ID = process.env.TELEGRAM_GROUP_CHAT_ID;
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const PHOTO_BUCKET = process.env.SUPABASE_ORDER_PHOTO_BUCKET || 'order-photos';
+const COMPLETION_BUCKET = process.env.SUPABASE_COMPLETION_PHOTO_BUCKET || 'completion-photos';
 
 const supabase = createClient(SUPABASE_URL || '', SUPABASE_SERVICE_ROLE_KEY || '', {
   auth: { autoRefreshToken: false, persistSession: false },
@@ -26,6 +27,29 @@ async function sendTelegram(chatId: string | number, text: string, extra: Record
   };
 
   const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  return response.ok ? await response.json() : null;
+}
+
+async function sendTelegramPhoto(chatId: string | number, photo: string, caption: string, extra: Record<string, any> = {}) {
+  if (!TELEGRAM_TOKEN) {
+    console.error('Telegram token missing');
+    return null;
+  }
+
+  const payload = {
+    chat_id: chatId,
+    photo,
+    caption,
+    parse_mode: 'HTML',
+    ...extra,
+  };
+
+  const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendPhoto`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -187,7 +211,7 @@ async function handleMyOrders(chatId: number | string, profile: any) {
     } else if (['installation', 'production'].includes(order.department)) {
       reply_markup = {
         inline_keyboard: [[
-          { text: '✅ ЗАВЕРШИТЬ ЗАКАЗ', callback_data: `finish_with_photo:${order.id}` },
+          { text: '✅ ЗАВЕРШИТЬ ЗАКАЗ', callback_data: `complete_with_photo_${order.id}` },
           { text: '🚫 ЗАВЕРШИТЬ БЕЗ ФОТО', callback_data: `finish_without_photo:${order.id}` },
         ]],
       };
@@ -397,9 +421,11 @@ async function handleCallbackQuery(callback: any) {
     return NextResponse.json({ ok: true });
   }
 
-  if (data.startsWith('take_')) {
-    const freeOrderId = data.slice(5);
-    answerText = await takeFreeOrder(freeOrderId, profile, callback);
+  if (data.startsWith('complete_with_photo_') || data.startsWith('complete_with_photo:')) {
+    const orderId = data.includes(':')
+      ? data.split(':')[1]
+      : data.slice('complete_with_photo_'.length);
+    answerText = await requestPhotoReport(orderId, profile);
     await answerCallbackQuery(callback.id, answerText);
     return NextResponse.json({ ok: true });
   }
@@ -517,7 +543,7 @@ async function takeFreeOrder(orderId: string, profile: any, callback: any) {
         { text: '🚚 НА МОНТАЖ', callback_data: `print_to_installation:${order.id}` },
       ]] }
     : { inline_keyboard: [[
-        { text: '✅ ЗАВЕРШИТЬ ЗАКАЗ', callback_data: `finish_with_photo:${order.id}` },
+        { text: '✅ ЗАВЕРШИТЬ ЗАКАЗ', callback_data: `complete_with_photo_${order.id}` },
         { text: '🚫 ЗАВЕРШИТЬ БЕЗ ФОТО', callback_data: `finish_without_photo:${order.id}` },
       ]] };
 
@@ -643,47 +669,50 @@ async function handlePhotoMessage(message: any, profile: any, chatId: number | s
     .order('updated_at', { ascending: false })
     .limit(1)
     .single();
-
   if (error || !order) {
     await sendTelegram(chatId, 'Нет заказа, ожидающего фотоотчет. Нажмите «Мои заказы» и выберите правильный заказ.');
     return;
   }
 
-  const photos = message.photo || [];
-  if (!photos.length) {
-    await sendTelegram(chatId, 'Отправьте фотографии, пожалуйста.');
+  const photoSizes = message.photo || [];
+  if (!photoSizes.length) {
+    await sendTelegram(chatId, 'Отправьте фотографию, пожалуйста.');
     return;
   }
 
-  const uploadedUrls: string[] = [];
+  const largestPhoto = photoSizes[photoSizes.length - 1];
+  const fileId = largestPhoto.file_id;
+  const filePathResponse = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/getFile?file_id=${fileId}`);
+  const filePathData = await filePathResponse.json();
+  const filePath = filePathData?.result?.file_path;
 
-  for (const photo of photos) {
-    const fileId = photo.file_id;
-    const filePathResponse = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/getFile?file_id=${fileId}`);
-    const filePathData = await filePathResponse.json();
-    const filePath = filePathData?.result?.file_path;
-    if (!filePath) continue;
+  if (!filePath) {
+    await sendTelegram(chatId, 'Не удалось получить файл из Telegram. Повторите попытку.');
+    return;
+  }
 
-    const fileResponse = await fetch(`https://api.telegram.org/file/bot${TELEGRAM_TOKEN}/${filePath}`);
-    const buffer = await fileResponse.arrayBuffer();
-    const fileName = `order-${order.id}/${Date.now()}-${fileId}.jpg`;
-    const { error: uploadError } = await supabase.storage
-      .from(PHOTO_BUCKET)
-      .upload(fileName, new Uint8Array(buffer), { contentType: 'image/jpeg', upsert: false });
+  const fileResponse = await fetch(`https://api.telegram.org/file/bot${TELEGRAM_TOKEN}/${filePath}`);
+  const buffer = await fileResponse.arrayBuffer();
+  const fileName = `order-${order.id}/${Date.now()}-${fileId}.jpg`;
+  const { error: uploadError } = await supabase.storage
+    .from(COMPLETION_BUCKET)
+    .upload(fileName, new Uint8Array(buffer), { contentType: 'image/jpeg', upsert: false });
 
-    if (uploadError) {
-      console.error('Photo upload failed:', uploadError.message);
-      continue;
-    }
+  if (uploadError) {
+    console.error('Photo upload failed:', uploadError.message);
+    await sendTelegram(chatId, 'Не удалось загрузить фотографию. Повторите попытку.');
+    return;
+  }
 
-    const { data: publicUrlData } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(fileName);
-    if (publicUrlData?.publicUrl) {
-      uploadedUrls.push(publicUrlData.publicUrl);
-    }
+  const { data: publicUrlData } = supabase.storage.from(COMPLETION_BUCKET).getPublicUrl(fileName);
+  const publicUrl = publicUrlData?.publicUrl;
+  if (!publicUrl) {
+    await sendTelegram(chatId, 'Не удалось получить ссылку на фото. Повторите попытку.');
+    return;
   }
 
   const existingImages = Array.isArray(order.image_urls) ? order.image_urls : [];
-  const finalUrls = [...existingImages, ...uploadedUrls];
+  const finalUrls = [...existingImages, publicUrl];
 
   const { error: updateError } = await supabase
     .from('orders')
@@ -696,14 +725,17 @@ async function handlePhotoMessage(message: any, profile: any, chatId: number | s
     return;
   }
 
-  if (uploadedUrls.length) {
-    await notifyGroup(`✅ <b>Заказ ${escapeHtml(order.title)}</b> завершен.
+  await notifyGroupPhoto(publicUrl, `✅ <b>Заказ ${escapeHtml(order.title)}</b> завершен.\n\nФотоотчет:`);
+  await sendTelegram(chatId, 'Фотография принята, заказ завершен. Спасибо!');
+}
 
-Фотоотчет:
-${uploadedUrls.map(url => escapeHtml(url)).join('\n')}`);
+async function notifyGroupPhoto(photoUrl: string, caption: string) {
+  if (!GROUP_CHAT_ID) {
+    console.error('Group chat ID missing');
+    return null;
   }
 
-  await sendTelegram(chatId, 'Фотографии приняты, заказ завершен. Спасибо!');
+  return sendTelegramPhoto(GROUP_CHAT_ID, photoUrl, caption);
 }
 
 export async function POST(request: Request) {
