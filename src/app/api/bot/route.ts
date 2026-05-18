@@ -112,6 +112,40 @@ async function findProfileByTelegramId(telegramId: string) {
   return data;
 }
 
+async function findProfileByTelegramIdentity(telegramId: string, username?: string) {
+  const profileById = await findProfileByTelegramId(telegramId);
+  if (profileById) {
+    return profileById;
+  }
+
+  if (!username) {
+    return null;
+  }
+
+  const normalizedUsername = username.startsWith('@') ? username.slice(1) : username;
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, can_print, name, full_name')
+    .or(`telegram_username.eq.${normalizedUsername},username.eq.${normalizedUsername}`)
+    .single();
+
+  if (error || !data) {
+    if (error) console.error('findProfileByTelegramIdentity error:', error.message);
+    return null;
+  }
+
+  const { error: updateError } = await supabase
+    .from('profiles')
+    .update({ telegram_chat_id: telegramId })
+    .eq('id', data.id);
+
+  if (updateError) {
+    console.error('findProfileByTelegramIdentity update error:', updateError.message);
+  }
+
+  return data;
+}
+
 function buildMainMenuKeyboard(canPrint: boolean) {
   const keyboard: any[] = [
     [
@@ -168,11 +202,12 @@ function buildOrderButtons(order: any) {
   return buttons.length ? { inline_keyboard: buttons } : undefined;
 }
 
-async function handleStartCommand(chatId: number | string, telegramId: string) {
-  const profile = await findProfileByTelegramId(telegramId);
+async function handleStartCommand(chatId: number | string, telegramId: string, username?: string) {
+  const profile = await findProfileByTelegramIdentity(telegramId, username);
 
   if (!profile) {
-    await sendTelegramMessage(chatId, 'Ваш профиль не найден. Обратитесь к администратору и убедитесь, что telegram_chat_id указан в таблице profiles.');
+    const usernameHint = username ? `@${username.replace(/^@/, '')}` : 'свой юзернейм';
+    await sendTelegramMessage(chatId, `Привет! Твой Telegram не привязан к сайту. Укажи в своем профиле на сайте юзернейм: ${usernameHint}`);
     return;
   }
 
@@ -633,59 +668,65 @@ export async function POST(request: Request) {
   if (update.message) {
     const chatId = update.message.chat?.id;
     const telegramId = String(update.message.from?.id || '');
+    const username = typeof update.message.from?.username === 'string' ? update.message.from.username : undefined;
 
     if (!chatId) {
       return NextResponse.json({ ok: false, error: 'Chat id missing' }, { status: 400 });
     }
 
-    const text = typeof update.message.text === 'string' ? update.message.text.trim() : '';
+    try {
+      const text = typeof update.message.text === 'string' ? update.message.text.trim() : '';
 
-    switch (text) {
-      case '/start':
-        await handleStartCommand(chatId, telegramId);
-        break;
-      case '📋 Активные заказы':
-        await handleActiveOrders(chatId);
-        break;
-      case '🔓 Свободные заказы':
-        await handleFreeOrders(chatId);
-        break;
-      case '💼 Мои заказы': {
-        const profile = await findProfileByTelegramId(telegramId);
-        if (!profile) {
-          await sendTelegramMessage(chatId, 'Профиль не найден. Пройдите команду /start снова после регистрации.');
+      switch (text) {
+        case '/start':
+          await handleStartCommand(chatId, telegramId, username);
+          break;
+        case '📋 Активные заказы':
+          await handleActiveOrders(chatId);
+          break;
+        case '🔓 Свободные заказы':
+          await handleFreeOrders(chatId);
+          break;
+        case '💼 Мои заказы': {
+          const profile = await findProfileByTelegramId(telegramId);
+          if (!profile) {
+            await sendTelegramMessage(chatId, 'Профиль не найден. Пройдите команду /start снова после регистрации.');
+            break;
+          }
+          await handleMyOrders(chatId, profile);
           break;
         }
-        await handleMyOrders(chatId, profile);
-        break;
-      }
-      case '📊 Рейтинг':
-        await handleRating(chatId);
-        break;
-      case '👤 Мой профиль': {
-        const profile = await findProfileByTelegramId(telegramId);
-        if (!profile) {
-          await sendTelegramMessage(chatId, 'Профиль не найден. Пройдите команду /start снова после регистрации.');
+        case '📊 Рейтинг':
+          await handleRating(chatId);
+          break;
+        case '👤 Мой профиль': {
+          const profile = await findProfileByTelegramId(telegramId);
+          if (!profile) {
+            await sendTelegramMessage(chatId, 'Профиль не найден. Пройдите команду /start снова после регистрации.');
+            break;
+          }
+          await handleProfile(chatId, profile);
           break;
         }
-        await handleProfile(chatId, profile);
-        break;
-      }
-      case '🖨 Очередь на печать': {
-        const profile = await findProfileByTelegramId(telegramId);
-        if (!profile) {
-          await sendTelegramMessage(chatId, 'Профиль не найден. Пройдите команду /start снова после регистрации.');
+        case '🖨 Очередь на печать': {
+          const profile = await findProfileByTelegramId(telegramId);
+          if (!profile) {
+            await sendTelegramMessage(chatId, 'Профиль не найден. Пройдите команду /start снова после регистрации.');
+            break;
+          }
+          if (profile.can_print) {
+            await handlePrintQueue(chatId);
+          } else {
+            await sendMainMenu(chatId, false);
+          }
           break;
         }
-        if (profile.can_print) {
-          await handlePrintQueue(chatId);
-        } else {
-          await sendMainMenu(chatId, false);
-        }
-        break;
+        default:
+          await sendMainMenu(chatId, Boolean((await findProfileByTelegramId(telegramId))?.can_print));
       }
-      default:
-        await sendMainMenu(chatId, Boolean((await findProfileByTelegramId(telegramId))?.can_print));
+    } catch (error) {
+      console.error('Telegram message handling failed:', error);
+      await sendTelegramMessage(chatId, 'Произошла ошибка при обработке вашего сообщения. Пожалуйста, повторите попытку позже.');
     }
 
     return new Response('OK', { status: 200 });

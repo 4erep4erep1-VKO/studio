@@ -2,10 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-
-// Настройки
-const BOT_TOKEN = process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN; 
-const GROUP_ID = process.env.NEXT_PUBLIC_TELEGRAM_GROUP_CHAT_ID;
+import { notifyNewOrderToGroup, notifyOrderToUser } from '@/app/actions/telegram';
 
 export default function OrderMiniPage() {
     const [title, setTitle] = useState('');
@@ -105,61 +102,44 @@ export default function OrderMiniPage() {
             setLoading(true);
 
             try {
-                const payload = { 
-                    title, 
-                    description, 
-                    deadline, 
+                const payload = {
+                    title,
+                    description,
+                    deadline,
                     status: 'new',
                     is_general: isGeneral,
                     department,
                     assigned_to: isGeneral ? null : (assignedTo || null),
-                    image_urls: imageUrls
+                    image_urls: imageUrls,
                 };
 
                 const { error } = await supabase.from('orders').insert([payload]);
                 if (error) throw error;
 
                 // УВЕДОМЛЕНИЯ В ТЕЛЕГРАМ
-                if (BOT_TOKEN) {
-                    // 1. Если личный заказ — шлем исполнителю
-                    if (!isGeneral && assignedTo) {
-                        const user = installers.find(i => i.id === assignedTo);
-                        if (user && user.telegram_chat_id) {
-                            const personalText = `🔔 <b>ЛИЧНЫЙ ЗАКАЗ!</b>\n\nТебе назначили новый объект: <b>${title}</b>\n\nЗайди в раздел «📦 Мои заказы», чтобы посмотреть.`;
-                            await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ chat_id: user.telegram_chat_id, text: personalText, parse_mode: 'HTML' })
-                            });
+                try {
+                    await notifyNewOrderToGroup({
+                        title,
+                        description,
+                        department,
+                        deadline,
+                        is_general: isGeneral,
+                        assigned_to: isGeneral ? null : assignedTo,
+                        image_urls: imageUrls,
+                        creator_id: undefined,
+                    });
+                } catch (notifyError) {
+                    console.error('Ошибка уведомления в группу Telegram:', notifyError);
+                }
+
+                if (!isGeneral && assignedTo) {
+                    const user = installers.find(i => i.id === assignedTo);
+                    if (user && user.telegram_chat_id) {
+                        try {
+                            await notifyOrderToUser(user.telegram_chat_id, title);
+                        } catch (personalNotifyError) {
+                            console.error('Ошибка личного уведомления исполнителю:', personalNotifyError);
                         }
-                    }
-
-                    // 2. Всегда шлем в общую группу для истории
-                    let groupText = `🔥 <b>НОВЫЙ ЗАКАЗ (Mini App)</b>\n\n📍 Объект: <b>${title}</b>\n📅 Срок: ${deadline}\n🏢 Отдел: ${department === 'installation' ? '🛠 Монтаж' : department === 'production' ? '🏭 Изготовление' : '🖨 Печать'}`;
-                    groupText += `\n👤 Кому: ${isGeneral ? '🌍 Общий заказ' : (installers.find(i => i.id === assignedTo)?.full_name || 'Не назначен')}`;
-                    if (description) groupText += `\n📝 Описание: ${description}`;
-
-                    if (GROUP_ID) {
-                      const hasPhoto = imageUrls.length > 0;
-                      const body = hasPhoto
-                        ? {
-                            chat_id: GROUP_ID,
-                            photo: imageUrls[0],
-                            caption: groupText,
-                            parse_mode: 'HTML',
-                          }
-                        : {
-                            chat_id: GROUP_ID,
-                            text: groupText,
-                            parse_mode: 'HTML',
-                            disable_web_page_preview: true,
-                          };
-
-                      await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${hasPhoto ? 'sendPhoto' : 'sendMessage'}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(body),
-                      });
                     }
                 }
 
