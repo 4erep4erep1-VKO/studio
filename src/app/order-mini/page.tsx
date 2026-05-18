@@ -17,7 +17,41 @@ export default function OrderMiniPage() {
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
     
+    // Резервное хранилище для профиля, если Next.js сотрет хэш ссылки
+    const [tgUserBackup, setTgUserBackup] = useState<any>(null);
     const submitRef = useRef<() => void>(() => {});
+
+    // МГНОВЕННЫЙ ПЕРЕХВАТ ДАННЫХ ИЗ URL ДО ОЧИСТКИ РОУТЕРОМ
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        const parseTgData = (rawString: string) => {
+            const params = new URLSearchParams(rawString);
+            const tgWebAppData = params.get('tgWebAppData');
+            if (tgWebAppData) {
+                const dataParams = new URLSearchParams(tgWebAppData);
+                const userStr = dataParams.get('user');
+                if (userStr) return JSON.parse(decodeURIComponent(userStr));
+            }
+            const directUser = params.get('user');
+            if (directUser) return JSON.parse(decodeURIComponent(directUser));
+            return null;
+        };
+
+        try {
+            // Ищем данные сначала в хэше (#), затем в обычных параметрах (?)
+            let user = parseTgData(window.location.hash.substring(1));
+            if (!user) {
+                user = parseTgData(window.location.search.substring(1));
+            }
+            if (user) {
+                setTgUserBackup(user);
+                console.log('✅ Профиль ТГ успешно перехвачен вручную:', user);
+            }
+        } catch (e) {
+            console.error('Ошибка ручного извлечения данных ТГ:', e);
+        }
+    }, []);
 
     // Загружаем профили сотрудников при открытии
     useEffect(() => {
@@ -31,7 +65,7 @@ export default function OrderMiniPage() {
         loadProfiles();
     }, []);
 
-    // Инициализация скрипта ТГ и ОДНОКРАТНОЕ вешание клика
+    // Инициализация скрипта ТГ и вешание клика
     useEffect(() => {
         const script = document.createElement('script');
         script.src = 'https://telegram.org/js/telegram-web-app.js';
@@ -59,7 +93,7 @@ export default function OrderMiniPage() {
         };
     }, []);
 
-    // Управляем доступностью кнопки в зависимости от валидации полей
+    // Управляем доступностью кнопки
     useEffect(() => {
         const tg = window.Telegram?.WebApp;
         if (!tg) return;
@@ -73,16 +107,16 @@ export default function OrderMiniPage() {
         }
     }, [title, deadline, uploading, loading]);
 
-    // Актуализируем функцию отправки в рефе
+    // Логика отправки данных
     useEffect(() => {
         submitRef.current = async () => {
             if (!title || !deadline || uploading || loading) return;
             
             const tg = window.Telegram?.WebApp;
-            const tgUser = tg?.initDataUnsafe?.user;
+            // Берем юзера либо из SDK, либо из нашего железного бэкапа
+            const tgUser = tg?.initDataUnsafe?.user || tgUserBackup;
             const tgUserId = tgUser?.id;
             
-            // Собираем имя из телеграма, если оно есть
             const tgFullName = tgUser 
                 ? `${tgUser.first_name}${tgUser.last_name ? ' ' + tgUser.last_name : ''}`
                 : undefined;
@@ -105,7 +139,7 @@ export default function OrderMiniPage() {
                 const { error } = await supabase.from('orders').insert([payload]);
                 if (error) throw error;
 
-                // УВЕДОМЛЕНИЯ В ТЕЛЕГРАМ
+                // ОТПРАВКА УВЕДОМЛЕНИЯ С ПРОВЕРЕННЫМ АВТОРОМ
                 try {
                     await notifyNewOrderToGroup({
                         title,
@@ -116,7 +150,7 @@ export default function OrderMiniPage() {
                         assigned_to: isGeneral ? null : assignedTo,
                         image_urls: imageUrls,
                         creator_id: tgUserId ? String(tgUserId) : undefined,
-                        creator_full_name: tgFullName, // Передаем имя напрямую из Телеграма
+                        creator_full_name: tgFullName,
                     });
                 } catch (notifyError) {
                     console.error('Ошибка уведомления в группу Telegram:', notifyError);
@@ -152,32 +186,7 @@ export default function OrderMiniPage() {
                 setLoading(false);
             }
         };
-    }, [title, description, deadline, department, assignedTo, isGeneral, imageUrls, uploading, installers, loading]);
-
-    // Обработчик загрузки картинок
-    const handleImageUpload = async (files: FileList | null) => {
-        if (!files || files.length === 0) return;
-        setUploading(true);
-        const tg = window.Telegram?.WebApp;
-        if (tg) tg.MainButton.showProgress();
-
-        const newUrls: string[] = [];
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
-            const filePath = `previews/${fileName}`;
-            
-            const { error } = await supabase.storage.from('order-photos').upload(filePath, file);
-            if (!error) {
-                const { data } = supabase.storage.from('order-photos').getPublicUrl(filePath);
-                newUrls.push(data.publicUrl);
-            }
-        }
-
-        setImageUrls(prev => [...prev, ...newUrls]);
-        setUploading(false);
-        if (tg) tg.MainButton.hideProgress();
-    };
+    }, [title, description, deadline, department, assignedTo, isGeneral, imageUrls, uploading, installers, loading, tgUserBackup]);
 
     // Общие стили для полей
     const inputStyle = {
