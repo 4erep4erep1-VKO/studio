@@ -13,7 +13,7 @@ interface OrderData {
   image_urls?: string[];
   creator_id?: string; 
   created_by?: string; 
-  creator_full_name?: string; // Самый надежный способ — передать имя сразу
+  creator_full_name?: string;
 }
 
 export async function notifyNewOrderToGroup(orderData: OrderData) {
@@ -26,44 +26,46 @@ export async function notifyNewOrderToGroup(orderData: OrderData) {
   }
 
   try {
-    // 1. Пытаемся взять имя, если оно уже передано (самый быстрый вариант)
     let creatorName = orderData.creator_full_name;
-
-    // 2. Если имени нет, но есть ID — идем в базу
     const creatorId = orderData.created_by || orderData.creator_id;
     
+    // Умный поиск автора: если пришел Telegram ID (число) или UUID
     if (!creatorName && creatorId) {
       try {
         const { createClient } = await import('@supabase/supabase-js');
         const supabase = createClient(
           process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-          process.env.SUPABASE_SERVICE_ROLE_KEY || '' // Проверь, что этот ключ есть в .env!
+          process.env.SUPABASE_SERVICE_ROLE_KEY || ''
         );
         
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('full_name')
-          .eq('id', creatorId)
-          .single();
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(creatorId));
+        let query = supabase.from('profiles').select('full_name, name');
+        
+        if (isUuid) {
+          query = query.eq('id', creatorId);
+        } else {
+          query = query.eq('telegram_chat_id', String(creatorId));
+        }
+        
+        const { data: profile, error } = await query.single();
         
         if (error) console.error('❌ Ошибка запроса профиля:', error.message);
-        if (profile?.full_name) {
-          creatorName = profile.full_name;
+        if (profile) {
+          creatorName = profile.full_name || profile.name;
         }
       } catch (err) {
         console.error('⚠️ Ошибка при подключении к Supabase в Telegram Action:', err);
       }
     }
 
-    // Если всё равно пусто — пишем дефолт
     const finalCreatorName = creatorName || 'Неизвестный пользователь';
-
     const departmentLabel = orderData.department === 'installation' ? '🛠 Монтаж' : orderData.department === 'production' ? '🏭 Изготовление' : '🖨 Печать';
     const typeLabel = orderData.is_general ? '🌍 Общий' : '👤 Личный';
     const deadline = orderData.deadline 
       ? new Date(orderData.deadline).toLocaleDateString('ru-RU')
       : 'Не указан';
 
+    // Формируем текст, ОБЯЗАТЕЛЬНО экранируя ссылку на макет через escapeHtml
     const messageText = `
 🆕 <b>Новый заказ (создан на сайте)</b>
 
@@ -76,7 +78,7 @@ ${orderData.description ? `📝 <b>Описание:</b> ${escapeHtml(orderData.
 
 ${orderData.dimensions ? `📐 <b>Размеры:</b> ${escapeHtml(orderData.dimensions)}` : ''}
 ${orderData.material ? `🎨 <b>Материал:</b> ${escapeHtml(orderData.material)}` : ''}
-${orderData.source_link ? `🔗 <b>Ссылка на макет:</b> <a href="${orderData.source_link}">открыть</a>` : ''}
+${orderData.source_link ? `🔗 <b>Ссылка на макет:</b> <a href="${escapeHtml(orderData.source_link)}">открыть</a>` : ''}
 
 👤 <b>Создал:</b> ${escapeHtml(finalCreatorName)}
 ⏱ Время: ${new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Almaty' })}
@@ -105,27 +107,37 @@ ${orderData.source_link ? `🔗 <b>Ссылка на макет:</b> <a href="${
       body: JSON.stringify(body),
     });
 
-    if (!response.ok && hasPhoto) {
-      response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: groupChatId,
-          text: messageText,
-          parse_mode: 'HTML',
-          disable_web_page_preview: true,
-        }),
-      });
+    if (!response.ok) {
+      const errorResponse = await response.text();
+      console.error(`❌ Telegram API Error (${endpoint}):`, errorResponse);
+
+      // Если упала отправка с фото, пробуем отправить хотя бы голый текст
+      if (hasPhoto) {
+        console.log('🔄 Ошибка при sendPhoto. Пробуем резервную отправку через sendMessage...');
+        response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: groupChatId,
+            text: messageText,
+            parse_mode: 'HTML',
+            disable_web_page_preview: true,
+          }),
+        });
+        if (!response.ok) {
+          const fallbackError = await response.text();
+          console.error('❌ Резервная отправка текста тоже упала:', fallbackError);
+        }
+      }
     }
 
     return { success: response.ok };
   } catch (error) {
-    console.error('❌ Error sending Telegram notification:', error);
+    console.error('❌ Критическая ошибка экшена Telegram:', error);
     return { success: false, error: 'Internal error' };
   }
 }
 
-/** Вспомогательные функции **/
 export async function notifyOrderToUser(chatId: string, title: string) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   if (!botToken) return { success: false };
@@ -142,5 +154,10 @@ export async function notifyOrderToUser(chatId: string, title: string) {
 
 function escapeHtml(text: string): string {
   if (!text) return '';
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }

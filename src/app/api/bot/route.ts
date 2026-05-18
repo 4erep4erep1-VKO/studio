@@ -126,7 +126,7 @@ async function findProfileByTelegramIdentity(telegramId: string, username?: stri
   const { data, error } = await supabase
     .from('profiles')
     .select('id, can_print, name, full_name')
-    .or(`telegram_username.eq.${normalizedUsername},username.eq.${normalizedUsername}`)
+    .or(`telegram_username.ilike.${normalizedUsername},username.ilike.${normalizedUsername}`)
     .single();
 
   if (error || !data) {
@@ -501,12 +501,27 @@ async function handleTakeOrder(orderId: string, profile: any, callbackQuery: any
     return 'Не удалось взять заказ. Попробуйте позже.';
   }
 
-  await notifyGroup(`🟡 Заказ <b>${escapeHtml(order.title)}</b> взят в работу исполнителем ${escapeHtml(profile.name || profile.full_name || 'Сотрудник')}.`);
+  const employeeName = profile.name || profile.full_name || 'Сотрудник';
+  await notifyGroup(`🟡 Заказ <b>${escapeHtml(order.title)}</b> взят в работу исполнителем ${escapeHtml(employeeName)}.`);
 
   if (callbackQuery?.message?.chat?.id && callbackQuery?.message?.message_id) {
-    const text = `<b>✅ Заказ принят</b>\n${buildOrderPreview(order)}`;
-    const replyMarkup = buildOrderButtons(order);
-    await sendTelegramMessage(String(callbackQuery.message.chat.id), text, { reply_markup: replyMarkup });
+    const chatId = callbackQuery.message.chat.id;
+    const messageId = callbackQuery.message.message_id;
+    const isPhoto = Boolean(callbackQuery.message.photo || callbackQuery.message.document);
+    
+    const text = `<b>✅ Заказ принят</b>\n${buildOrderPreview(order)}\nИсполнитель: ${escapeHtml(employeeName)}`;
+    const replyMarkup = buildOrderButtons({ ...order, department: order.department });
+
+    await sendTelegram(chatId, {
+      method: isPhoto ? 'editMessageCaption' : 'editMessageText',
+      body: {
+        chat_id: chatId,
+        message_id: messageId,
+        [isPhoto ? 'caption' : 'text']: text,
+        parse_mode: 'HTML',
+        reply_markup: replyMarkup || { inline_keyboard: [] },
+      },
+    });
   }
 
   return 'Вы успешно взяли заказ в работу.';
