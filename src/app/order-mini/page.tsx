@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import Script from 'next/script';
+import imageCompression from 'browser-image-compression';
 import { supabase } from '@/lib/supabase';
 import { notifyNewOrderToGroup, notifyOrderToUser } from '@/app/actions/telegram';
 
@@ -180,6 +181,28 @@ export default function OrderMiniPage() {
         };
     }, [title, description, deadline, department, assignedTo, isGeneral, imageUrls, uploading, installers, loading, creatorName, creatorTgId, creatorUuid]);
 
+    const compressImageFile = async (file: File): Promise<File> => {
+        if (!file.type.startsWith('image/')) return file;
+
+        try {
+            const compressedBlob = await imageCompression(file, {
+                maxSizeMB: 0.5,
+                maxWidthOrHeight: 1600,
+                useWebWorker: true,
+                fileType: file.type,
+            });
+
+            if (compressedBlob instanceof File) {
+                return compressedBlob;
+            }
+
+            return new File([compressedBlob], file.name, { type: compressedBlob.type || file.type });
+        } catch (err) {
+            console.error('Image compression failed:', err);
+            return file;
+        }
+    };
+
     const handleImageUpload = async (files: FileList | null) => {
         if (!files || files.length === 0) return;
         setUploading(true);
@@ -189,13 +212,17 @@ export default function OrderMiniPage() {
         const newUrls: string[] = [];
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
-            const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
+            const optimizedFile = await compressImageFile(file);
+            const ext = optimizedFile.name.split('.').pop()?.toLowerCase() || file.type.split('/')[1] || 'jpg';
+            const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
             const filePath = `previews/${fileName}`;
             
-            const { error } = await supabase.storage.from('order-photos').upload(filePath, file);
+            const { error } = await supabase.storage.from('order-photos').upload(filePath, optimizedFile);
             if (!error) {
                 const { data } = supabase.storage.from('order-photos').getPublicUrl(filePath);
-                newUrls.push(data.publicUrl);
+                if (data?.publicUrl) {
+                    newUrls.push(data.publicUrl);
+                }
             }
         }
 
