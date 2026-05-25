@@ -15,7 +15,6 @@ type SupabaseOrderRow = {
   assigned_to: string | null;
   created_at: string;
   due_date: string | null;
-  is_measurement?: boolean;
 };
 
 // Тип для сырых данных из таблицы 'profiles'
@@ -42,7 +41,6 @@ const mapRowToOrder = (row: SupabaseOrderRow): Order => ({
   status: row.status as Order['status'],
   imageUrls: row.image_urls || [],
   installerId: row.assigned_to || 'general',
-  is_measurement: row.is_measurement ?? false,
   createdAt: row.created_at,
   updatedAt: row.created_at, // supabase не предоставляет это поле, используем created_at
   dueDate: row.due_date || new Date().toISOString(),
@@ -96,7 +94,6 @@ export async function createOrder(order: Partial<Order>): Promise<Order> {
         title: order.objectName,
         description: order.workDescription,
         status: order.status,
-        is_measurement: order.is_measurement ?? false,
         image_urls: order.imageUrls,
         assigned_to: order.installerId === 'general' ? null : order.installerId,
         due_date: order.dueDate,

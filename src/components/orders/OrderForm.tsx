@@ -22,7 +22,6 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
     deadline: '',
     assigned_to: '',
     is_general: true,
-    is_measurement: false,
     image_urls: [] as string[],
     source_link: '',
     dimensions: '',
@@ -67,7 +66,6 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
               deadline: order.deadline ? String(order.deadline).split('T')[0] : '',
               assigned_to: order.assigned_to ?? '',
               is_general: order.is_general ?? true,
-              is_measurement: order.is_measurement ?? false,
               image_urls: order.image_urls || [],
               source_link: order.source_link ?? '',
               dimensions: order.dimensions ?? '',
@@ -299,10 +297,7 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
               <span className="font-bold text-sm cursor-pointer text-foreground">Общий заказ (увидят все в отделе)</span>
             </label>
 
-            <label className="flex items-center gap-2 p-3 border border-border bg-background/50 rounded cursor-pointer">
-              <input type="checkbox" checked={formData.is_measurement} onChange={e => setFormData({...formData, is_measurement: e.target.checked})} className="w-5 h-5 accent-primary" />
-              <span className="font-bold text-sm cursor-pointer text-foreground">Это замер?</span>
-            </label>
+            {/* Поле "Это замер?" временно удалено */}
           </div>
 
           <div className="grid grid-cols-2 gap-4">

@@ -27,7 +27,7 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssig
     onComplete(order.id);
   };
 
-  const containerClass = `p-5 rounded-xl shadow-sm hover:border-muted-foreground/30 transition flex flex-col h-full ${order.is_measurement ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50' : 'bg-card border border-border'}`;
+  const containerClass = `p-5 rounded-xl shadow-sm hover:border-muted-foreground/30 transition flex flex-col h-full bg-card border border-border`;
 
   return (
     <div className={containerClass}>
@@ -35,9 +35,6 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssig
       <div onClick={() => onView(order)} className="cursor-pointer group mb-4 -mx-5 -mt-5 px-5 pt-5 pb-4">
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-2">
-            {order.is_measurement && (
-              <span className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 px-2 py-0.5 rounded font-medium">📐 ЗАМЕР</span>
-            )}
             <h3 className="font-bold text-lg text-card-foreground group-hover:text-primary transition mb-2">{order.title}</h3>
           </div>
           <div className="flex gap-2">

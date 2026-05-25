@@ -18,5 +18,4 @@ export interface Order {
   assigned_to: string; // ID монтажника из таблицы profiles
   created_at: string;
   updated_at: string;
-  is_measurement?: boolean;
 }
