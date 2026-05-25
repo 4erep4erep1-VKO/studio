@@ -69,35 +69,39 @@ async def process_pin(message: types.Message, state: FSMContext):
         pin = message.text.strip()
         supabase = await get_supabase()
 
-        # 3. Ищем профиль с таким ПИН-кодом в базе
-        res = await supabase.table("profiles").select("*").eq("pin_code", pin).execute()
+        # Попробуем найти профиль по нескольким возможным названию поля с PIN
+        pin_fields = ["pin_code", "pin", "password"]
+        user = None
 
-        if not res.data:
-            await message.answer("❌ ПИН-код не найден. Проверь цифры или обратись к админу.")
+        for field in pin_fields:
+            res = await supabase.table("profiles").select("*").eq(field, pin).execute()
+            if res.data:
+                user = res.data[0]
+                break
+
+        if not user:
+            await message.answer("❌ Неверный ПИН-код. Проверьте цифры или обратитесь к администратору.")
             return
 
-        user = res.data[0]
-
-        # 4. Защита от перехвата: проверяем, не привязан ли уже этот профиль к кому-то другому
+        # Защита: если профиль уже привязан к другому Telegram
         if user.get("telegram_chat_id"):
             await message.answer("⚠️ Этот ПИН-код уже активирован другим устройством.")
             return
 
-        # 5. Привязываем Telegram ID к профилю
+        # Привязываем Telegram ID к профилю
         chat_id = str(message.from_user.id)
         await supabase.table("profiles").update({"telegram_chat_id": chat_id}).eq("id", user["id"]).execute()
 
-        # Очищаем состояние (больше пин не ждем)
+        # Очищаем состояние
         await state.clear()
-        
-        # Выдаем меню
+
+        # Ответ пользователю
+        name = user.get("full_name") or user.get("name") or "сотрудник"
         await message.answer(
-            f"✅ Отлично! Твой профиль успешно привязан.\n"
-            f"Добро пожаловать в команду, <b>{user['full_name']}</b>!", 
-            parse_mode="HTML", 
+            f"✅ Авторизация успешна! {name}, вы привязаны к системе Montazhka PRO.",
             reply_markup=get_main_menu()
         )
-        
+
     except Exception as e:
         await message.answer(f"❌ Ошибка авторизации: {str(e)}")
         await state.clear()

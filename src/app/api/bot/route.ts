@@ -112,6 +112,47 @@ async function findProfileByTelegramIdentity(telegramId: string, username?: stri
   return data;
 }
 
+// Обработка попытки авторизации по ПИН-коду. Возвращает true, если сообщение обработано (ответ отправлен).
+export async function handlePinAuthorization(chatId: number | string, telegramId: string, text: string): Promise<boolean> {
+  try {
+    const pin = (text || '').trim();
+    if (!pin) return false;
+
+    // Если уже привязан — не считаем это PIN-авторизацией
+    const existing = await findProfileByTelegramId(telegramId);
+    if (existing) return false;
+
+    // Ищем профиль по любому из полей pin_code, pin, password
+    const orQuery = `pin_code.eq.${pin},pin.eq.${pin},password.eq.${pin}`;
+    const { data: profile } = await supabase.from('profiles').select('*').or(orQuery).limit(1).maybeSingle();
+
+    if (!profile) {
+      await sendTelegramMessage(chatId, '❌ Неверный ПИН-код. Проверьте цифры или обратитесь к администратору.');
+      return true;
+    }
+
+    if (profile.telegram_chat_id) {
+      await sendTelegramMessage(chatId, '⚠️ Этот ПИН-код уже активирован другим устройством.');
+      return true;
+    }
+
+    const { error: updateError } = await supabase.from('profiles').update({ telegram_chat_id: String(telegramId) }).eq('id', profile.id);
+    if (updateError) {
+      console.error('❌ Ошибка обновления профиля при привязке Telegram:', updateError);
+      await sendTelegramMessage(chatId, '❌ Ошибка при привязке профиля. Попробуйте позже.');
+      return true;
+    }
+
+    const name = profile.full_name || profile.name || 'сотрудник';
+    await sendTelegramMessage(chatId, `✅ Авторизация успешна! ${escapeHtml(name)}, вы привязаны к системе Montazhka PRO.`);
+    return true;
+  } catch (err) {
+    console.error('❌ Ошибка в handlePinAuthorization:', err);
+    try { await sendTelegramMessage(chatId, '❌ Внутренняя ошибка авторизации.'); } catch (_) {}
+    return true;
+  }
+}
+
 function buildMainMenuKeyboard(canPrint: boolean, chatId: string | number) {
   const keyboard = [
     [{ text: '➕ Создать заказ', web_app: { url: `${WEB_APP_URL}?tg_id=${chatId}` } }, { text: '📋 Активные заказы' }], 
@@ -546,7 +587,23 @@ export async function POST(request: Request) {
           else await sendMainMenu(chatId, false);
           break;
         }
-        default: await sendMainMenu(chatId, Boolean((await findProfileByTelegramId(telegramId))?.can_print));
+        default: {
+          // Проверим профиль по telegram_chat_id
+          const existingProfile = await findProfileByTelegramId(telegramId);
+
+          // Если профиля нет — попробуем обработать текст как ПИН-код
+          if (!existingProfile) {
+            const handled = await handlePinAuthorization(chatId, telegramId, text);
+            if (handled) {
+              // Если сообщение обработано (ответ отправлен) — возвращаем OK, чтобы Telegram не дублировал
+              return NextResponse.json({ ok: true }, { status: 200 });
+            }
+            // Если не обработано — продолжим и покажем меню ниже
+          }
+
+          await sendMainMenu(chatId, Boolean((await findProfileByTelegramId(telegramId))?.can_print));
+          break;
+        }
       }
     } catch (error) {
       console.error('Telegram failed:', error);
