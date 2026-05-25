@@ -101,18 +101,6 @@ async function findProfileByTelegramId(telegramId: string) {
   return data;
 }
 
-// Старая функция поиска по username теперь не используется при авторизации, оставлена для совместимости, если нужна
-async function findProfileByTelegramIdentity(telegramId: string, username?: string) {
-  const profileById = await findProfileByTelegramId(telegramId);
-  if (profileById) return profileById;
-  if (!username) return null;
-  const normalizedUsername = username.startsWith('@') ? username.slice(1) : username;
-  const { data } = await supabase.from('profiles').select('id, can_print, name, full_name').or(`telegram_username.ilike.${normalizedUsername},username.ilike.${normalizedUsername}`).single();
-  if (!data) return null;
-  await supabase.from('profiles').update({ telegram_chat_id: telegramId }).eq('id', data.id);
-  return data;
-}
-
 export async function handlePinAuthorization(chatId: number | string, telegramId: string, text: string): Promise<boolean> {
   try {
     const pin = (text || '').trim();
@@ -193,7 +181,6 @@ function buildOrderButtons(order: any) {
   return buttons.length ? { inline_keyboard: buttons } : undefined;
 }
 
-// ИСПРАВЛЕНО: Полностью переписана логика стартовой команды под работу с ПИН-кодами
 async function handleStartCommand(chatId: number | string, telegramId: string) {
   const profile = await findProfileByTelegramId(telegramId);
   if (!profile) {
@@ -294,7 +281,7 @@ async function handleIncomingPhoto(chatId: number | string, telegramId: string, 
   }
 
   if (!order) {
-    return sendTelegramMessage(chatId, '⚠️ Не удалось связать фото с активным заказом. Убедитесь, что нажали кнопку "✅ ЗАВЕРШИТЬ ЗАКАЗ" in меню "Мои заказы".');
+    return sendTelegramMessage(chatId, '⚠️ Не удалось связать фото с активным заказом. Убедитесь, что нажали кнопку "✅ ЗАВЕРШИТЬ ЗАКАЗ" в меню "Мои заказы".');
   }
 
   const photo = photoArray[photoArray.length - 1];
@@ -439,7 +426,7 @@ async function handleCompleteOrder(orderId: string, profile: any, withoutPhoto =
 }
 
 async function handleMoveToOffice(orderId: string, profile: any, callbackQuery: any) {
-  const { error: updateError } = await supabase.from('orders').update({ status: 'completed' }).eq('id', orderId);
+  const { error: updateError = null } = await supabase.from('orders').update({ status: 'completed' }).eq('id', orderId);
   if (updateError) console.error('❌ Ошибка передачи в офис:', updateError);
 
   const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
@@ -450,7 +437,7 @@ async function handleMoveToOffice(orderId: string, profile: any, callbackQuery: 
     const chatId = callbackQuery.message.chat.id;
     const messageId = callbackQuery.message.message_id;
     const isPhoto = Boolean(callbackQuery.message.photo || callbackQuery.message.document);
-    const text = `<b>🏢 Передано в офис</b>\n${buildOrderPreview(order)}`;
+    const text = `<b>🏢 Передано в офис</b>\n${buildOrderPreview(order}`;
     
     await sendTelegram({
       method: isPhoto ? 'editMessageCaption' : 'editMessageText',
@@ -547,11 +534,58 @@ export async function POST(request: Request) {
 
       const text = typeof update.message.text === 'string' ? update.message.text.trim() : '';
       
-      // ИСПРАВЛЕНО: Прежде чем выполнять стандартные кнопки, проверяем, авторизован ли пользователь по telegram_chat_id
       const currentProfile = await findProfileByTelegramId(telegramId);
       
       if (!currentProfile) {
-        // Если профиля нет — любое текстовое сообщение (включая /start) прогоняем через авторизацию по ПИНу
         const handled = await handlePinAuthorization(chatId, telegramId, text);
         if (handled) {
           return NextResponse.json({ ok: true }, { status: 200 });
+        }
+        await sendTelegramMessage(chatId, 'Пожалуйста, введите ваш персональный ПИН-код:');
+        return new Response('OK', { status: 200 });
+      }
+
+      switch (text) {
+        case '/start': await handleStartCommand(chatId, telegramId); break;
+        case '📋 Активные заказы': await handleActiveOrders(chatId); break;
+        case '🔓 Свободные заказы': await handleFreeOrders(chatId); break;
+        case '💼 Мои заказы': {
+          await handleMyOrders(chatId, currentProfile);
+          break;
+        }
+        case '👤 Мой профиль': {
+          const { data: activeOrders } = await supabase.from('orders').select('id, deadline').eq('assigned_to', currentProfile.id).neq('status', 'completed');
+          const { data: completedOrders } = await supabase.from('orders').select('id').eq('assigned_to', currentProfile.id).eq('status', 'completed');
+          const deadlines = (activeOrders || []).map((o: any) => o.deadline).filter(Boolean).map((v: string) => new Date(v)).sort((a, b) => a.getTime() - b.getTime()).slice(0, 3).map((d: Date) => escapeHtml(d.toLocaleDateString('ru-RU')));
+          await sendMainMenu(chatId, Boolean(currentProfile.can_print));
+          await sendTelegramMessage(chatId, `<b>👤 Мой профиль</b>\nВ работе: ${activeOrders?.length || 0}\nЗавершено: ${completedOrders?.length || 0}\n\n<b>Ближайшие дедлайны</b>:\n${deadlines.length ? deadlines.join('\n') : 'Нет дедлайнов.'}`);
+          break;
+        }
+        case '📊 Рейтинг': {
+          const { data } = await supabase.from('orders').select('assigned_to').eq('status', 'completed');
+          const counts = (data || []).reduce<Record<string, number>>((acc, o) => { if (o.assigned_to) acc[o.assigned_to] = (acc[o.assigned_to] || 0) + 1; return acc; }, {});
+          const sorted = Object.entries(counts).sort(([, a], [, b]) => b - a).slice(0, 10);
+          if (!sorted.length) { await sendTelegramMessage(chatId, 'Рейтинг пока пуст.'); break; }
+          const { data: profiles } = await supabase.from('profiles').select('id, name, full_name').in('id', sorted.map(([id]) => id));
+          const namesById = (profiles || []).reduce<Record<string, string>>((acc, p) => { acc[p.id] = p.name || p.full_name || 'Сотрудник'; return acc; }, {});
+          const lines = sorted.map(([id, count], index) => `${index + 1}. ${escapeHtml(namesById[id] || 'Сотрудник')} — ${count}`);
+          await sendTelegramMessage(chatId, `<b>📊 Рейтинг</b>\n${lines.join('\n')}`);
+          break;
+        }
+        case '🖨 Очередь на печать': {
+          if (currentProfile?.can_print) await handlePrintQueue(chatId, currentProfile);
+          else await sendMainMenu(chatId, false);
+          break;
+        }
+        default: {
+          await sendMainMenu(chatId, Boolean(currentProfile?.can_print));
+          break;
+        }
+      }
+    } catch (error) {
+      console.error('Telegram failed:', error);
+    }
+    return new Response('OK', { status: 200 });
+  }
+  return new Response('OK', { status: 200 });
+}
