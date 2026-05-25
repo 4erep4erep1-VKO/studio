@@ -426,7 +426,7 @@ async function handleCompleteOrder(orderId: string, profile: any, withoutPhoto =
 }
 
 async function handleMoveToOffice(orderId: string, profile: any, callbackQuery: any) {
-  const { error: updateError = null } = await supabase.from('orders').update({ status: 'completed' }).eq('id', orderId);
+  const { error: updateError } = await supabase.from('orders').update({ status: 'completed' }).eq('id', orderId);
   if (updateError) console.error('❌ Ошибка передачи в офис:', updateError);
 
   const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
@@ -437,7 +437,7 @@ async function handleMoveToOffice(orderId: string, profile: any, callbackQuery: 
     const chatId = callbackQuery.message.chat.id;
     const messageId = callbackQuery.message.message_id;
     const isPhoto = Boolean(callbackQuery.message.photo || callbackQuery.message.document);
-    const text = `<b>🏢 Передано в офис</b>\n${buildOrderPreview(order}`;
+    const text = `<b>🏢 Передано в офис</b>\n${buildOrderPreview(order)}`;
     
     await sendTelegram({
       method: isPhoto ? 'editMessageCaption' : 'editMessageText',
