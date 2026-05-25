@@ -1,5 +1,5 @@
 from aiogram import Router, types, F
-from aiogram.filters import CommandStart
+from aiogram.filters import BaseFilter, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from database.client import get_supabase
@@ -11,6 +11,13 @@ router = Router()
 # Состояние для ожидания ПИН-кода
 class AuthStates(StatesGroup):
     waiting_for_pin = State()
+
+class UnauthenticatedFilter(BaseFilter):
+    async def __call__(self, message: types.Message) -> bool:
+        chat_id = str(message.from_user.id)
+        supabase = await get_supabase()
+        res = await supabase.table("profiles").select("id").eq("telegram_chat_id", chat_id).execute()
+        return not bool(res.data)
 
 @router.message(CommandStart())
 async def cmd_start(message: types.Message, state: FSMContext):
@@ -34,11 +41,24 @@ async def cmd_start(message: types.Message, state: FSMContext):
         # 2. Если профиля нет — просим ПИН-код
         await state.set_state(AuthStates.waiting_for_pin)
         await message.answer(
-            "👋 Привет! Это система Montazhka PRO.\n\n"
-            "Пожалуйста, введи свой <b>ПИН-код</b> (его выдает администратор):", 
+            "👋 Привет! Ваш Telegram не привязан к системе.\n\n"
+            "Введите персональный ПИН-код, который вам выдал администратор:", 
             parse_mode="HTML"
         )
         
+    except Exception as e:
+        await message.answer(f"❌ Ошибка: {str(e)}")
+
+
+@router.message(F.text, state=None, UnauthenticatedFilter())
+async def request_pin_on_any_message(message: types.Message, state: FSMContext):
+    try:
+        await state.set_state(AuthStates.waiting_for_pin)
+        await message.answer(
+            "👋 Привет! Ваш Telegram не привязан к системе.\n\n"
+            "Введите персональный ПИН-код, который вам выдал администратор:",
+            parse_mode="HTML"
+        )
     except Exception as e:
         await message.answer(f"❌ Ошибка: {str(e)}")
 
