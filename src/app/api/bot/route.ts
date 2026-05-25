@@ -106,14 +106,34 @@ export async function handlePinAuthorization(chatId: number | string, telegramId
     const pin = (text || '').trim();
     if (!pin) return false;
 
-    const existing = await findProfileByTelegramId(telegramId);
-    if (existing) return false;
+    // Проверяем, число это или строка с цифрами
+    const isNumeric = /^\d+$/.test(pin);
+    const pinAsNumber = isNumeric ? parseInt(pin, 10) : null;
 
-    const orQuery = `pin_code.eq.${pin},pin.eq.${pin},password.eq.${pin}`;
-    const { data: profile } = await supabase.from('profiles').select('*').or(orQuery).limit(1).maybeSingle();
+    // Ищем профиль перебором поочередно во избежание сбоев типов в OR-запросах Supabase
+    let profile = null;
+    const fields = ['pin_code', 'pin', 'password'];
+
+    for (const field of fields) {
+      // Ищем как текст
+      let query = supabase.from('profiles').select('*').eq(field, pin);
+      let { data } = await query.limit(1).maybeSingle();
+      
+      // Если не нашли и это число — ищем как число
+      if (!data && pinAsNumber !== null) {
+        let queryNum = supabase.from('profiles').select('*').eq(field, pinAsNumber);
+        const resNum = await queryNum.limit(1).maybeSingle();
+        data = resNum.data;
+      }
+
+      if (data) {
+        profile = data;
+        break;
+      }
+    }
 
     if (!profile) {
-      await sendTelegramMessage(chatId, '❌ Неверный ПИН-код. Проверьте цифры или обратитесь к администратору.');
+      await sendTelegramMessage(chatId, `❌ Неверный ПИН-код. Код "${pin}" не найден в системе. Проверьте цифры на сайте.`);
       return true;
     }
 
@@ -125,16 +145,16 @@ export async function handlePinAuthorization(chatId: number | string, telegramId
     const { error: updateError } = await supabase.from('profiles').update({ telegram_chat_id: String(telegramId) }).eq('id', profile.id);
     if (updateError) {
       console.error('❌ Ошибка обновления профиля при привязке Telegram:', updateError);
-      await sendTelegramMessage(chatId, '❌ Ошибка при привязке профиля. Попробуйте позже.');
+      await sendTelegramMessage(chatId, '❌ Ошибка при привязке профиля в БД. Попробуйте позже.');
       return true;
     }
 
     const name = profile.full_name || profile.name || 'сотрудник';
     await sendTelegramMessage(chatId, `✅ Авторизация успешна! ${escapeHtml(name)}, вы привязаны к системе Montazhka PRO.`);
     return true;
-  } catch (err) {
+  } catch (err: any) {
     console.error('❌ Ошибка в handlePinAuthorization:', err);
-    try { await sendTelegramMessage(chatId, '❌ Внутренняя ошибка авторизации.'); } catch (_) {}
+    try { await sendTelegramMessage(chatId, `❌ Внутренняя ошибка авторизации: ${err?.message || err}`); } catch (_) {}
     return true;
   }
 }
@@ -281,7 +301,7 @@ async function handleIncomingPhoto(chatId: number | string, telegramId: string, 
   }
 
   if (!order) {
-    return sendTelegramMessage(chatId, '⚠️ Не удалось связать фото с активным заказом. Убедитесь, что нажали кнопку "✅ ЗАВЕРШИТЬ ЗАКАЗ" в меню "Мои заказы".');
+    return sendTelegramMessage(chatId, '⚠️ Не удалось связать фото с active заказом. Убедитесь, что нажали кнопку "✅ ЗАВЕРШИТЬ ЗАКАЗ" в меню "Мои заказы".');
   }
 
   const photo = photoArray[photoArray.length - 1];
@@ -536,15 +556,12 @@ export async function POST(request: Request) {
       
       const currentProfile = await findProfileByTelegramId(telegramId);
       
-      // Если пользователь НЕ авторизован
       if (!currentProfile) {
-        // Если он нажал /start — не проверяем его как ПИН-код, а просто выводим инструкцию
         if (text === '/start') {
           await handleStartCommand(chatId, telegramId);
           return NextResponse.json({ ok: true }, { status: 200 });
         }
 
-        // Если пришёл любой другой текст — проверяем, ПИН ли это
         const handled = await handlePinAuthorization(chatId, telegramId, text);
         if (handled) {
           return NextResponse.json({ ok: true }, { status: 200 });
@@ -554,7 +571,6 @@ export async function POST(request: Request) {
         return new Response('OK', { status: 200 });
       }
 
-      // Если пользователь авторизован, запускаем стандартное меню команд
       switch (text) {
         case '/start': await handleStartCommand(chatId, telegramId); break;
         case '📋 Активные заказы': await handleActiveOrders(chatId); break;
