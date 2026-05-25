@@ -536,15 +536,25 @@ export async function POST(request: Request) {
       
       const currentProfile = await findProfileByTelegramId(telegramId);
       
+      // Если пользователь НЕ авторизован
       if (!currentProfile) {
+        // Если он нажал /start — не проверяем его как ПИН-код, а просто выводим инструкцию
+        if (text === '/start') {
+          await handleStartCommand(chatId, telegramId);
+          return NextResponse.json({ ok: true }, { status: 200 });
+        }
+
+        // Если пришёл любой другой текст — проверяем, ПИН ли это
         const handled = await handlePinAuthorization(chatId, telegramId, text);
         if (handled) {
           return NextResponse.json({ ok: true }, { status: 200 });
         }
+        
         await sendTelegramMessage(chatId, 'Пожалуйста, введите ваш персональный ПИН-код:');
         return new Response('OK', { status: 200 });
       }
 
+      // Если пользователь авторизован, запускаем стандартное меню команд
       switch (text) {
         case '/start': await handleStartCommand(chatId, telegramId); break;
         case '📋 Активные заказы': await handleActiveOrders(chatId); break;
