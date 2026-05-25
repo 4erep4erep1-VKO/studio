@@ -27,12 +27,19 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssig
     onComplete(order.id);
   };
 
+  const containerClass = `p-5 rounded-xl shadow-sm hover:border-muted-foreground/30 transition flex flex-col h-full ${order.is_measurement ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50' : 'bg-card border border-border'}`;
+
   return (
-    <div className="bg-card border border-border p-5 rounded-xl shadow-sm hover:border-muted-foreground/30 transition flex flex-col h-full">
+    <div className={containerClass}>
       {/* ЗАГОЛОВОК И ОПИСАНИЕ - КЛИКАБЕЛЬНЫЕ */}
       <div onClick={() => onView(order)} className="cursor-pointer group mb-4 -mx-5 -mt-5 px-5 pt-5 pb-4">
         <div className="flex justify-between items-start">
-          <h3 className="font-bold text-lg text-card-foreground group-hover:text-primary transition mb-2">{order.title}</h3>
+          <div className="flex items-center gap-2">
+            {order.is_measurement && (
+              <span className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 px-2 py-0.5 rounded font-medium">📐 ЗАМЕР</span>
+            )}
+            <h3 className="font-bold text-lg text-card-foreground group-hover:text-primary transition mb-2">{order.title}</h3>
+          </div>
           <div className="flex gap-2">
              {order.preview_url && <span className="text-[10px] text-primary bg-primary/10 border border-primary/20 px-2 py-1 rounded uppercase font-bold">Эскиз</span>}
              <span className={`text-[10px] px-2 py-1 rounded uppercase font-bold ${order.department === 'print' ? 'bg-purple-500/10 text-purple-500' : order.department === 'production' ? 'bg-orange-500/10 text-orange-500' : 'bg-blue-500/10 text-blue-500'}`}>
