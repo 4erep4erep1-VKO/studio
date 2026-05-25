@@ -34,6 +34,8 @@ export default function Dashboard() {
   const [displayMode, setDisplayMode] = useState<'kanban' | 'list'>('kanban');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserName, setCurrentUserName] = useState<string | null>(null);
+  const [isCurrentUserLoading, setIsCurrentUserLoading] = useState(true);
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -55,6 +57,50 @@ export default function Dashboard() {
       setCurrentUserId(savedId);
       setIsAdmin(savedIsAdmin);
     }
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadCurrentUserName = async () => {
+      setIsCurrentUserLoading(true);
+
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        if (!session?.user?.id) {
+          if (mounted) {
+            setCurrentUserName(null);
+          }
+          return;
+        }
+
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('name, full_name')
+          .eq('id', session.user.id)
+          .single();
+
+        if (profileError && profileError.code !== 'PGRST116') {
+          console.error('Ошибка загрузки профиля текущего пользователя:', profileError);
+        }
+
+        if (mounted) {
+          setCurrentUserName(profile?.name || profile?.full_name || null);
+        }
+      } catch (err: any) {
+        console.error('Ошибка получения текущей сессии:', err);
+      } finally {
+        if (mounted) {
+          setIsCurrentUserLoading(false);
+        }
+      }
+    };
+
+    loadCurrentUserName();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const fetchAllData = async () => {
@@ -369,8 +415,14 @@ export default function Dashboard() {
              <div className="flex-grow">
                 <p className="text-xs text-muted-foreground font-bold">Система</p>
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium">Активна</p>
-                  <LogOut onClick={handleLogout} className="w-5 h-5 text-destructive cursor-pointer" aria-label="Выйти" />
+                  <div className="flex items-center">
+                    {isCurrentUserLoading ? (
+                      <div className="h-5 w-24 rounded-full bg-slate-200/70 dark:bg-slate-700/50 animate-pulse mr-4" />
+                    ) : currentUserName ? (
+                      <span className="text-sm text-gray-600 dark:text-gray-400 mr-4">{currentUserName}</span>
+                    ) : null}
+                    <LogOut onClick={handleLogout} className="w-5 h-5 text-destructive cursor-pointer" aria-label="Выйти" />
+                  </div>
                 </div>
              </div>
           </div>
