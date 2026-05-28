@@ -7,7 +7,13 @@ function getAlmatyTodayEnd() {
   return now;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  // Защита от левых вызовов
+  const authHeader = request.headers.get('authorization');
+  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+
   try {
     const { data: orders, error } = await supabaseAdmin
       .from('orders')
