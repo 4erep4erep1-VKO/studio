@@ -138,6 +138,101 @@ ${orderData.source_link ? `🔗 <b>Ссылка на макет:</b> <a href="${
   }
 }
 
+function formatPayloadChange(key: string, value: any) {
+  switch (key) {
+    case 'title': return `Название объекта: ${escapeHtml(String(value || ''))}`;
+    case 'description': return `Описание: ${escapeHtml(String(value || ''))}`;
+    case 'deadline': return `Дедлайн: ${escapeHtml(String(value || 'Не указан'))}`;
+    case 'assigned_to': return value ? 'Исполнитель: изменен / назначен' : 'Исполнитель: снят';
+    case 'is_general': return `Тип заказа: ${value ? 'Общий' : 'Личный'}`;
+    case 'image_urls': return `Фото/изображения: ${Array.isArray(value) ? `${value.length} шт.` : escapeHtml(String(value || ''))}`;
+    case 'source_link': return `Ссылка на макет: ${escapeHtml(String(value || ''))}`;
+    case 'dimensions': return `Размеры: ${escapeHtml(String(value || ''))}`;
+    case 'material': return `Материал: ${escapeHtml(String(value || ''))}`;
+    case 'department': return `Отдел: ${escapeHtml(String(value === 'installation' ? 'Монтаж' : value === 'production' ? 'Изготовление' : 'Печать'))}`;
+    case 'status': return `Статус: ${escapeHtml(String(value || ''))}`;
+    case 'report_photo': return 'Фото отчета: обновлено';
+    default: return `${escapeHtml(key)}: ${escapeHtml(String(value ?? ''))}`;
+  }
+}
+
+export async function notifyOrderUpdate(
+  orderTitle: string,
+  payload: Record<string, any>,
+  editorName: string,
+  currentAssignedTo: string | null
+) {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const groupChatId = process.env.TELEGRAM_GROUP_CHAT_ID;
+
+  if (!botToken || !groupChatId) {
+    console.warn('⚠️ Telegram config missing');
+    return { success: false, error: 'Telegram config missing' };
+  }
+
+  let chatId: string | number = groupChatId;
+  const targetUserId = payload.assigned_to ?? currentAssignedTo;
+
+  if (targetUserId) {
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+        process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+      );
+
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('telegram_chat_id')
+        .eq('id', targetUserId)
+        .single();
+
+      if (!error && profile?.telegram_chat_id) {
+        chatId = String(profile.telegram_chat_id);
+      }
+    } catch (err) {
+      console.error('⚠️ Ошибка запроса телеграм-ид профиля при уведомлении об обновлении заказа:', err);
+    }
+  }
+
+  const changes = Object.entries(payload)
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => formatPayloadChange(key, value));
+
+  const changesText = changes.length
+    ? changes.map(line => `• ${line}`).join('\n')
+    : '• Нет явных изменений';
+
+  const messageText = `
+✏️ <b>Заказ изменен!</b>
+
+📦 <b>Объект:</b> ${escapeHtml(orderTitle)}
+👤 <b>Кто изменил:</b> ${escapeHtml(editorName)}
+
+🔍 <b>Что обновилось:</b>
+${changesText}
+⏱ Время: ${new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Almaty' })}
+  `.trim();
+
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text: messageText, parse_mode: 'HTML', disable_web_page_preview: true }),
+    });
+
+    if (!response.ok) {
+      const errorResponse = await response.text();
+      console.error('❌ Telegram update notification failed:', errorResponse);
+    }
+
+    return { success: response.ok };
+  } catch (error) {
+    console.error('❌ Ошибка отправки уведомления об обновлении заказа:', error);
+    return { success: false, error: 'Internal error' };
+  }
+}
+
 export async function notifyOrderToUser(chatId: string, title: string) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   if (!botToken) return { success: false };

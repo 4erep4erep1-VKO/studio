@@ -3,16 +3,17 @@
 import React, { useState, useEffect } from 'react';
 import imageCompression from 'browser-image-compression';
 import { supabase } from '@/lib/supabase';
-import { notifyNewOrderToGroup, notifyOrderToUser } from '@/app/actions/telegram';
+import { notifyNewOrderToGroup, notifyOrderToUser, notifyOrderUpdate } from '@/app/actions/telegram';
 import { useRouter } from 'next/navigation';
 
 interface OrderFormProps {
   orderId: string | null;
   onSave: () => void;
   creatorId: string;
+  editorName?: string;
 }
 
-export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps) {
+export default function OrderForm({ orderId, onSave, creatorId, editorName }: OrderFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [installers, setInstallers] = useState<any[]>([]);
@@ -203,6 +204,15 @@ export default function OrderForm({ orderId, onSave, creatorId }: OrderFormProps
       : await supabase.from('orders').insert([payload]);
 
     if (!error) {
+      if (orderId && Object.keys(payload).length > 0) {
+        const currentAssigned = initialData?.assigned_to || formData.assigned_to || null;
+        try {
+          await notifyOrderUpdate(initialData?.title || formData.title, payload, editorName || 'Сотрудник', currentAssigned);
+        } catch (err) {
+          console.error('Ошибка уведомления об изменении заказа:', err);
+        }
+      }
+
       // Отправляем уведомления только для новых заказов
       if (!orderId) {
         try {

@@ -608,7 +608,7 @@ export default function Dashboard() {
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogContent className="max-w-xl bg-card border-border text-foreground p-0 shadow-2xl overflow-hidden">
             <DialogHeader className="p-6 pb-0"><DialogTitle className="text-xl font-bold uppercase italic tracking-tight text-secondary">Параметры объекта</DialogTitle></DialogHeader>
-            <OrderForm orderId={editingOrderId} onSave={() => { setIsModalOpen(false); fetchAllData(); }} creatorId={currentUserId || ''} />
+            <OrderForm orderId={editingOrderId} onSave={() => { setIsModalOpen(false); fetchAllData(); }} creatorId={currentUserId || ''} editorName={currentUserName || undefined} />
           </DialogContent>
         </Dialog>
 
