@@ -32,10 +32,11 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
   const [formData, setFormData] = useState(initialFormState);
   const [initialData, setInitialData] = useState<typeof initialFormState | null>(null);
 
+  // Исправлено: приводим пустые строки к null, убираем зависимость от чекбокса общего заказа при сравнении
   const normalizeFormValues = (data: typeof initialFormState) => ({
     ...data,
     deadline: data.deadline || null,
-    assigned_to: data.is_general ? null : (data.assigned_to || null)
+    assigned_to: data.assigned_to && data.assigned_to.trim() !== "" ? data.assigned_to : null
   });
 
   useEffect(() => {
@@ -83,11 +84,10 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
     loadData();
   }, [orderId]);
 
-  // Ensure Telegram WebApp script is available when this form is opened inside Telegram Mini App
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const w = window as any;
-    if (w.Telegram && w.Telegram.WebApp) return; // already present
+    if (w.Telegram && w.Telegram.WebApp) return;
 
     const scriptId = 'telegram-web-app-script';
     if (document.getElementById(scriptId)) return;
@@ -105,7 +105,6 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
 
   const compressImageFile = async (file: File): Promise<File> => {
     if (!file.type.startsWith('image/')) return file;
-
     try {
       const compressedBlob = await imageCompression(file, {
         maxSizeMB: 0.5,
@@ -113,11 +112,7 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
         useWebWorker: true,
         fileType: file.type,
       });
-
-      if (compressedBlob instanceof File) {
-        return compressedBlob;
-      }
-
+      if (compressedBlob instanceof File) return compressedBlob;
       return new File([compressedBlob], file.name, { type: compressedBlob.type || file.type });
     } catch (err) {
       console.error('Image compression failed:', err);
@@ -128,7 +123,6 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
   const uploadImages = async (files: FileList | File[]) => {
     setLoading(true);
     const newUrls: string[] = [];
-
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const optimizedFile = await compressImageFile(file);
@@ -139,12 +133,9 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
       const { error } = await supabase.storage.from('order-photos').upload(filePath, optimizedFile);
       if (!error) {
         const { data } = supabase.storage.from('order-photos').getPublicUrl(filePath);
-        if (data?.publicUrl) {
-          newUrls.push(data.publicUrl);
-        }
+        if (data?.publicUrl) newUrls.push(data.publicUrl);
       }
     }
-
     setFormData(prev => ({ ...prev, image_urls: [...prev.image_urls, ...newUrls] }));
     setLoading(false);
   };
@@ -157,13 +148,10 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Проверка: если создатель не определен, не создаем заказ
     if (!creatorId) {
       alert('❌ Ошибка: Пользователь не авторизован. Пожалуйста, пройдите вход в систему.');
       return;
     }
-    
     setLoading(true);
 
     const currentData = normalizeFormValues(formData);
@@ -185,7 +173,6 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
     } else if (orderId) {
       payload = currentData;
     } else {
-      // Для нового заказа обязательно добавляем created_by и начальный статус
       payload = {
         ...currentData,
         created_by: creatorId,
@@ -204,16 +191,23 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
       : await supabase.from('orders').insert([payload]);
 
     if (!error) {
+      // ИСПРАВЛЕНО: Четкий разбор исполнителя без пустых строк для отправки уведомлений
       if (orderId && Object.keys(payload).length > 0) {
-        const currentAssigned = initialData?.assigned_to || formData.assigned_to || null;
+        const rawAssigned = formData.assigned_to || initialData?.assigned_to || null;
+        const currentAssigned = rawAssigned && rawAssigned.trim() !== "" ? rawAssigned : null;
+
         try {
-          await notifyOrderUpdate(initialData?.title || formData.title, payload, editorName || 'Сотрудник', currentAssigned);
+          await notifyOrderUpdate(
+            initialData?.title || formData.title, 
+            payload, 
+            editorName || 'Сотрудник', 
+            currentAssigned
+          );
         } catch (err) {
           console.error('Ошибка уведомления об изменении заказа:', err);
         }
       }
 
-      // Отправляем уведомления только для новых заказов
       if (!orderId) {
         try {
           await notifyNewOrderToGroup({
@@ -226,15 +220,14 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
             material: formData.material,
             source_link: formData.source_link,
             image_urls: formData.image_urls,
-            creator_id: creatorId, // Передаем ID создателя
+            creator_id: creatorId,
           });
         } catch (err: any) {
           console.error('Ошибка Telegram:', err);
-          alert('Заказ создан, но в Телеграм не улетел. Проверь ключи на Vercel!');
+          alert('Заказ создан, но в Телеграм не улетел.');
         }
       }
 
-      // Личное уведомление исполнителю
       if (!orderId && !formData.is_general && formData.assigned_to) {
         const assignedUser = installers.find(i => i.id === formData.assigned_to);
         if (assignedUser && assignedUser.telegram_chat_id) {
@@ -246,9 +239,8 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
         }
       }
 
-      router.refresh(); // Принудительно обновляем данные на странице (чтобы перекинулись отделы)
+      router.refresh();
       onSave();
-      // Если форма открыта внутри Telegram Mini App — закрываем окно
       try {
         if (typeof window !== 'undefined') {
           const w = window as any;
@@ -256,22 +248,17 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
             w.Telegram.WebApp.close();
           }
         }
-      } catch (e) {
-        console.warn('Telegram WebApp close failed', e);
-      }
+      } catch (e) { console.warn('Telegram WebApp close failed', e); }
     } else {
       alert('Ошибка базы: ' + error.message);
     }
-    
     setLoading(false);
   };
 
   return (
     <div className="flex flex-col h-full bg-card text-foreground overflow-hidden p-6" onPaste={handlePaste}>
       <form onSubmit={handleSubmit} className="flex flex-col h-full">
-        
         <div className="flex-grow overflow-y-auto space-y-5 pr-2 custom-scrollbar" style={{ maxHeight: '70vh' }}>
-          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Объект</label>
@@ -306,8 +293,6 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
               <input type="checkbox" checked={formData.is_general} onChange={e => setFormData({...formData, is_general: e.target.checked})} className="w-5 h-5 accent-primary" />
               <span className="font-bold text-sm cursor-pointer text-foreground">Общий заказ (увидят все в отделе)</span>
             </label>
-
-            {/* Поле "Это замер?" временно удалено */}
           </div>
 
           <div className="grid grid-cols-2 gap-4">

@@ -29,7 +29,6 @@ export async function notifyNewOrderToGroup(orderData: OrderData) {
     let creatorName = orderData.creator_full_name;
     const creatorId = orderData.created_by || orderData.creator_id;
     
-    // Умный поиск автора: если пришел Telegram ID (число) или UUID
     if (!creatorName && creatorId) {
       try {
         const { createClient } = await import('@supabase/supabase-js');
@@ -48,7 +47,6 @@ export async function notifyNewOrderToGroup(orderData: OrderData) {
         }
         
         const { data: profile, error } = await query.single();
-        
         if (error) console.error('❌ Ошибка запроса профиля:', error.message);
         if (profile) {
           creatorName = profile.full_name || profile.name;
@@ -65,7 +63,6 @@ export async function notifyNewOrderToGroup(orderData: OrderData) {
       ? new Date(orderData.deadline).toLocaleDateString('ru-RU')
       : 'Не указан';
 
-    // Формируем текст, ОБЯЗАТЕЛЬНО экранируя ссылку на макет через escapeHtml
     const messageText = `
 🆕 <b>Новый заказ (создан на сайте)</b>
 
@@ -87,19 +84,8 @@ ${orderData.source_link ? `🔗 <b>Ссылка на макет:</b> <a href="${
     const hasPhoto = Array.isArray(orderData.image_urls) && orderData.image_urls.length > 0 && typeof orderData.image_urls[0] === 'string';
     const endpoint = hasPhoto ? 'sendPhoto' : 'sendMessage';
     const body = hasPhoto
-      ? {
-          chat_id: groupChatId,
-          photo: orderData.image_urls![0],
-          caption: messageText,
-          parse_mode: 'HTML',
-          disable_notification: false,
-        }
-      : {
-          chat_id: groupChatId,
-          text: messageText,
-          parse_mode: 'HTML',
-          disable_web_page_preview: true,
-        };
+      ? { chat_id: groupChatId, photo: orderData.image_urls![0], caption: messageText, parse_mode: 'HTML', disable_notification: false }
+      : { chat_id: groupChatId, text: messageText, parse_mode: 'HTML', disable_web_page_preview: true };
 
     let response = await fetch(`https://api.telegram.org/bot${botToken}/${endpoint}`, {
       method: 'POST',
@@ -110,27 +96,14 @@ ${orderData.source_link ? `🔗 <b>Ссылка на макет:</b> <a href="${
     if (!response.ok) {
       const errorResponse = await response.text();
       console.error(`❌ Telegram API Error (${endpoint}):`, errorResponse);
-
-      // Если упала отправка с фото, пробуем отправить хотя бы голый текст
       if (hasPhoto) {
-        console.log('🔄 Ошибка при sendPhoto. Пробуем резервную отправку через sendMessage...');
         response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: groupChatId,
-            text: messageText,
-            parse_mode: 'HTML',
-            disable_web_page_preview: true,
-          }),
+          body: JSON.stringify({ chat_id: groupChatId, text: messageText, parse_mode: 'HTML', disable_web_page_preview: true }),
         });
-        if (!response.ok) {
-          const fallbackError = await response.text();
-          console.error('❌ Резервная отправка текста тоже упала:', fallbackError);
-        }
       }
     }
-
     return { success: response.ok };
   } catch (error) {
     console.error('❌ Критическая ошибка экшена Telegram:', error);
@@ -142,15 +115,15 @@ function formatPayloadChange(key: string, value: any) {
   switch (key) {
     case 'title': return `Название объекта: ${escapeHtml(String(value || ''))}`;
     case 'description': return `Описание: ${escapeHtml(String(value || ''))}`;
-    case 'deadline': return `Дедлайн: ${escapeHtml(String(value || 'Не указан'))}`;
-    case 'assigned_to': return value ? 'Исполнитель: изменен / назначен' : 'Исполнитель: снят';
+    case 'deadline': return `Дедлайн: ${escapeHtml(String(value ? new Date(value).toLocaleDateString('ru-RU') : 'Не указан'))}`;
+    case 'assigned_to': return value ? 'Исполнитель: назначен / изменен' : 'Исполнитель: снят';
     case 'is_general': return `Тип заказа: ${value ? 'Общий' : 'Личный'}`;
     case 'image_urls': return `Фото/изображения: ${Array.isArray(value) ? `${value.length} шт.` : escapeHtml(String(value || ''))}`;
     case 'source_link': return `Ссылка на макет: ${escapeHtml(String(value || ''))}`;
     case 'dimensions': return `Размеры: ${escapeHtml(String(value || ''))}`;
     case 'material': return `Материал: ${escapeHtml(String(value || ''))}`;
-    case 'department': return `Отдел: ${escapeHtml(String(value === 'installation' ? 'Монтаж' : value === 'production' ? 'Изготовление' : 'Печать'))}`;
-    case 'status': return `Статус: ${escapeHtml(String(value || ''))}`;
+    case 'department': return `Отдел: ${escapeHtml(String(value === 'installation' ? '🛠 Монтаж' : value === 'production' ? '🏭 Изготовление' : '🖨 Печать'))}`;
+    case 'status': return `Статус: ${escapeHtml(String(value === 'new' ? 'Новый' : value === 'in_progress' ? 'В работе' : 'Готово'))}`;
     case 'report_photo': return 'Фото отчета: обновлено';
     default: return `${escapeHtml(key)}: ${escapeHtml(String(value ?? ''))}`;
   }
@@ -171,7 +144,10 @@ export async function notifyOrderUpdate(
   }
 
   let chatId: string | number = groupChatId;
-  const targetUserId = payload.assigned_to ?? currentAssignedTo;
+  
+  // ИСПРАВЛЕНО: Строго фильтруем фантомные пустые ID строк
+  const rawTargetId = payload.assigned_to !== undefined ? payload.assigned_to : currentAssignedTo;
+  const targetUserId = rawTargetId && String(rawTargetId).trim() !== "" ? String(rawTargetId) : null;
 
   if (targetUserId) {
     try {
@@ -187,11 +163,11 @@ export async function notifyOrderUpdate(
         .eq('id', targetUserId)
         .single();
 
-      if (!error && profile?.telegram_chat_id) {
+      if (!error && profile?.telegram_chat_id && String(profile.telegram_chat_id).trim() !== "") {
         chatId = String(profile.telegram_chat_id);
       }
     } catch (err) {
-      console.error('⚠️ Ошибка запроса телеграм-ид профиля при уведомлении об обновлении заказа:', err);
+      console.error('⚠️ Ошибка запроса телеграм-ид профиля при обновлении заказа:', err);
     }
   }
 
@@ -200,7 +176,7 @@ export async function notifyOrderUpdate(
     .map(([key, value]) => formatPayloadChange(key, value));
 
   const changesText = changes.length
-    ? changes.map(line => `• ${line}`).join('\n')
+    .then ? changes.map(line => `• ${line}`).join('\n')
     : '• Нет явных изменений';
 
   const messageText = `
@@ -211,8 +187,12 @@ export async function notifyOrderUpdate(
 
 🔍 <b>Что обновилось:</b>
 ${changesText}
+
 ⏱ Время: ${new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Almaty' })}
   `.trim();
+
+  // Добавлено логирование для панели Vercel
+  console.log(`🤖 Отправка апдейта. Выбран чат ID: ${chatId} (Тип: ${targetUserId ? 'Личный пуш исполнителя' : 'Общая группа'})`);
 
   try {
     const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
@@ -222,10 +202,8 @@ ${changesText}
     });
 
     if (!response.ok) {
-      const errorResponse = await response.text();
-      console.error('❌ Telegram update notification failed:', errorResponse);
+      console.error('❌ Telegram update notification failed:', await response.text());
     }
-
     return { success: response.ok };
   } catch (error) {
     console.error('❌ Ошибка отправки уведомления об обновлении заказа:', error);
