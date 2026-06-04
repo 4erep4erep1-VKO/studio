@@ -111,25 +111,8 @@ ${orderData.source_link ? `🔗 <b>Ссылка на макет:</b> <a href="${
   }
 }
 
-function formatPayloadChange(key: string, value: any) {
-  switch (key) {
-    case 'title': return `Название объекта: ${escapeHtml(String(value || ''))}`;
-    case 'description': return `Описание: ${escapeHtml(String(value || ''))}`;
-    case 'deadline': return `Дедлайн: ${escapeHtml(String(value ? new Date(value).toLocaleDateString('ru-RU') : 'Не указан'))}`;
-    case 'assigned_to': return value ? 'Исполнитель: назначен / изменен' : 'Исполнитель: снят';
-    case 'is_general': return `Тип заказа: ${value ? 'Общий' : 'Личный'}`;
-    case 'image_urls': return `Фото/изображения: ${Array.isArray(value) ? `${value.length} шт.` : escapeHtml(String(value || ''))}`;
-    case 'source_link': return `Ссылка на макет: ${escapeHtml(String(value || ''))}`;
-    case 'dimensions': return `Размеры: ${escapeHtml(String(value || ''))}`;
-    case 'material': return `Материал: ${escapeHtml(String(value || ''))}`;
-    case 'department': return `Отдел: ${escapeHtml(String(value === 'installation' ? '🛠 Монтаж' : value === 'production' ? '🏭 Изготовление' : '🖨 Печать'))}`;
-    case 'status': return `Статус: ${escapeHtml(String(value === 'new' ? 'Новый' : value === 'in_progress' ? 'В работе' : 'Готово'))}`;
-    case 'report_photo': return 'Фото отчета: обновлено';
-    default: return `${escapeHtml(key)}: ${escapeHtml(String(value ?? ''))}`;
-  }
-}
-
 export async function notifyOrderUpdate(
+  orderId: string, 
   orderTitle: string,
   payload: Record<string, any>,
   editorName: string,
@@ -144,8 +127,8 @@ export async function notifyOrderUpdate(
   }
 
   let chatId: string | number = groupChatId;
+  let isPersonal = false;
   
-  // ИСПРАВЛЕНО: Строго фильтруем фантомные пустые ID строк
   const rawTargetId = payload.assigned_to !== undefined ? payload.assigned_to : currentAssignedTo;
   const targetUserId = rawTargetId && String(rawTargetId).trim() !== "" ? String(rawTargetId) : null;
 
@@ -165,19 +148,12 @@ export async function notifyOrderUpdate(
 
       if (!error && profile?.telegram_chat_id && String(profile.telegram_chat_id).trim() !== "") {
         chatId = String(profile.telegram_chat_id);
+        isPersonal = true;
       }
     } catch (err) {
-      console.error('⚠️ Ошибка запроса телеграм-ид профиля при обновлении заказа:', err);
+      console.error('⚠️ Ошибка запроса телеграм-ид профиля при уведомлении об обновлении заказа:', err);
     }
   }
-
-  const changes = Object.entries(payload)
-    .filter(([, value]) => value !== undefined)
-    .map(([key, value]) => formatPayloadChange(key, value));
-
-  const changesText = changes.length
-    .then ? changes.map(line => `• ${line}`).join('\n')
-    : '• Нет явных изменений';
 
   const messageText = `
 ✏️ <b>Заказ изменен!</b>
@@ -185,20 +161,32 @@ export async function notifyOrderUpdate(
 📦 <b>Объект:</b> ${escapeHtml(orderTitle)}
 👤 <b>Кто изменил:</b> ${escapeHtml(editorName)}
 
-🔍 <b>Что обновилось:</b>
-${changesText}
-
+СМОТРИ ОПИСАНИЕ ЗАКАЗА 👇
 ⏱ Время: ${new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Almaty' })}
   `.trim();
 
-  // Добавлено логирование для панели Vercel
-  console.log(`🤖 Отправка апдейта. Выбран чат ID: ${chatId} (Тип: ${targetUserId ? 'Личный пуш исполнителя' : 'Общая группа'})`);
+  console.log(`🤖 Отправка апдейта. Выбран чат ID: ${chatId} (Лично: ${isPersonal})`);
+
+  const fetchBody: any = { 
+    chat_id: chatId, 
+    text: messageText, 
+    parse_mode: 'HTML', 
+    disable_web_page_preview: true
+  };
+
+  if (isPersonal) {
+    fetchBody.reply_markup = {
+      inline_keyboard: [
+        [{ text: '📄 ОПИСАНИЕ ЗАКАЗА', callback_data: `desc_${orderId}` }]
+      ]
+    };
+  }
 
   try {
     const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: messageText, parse_mode: 'HTML', disable_web_page_preview: true }),
+      body: JSON.stringify(fetchBody),
     });
 
     if (!response.ok) {

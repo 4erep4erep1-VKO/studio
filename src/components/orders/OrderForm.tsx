@@ -1,3 +1,4 @@
+// src/components/orders/OrderForm.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -32,7 +33,6 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
   const [formData, setFormData] = useState(initialFormState);
   const [initialData, setInitialData] = useState<typeof initialFormState | null>(null);
 
-  // Исправлено: приводим пустые строки к null, убираем зависимость от чекбокса общего заказа при сравнении
   const normalizeFormValues = (data: typeof initialFormState) => ({
     ...data,
     deadline: data.deadline || null,
@@ -82,7 +82,7 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
       } catch (e) { console.error(e); }
     }
     loadData();
-  }, [orderId]);
+  }, [orderId, creatorId]); // Добавил creatorId в зависимости
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -191,13 +191,14 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
       : await supabase.from('orders').insert([payload]);
 
     if (!error) {
-      // ИСПРАВЛЕНО: Четкий разбор исполнителя без пустых строк для отправки уведомлений
       if (orderId && Object.keys(payload).length > 0) {
         const rawAssigned = formData.assigned_to || initialData?.assigned_to || null;
         const currentAssigned = rawAssigned && rawAssigned.trim() !== "" ? rawAssigned : null;
 
         try {
+          // ИСПРАВЛЕНИЕ: Передаем orderId первым аргументом
           await notifyOrderUpdate(
+            orderId, 
             initialData?.title || formData.title, 
             payload, 
             editorName || 'Сотрудник', 
