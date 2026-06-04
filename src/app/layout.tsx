@@ -1,5 +1,6 @@
 import { ThemeProvider } from "@/components/theme-provider"
 import { ThemeToggle } from "@/components/ThemeToggle"
+import CalculatorWidget from "@/components/CalculatorWidget"
 import "./globals.css"
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -17,6 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <ThemeToggle />
           </header>
           <main>{children}</main>
+          <CalculatorWidget />
         </ThemeProvider>
       </body>
     </html>
