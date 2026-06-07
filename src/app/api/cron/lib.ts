@@ -37,8 +37,23 @@ export async function sendTelegram(text: string) {
 }
 
 export function formatOrderLine(order: any, assignedNames: Record<string, string>) {
-  const departmentLabel = order.department === 'installation' ? '🛠 Монтаж' : order.department === 'production' ? '🏭 Изготовление' : '🖨 Печать';
+  // Словарь для красивых названий
+  const statusMap: Record<string, string> = {
+    'new': '🆕 Новые',
+    'in_progress': '⏳ В работе',
+    'completed': '✅ Готово'
+  };
+
+  const departmentLabel = order.department === 'installation' 
+    ? '🛠 Монтаж' 
+    : order.department === 'production' 
+    ? '🏭 Изготовление' 
+    : '🖨 Печать';
+
+  const statusLabel = statusMap[order.status] || order.status || 'В работе';
   const assigned = assignedNames[order.assigned_to] || 'Общий';
   const deadline = order.deadline ? new Date(order.deadline).toLocaleDateString('ru-RU') : 'Не указан';
-  return `• <b>№${escapeHtml(order.id)}</b> — ${escapeHtml(order.title)}\n  ${departmentLabel}, ${escapeHtml(order.status || 'В работе')}\n  Ответственный: ${escapeHtml(assigned)}\n  Дедлайн: ${escapeHtml(deadline)}`;
+  
+  // ВЫВОДИМ TITLE, А НЕ ID
+  return `• <b>${escapeHtml(order.title)}</b>\n  ${departmentLabel}, ${statusLabel}\n  Ответственный: ${escapeHtml(assigned)}\n  Дедлайн: ${escapeHtml(deadline)}`;
 }
