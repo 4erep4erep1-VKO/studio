@@ -1,3 +1,4 @@
+// components/orders/OrderCard.tsx
 import React from 'react';
 import { Trash2, CheckCircle, ExternalLink, User, UserPlus, Truck } from 'lucide-react';
 import confetti from 'canvas-confetti';
@@ -27,12 +28,42 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssig
     onComplete(order.id);
   };
 
-  const containerClass = `p-5 rounded-xl shadow-sm hover:border-muted-foreground/30 transition flex flex-col h-full bg-card border border-border`;
+  // Функция расчета статуса дедлайна
+  const getDeadlineStatus = () => {
+    if (order.status === 'completed') return 'normal'; // Завершенные не пульсируют
+    if (!order.deadline) return 'normal';
+
+    const deadlineDate = new Date(order.deadline);
+    deadlineDate.setHours(0, 0, 0, 0);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const diffTime = deadlineDate.getTime() - today.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 1) return 'critical'; // Просрочено, сегодня или завтра
+    if (diffDays <= 3) return 'warning';  // 2-3 дня
+    return 'normal';
+  };
+
+  const deadlineStatus = getDeadlineStatus();
+
+  // Добавили relative, чтобы абсолютная рамка легла ровно по краям карточки
+  const containerClass = `relative p-5 rounded-xl shadow-sm hover:border-muted-foreground/30 transition flex flex-col h-full bg-card border border-border`;
 
   return (
     <div className={containerClass}>
+      {/* Слой пульсации дедлайна */}
+      {deadlineStatus === 'critical' && (
+        <div className="absolute inset-0 rounded-xl border-2 border-red-500 animate-pulse pointer-events-none z-10" />
+      )}
+      {deadlineStatus === 'warning' && (
+        <div className="absolute inset-0 rounded-xl border-2 border-amber-500 animate-pulse pointer-events-none z-10" />
+      )}
+
       {/* ЗАГОЛОВОК И ОПИСАНИЕ - КЛИКАБЕЛЬНЫЕ */}
-      <div onClick={() => onView(order)} className="cursor-pointer group mb-4 -mx-5 -mt-5 px-5 pt-5 pb-4">
+      <div onClick={() => onView(order)} className="cursor-pointer group mb-4 -mx-5 -mt-5 px-5 pt-5 pb-4 relative z-20">
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-2">
             <h3 className="font-bold text-lg text-card-foreground group-hover:text-primary transition mb-2">{order.title}</h3>
@@ -50,10 +81,12 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssig
         </p>
       </div>
       
-      <div className="space-y-2 text-sm mb-4 bg-background/50 p-3 rounded-lg border border-border/50">
+      <div className="space-y-2 text-sm mb-4 bg-background/50 p-3 rounded-lg border border-border/50 relative z-20">
         <div className="flex justify-between">
           <span className="text-muted-foreground">Дедлайн:</span>
-          <span className="text-foreground font-medium">{order.deadline ? new Date(order.deadline).toLocaleDateString() : '—'}</span>
+          <span className={`font-bold ${deadlineStatus === 'critical' ? 'text-red-500' : deadlineStatus === 'warning' ? 'text-amber-500' : 'text-foreground'}`}>
+            {order.deadline ? new Date(order.deadline).toLocaleDateString('ru-RU') : '—'}
+          </span>
         </div>
         <div className="flex justify-between items-center">
           <span className="text-muted-foreground">Исполнитель:</span>
@@ -76,7 +109,7 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssig
       </div>
 
       {order.report_photo && (
-        <div className="mb-4 bg-background p-2 rounded-lg border border-border">
+        <div className="mb-4 bg-background p-2 rounded-lg border border-border relative z-20">
           <p className="text-[10px] text-muted-foreground uppercase font-bold mb-2">📸 Отчет:</p>
           <a href={order.report_photo} target="_blank" rel="noopener noreferrer" className="block relative group">
             <img src={order.report_photo} alt="Отчет" className="w-full h-24 object-cover rounded-md border border-border" />
@@ -87,7 +120,7 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssig
         </div>
       )}
 
-      <div className="pt-4 border-t border-border flex flex-wrap gap-2 justify-between items-center mt-auto">
+      <div className="pt-4 border-t border-border flex flex-wrap gap-2 justify-between items-center mt-auto relative z-20">
         <div className="flex items-center gap-2">
           <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
             order.status === 'completed' ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 
