@@ -1,17 +1,19 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai'; // 1. Импортируем Gemini
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const GROUP_CHAT_ID = process.env.TELEGRAM_GROUP_CHAT_ID;
 
+// Инициализация Gemini по новому стабильному стандарту
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 const aiModel = genAI.getGenerativeModel({ 
-  model: "models/gemini-1.5-flash",
-  systemInstruction: "Ты — ведущий технический инженер и технолог компании 'Монтажка PRO'. Твоя задача — давать четкие, профессиональные рекомендации по изготовлению наружной рекламы, вывесок, металлоконструкций и их монтажу. Отвечай кратко, по делу, без лишней воды."
-}); 
+  model: "gemini-1.5-flash" 
+}, {
+  apiVersion: "v1beta"
+});
 
 let rawUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL || 'https://studio-cherepok.vercel.app';
 if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
@@ -104,7 +106,7 @@ async function notifyGroup(text: string, photoUrl?: string | null) {
 
 async function findProfileByTelegramId(telegramId: string) {
   if (!telegramId) return null;
-  const { data } = await supabase.from('profiles').select('id, can_print, name, full_name, ai_mode').eq('telegram_chat_id', telegramId).valueOnly?.() || await supabase.from('profiles').select('*').eq('telegram_chat_id', telegramId).maybeSingle();
+  const { data } = await supabase.from('profiles').select('*').eq('telegram_chat_id', telegramId).maybeSingle();
   return data;
 }
 
@@ -162,19 +164,17 @@ export async function handlePinAuthorization(chatId: number | string, telegramId
   }
 }
 
-// Добавили кнопку ИИ-Ассистент в меню
 function buildMainMenuKeyboard(canPrint: boolean, chatId: string | number) {
   const keyboard = [
     [{ text: '➕ Создать заказ', web_app: { url: `${WEB_APP_URL}?tg_id=${chatId}` } }, { text: '📋 Активные заказы' }], 
     [{ text: '🔓 Свободные заказы' }, { text: '💼 Мои заказы' }], 
     [{ text: '📊 Рейтинг' }, { text: '👤 Мой профиль' }],
-    [{ text: '🤖 ИИ-Технолог' }] // Новая кнопка на всю ширину
+    [{ text: '🤖 ИИ-Технолог' }]
   ];
   if (canPrint) keyboard.splice(2, 0, [{ text: '🖨 Очередь на печать' }]);
   return { keyboard, resize_keyboard: true };
 }
 
-// Отдельная клавиатура для выхода из режима ИИ
 function buildAIKeyboard() {
   return {
     keyboard: [[{ text: '⬅️ Выйти из ИИ' }]],
@@ -220,7 +220,6 @@ async function handleStartCommand(chatId: number | string, telegramId: string) {
     await sendTelegramMessage(chatId, `Привет! Ваш Telegram не привязан к системе Montazhka PRO.\n\nВведите <b>персональный ПИН-код</b>, который вам выдал администратор:`);
     return;
   }
-  // Сбрасываем режим ИИ при старте
   await supabase.from('profiles').update({ ai_mode: false }).eq('id', profile.id);
   await sendMainMenu(chatId, Boolean(profile.can_print));
 }
@@ -583,26 +582,26 @@ export async function POST(request: Request) {
         return new Response('OK', { status: 200 });
       }
 
-      // --- ЛОГИКА ДИАЛОГА С ИИ (FSM на базе столбца ai_mode в Supabase) ---
+      // --- ЛОГИКА ДИАЛОГА С ИИ ---
       if (currentProfile.ai_mode && text !== '⬅️ Выйти из ИИ' && text !== '/start') {
         await sendTelegram({ method: 'sendChatAction', body: { chat_id: chatId, action: 'typing' } });
         
         try {
-          // Более стабильный вызов для Node.js SDK
           const aiResponse = await aiModel.generateContent({
-            contents: [{ role: 'user', parts: [{ text: text }] }]
+            contents: [{ role: 'user', parts: [{ text: text }] }],
+            systemInstruction: "Ты — ведущий технический инженер и технолог компании 'Монтажка PRO'. Твоя задача — давать четкие, профессиональные рекомендации по изготовлению наружной рекламы, вывесок, металлоконструкций и их монтажу. Отвечай кратко, по делу, без лишней воды."
           });
           
           const responseText = aiResponse.response?.text ? aiResponse.response.text() : "Не удалось разобрать ответ от модели.";
           await sendTelegramMessage(chatId, responseText, { reply_markup: buildAIKeyboard() });
         } catch (aiErr: any) {
           console.error('❌ Ошибка Gemini API:', aiErr);
-          // Выводим точную ошибку прямо тебе в чат, чтобы сразу увидеть косяк
           const errorMsg = aiErr?.message || JSON.stringify(aiErr) || 'Неизвестная ошибка API';
           await sendTelegramMessage(chatId, `⚠️ Ошибка API:\n<code>${escapeHtml(errorMsg)}</code>`, { reply_markup: buildAIKeyboard() });
         }
         return new Response('OK', { status: 200 });
       }
+
       switch (text) {
         case '/start': 
           await handleStartCommand(chatId, telegramId); 
@@ -617,13 +616,11 @@ export async function POST(request: Request) {
           await handleMyOrders(chatId, currentProfile); 
           break;
         case '🤖 ИИ-Технолог': {
-          // Включаем режим ИИ в профиле
           await supabase.from('profiles').update({ ai_mode: true }).eq('id', currentProfile.id);
           await sendTelegramMessage(chatId, '🤖 <b>Режим ИИ-Технолога активирован.</b>\n\nНапишите параметры конструкции (например: <i>"Вывеска ПВХ 5000х1000мм на железный фасад"</i>), и я выдам рекомендации по изготовлению и монтажу.', { reply_markup: buildAIKeyboard() });
           break;
         }
         case '⬅️ Выйти из ИИ': {
-          // Выключаем режим ИИ
           await supabase.from('profiles').update({ ai_mode: false }).eq('id', currentProfile.id);
           await sendMainMenu(chatId, Boolean(currentProfile?.can_print));
           break;
