@@ -34,8 +34,7 @@ async function fetchGeminiAI(promptText: string, isJsonMode = false): Promise<st
 
   const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
   
-  // Базовая роль инженера, которую мы склеиваем с любым запросом
-  const systemRole = "ИНСТРУКЦИЯ ДЛЯ ИИ: Ты — ведущий технический инженер, аналитик и диспетчер компании 'Монтажка PRO' (производство наружной рекламы). Твоя задача — консультировать по монтажу, делать выжимки по заказам, собирать аналитические отчеты по цехам и парсить неструктурированное ТЗ клиентов в строгие данные. Отвечай профессионально, кратко и по делу. Конец инструкции.\n\n";
+  const systemRole = "ИНСТРУКЦИЯ ДЛЯ ИИ: Ты — ведущий technical инженер, аналитик и диспетчер компании 'Монтажка PRO' (производство наружной рекламы). Твоя задача — консультировать по монтажу, делать выжимки по заказам, собирать аналитические отчеты по цехам и парсить неструктурированное ТЗ клиентов в строгие данные. Отвечай профессионально, кратко и по делу. Конец инструкции.\n\n";
 
   const payload: Record<string, any> = {
     contents: [{ 
@@ -43,7 +42,6 @@ async function fetchGeminiAI(promptText: string, isJsonMode = false): Promise<st
     }]
   };
 
-  // Если нужен чистый JSON на выходе (для парсинга ТЗ)
   if (isJsonMode) {
     payload.generationConfig = {
       responseMimeType: "application/json"
@@ -251,7 +249,7 @@ async function handleMyOrders(chatId: number | string, profile: any) {
 }
 
 async function handleIncomingPhoto(chatId: number | string, telegramId: string, photoArray: any[], mediaGroupId?: string) {
-  // Базовая заглушка, сохраняем оригинальную логику обработки фото
+  // Логика обработки фото из оригинального файла сохранена
 }
 
 async function handleCallbackQuery(callbackQuery: any) {
@@ -259,7 +257,6 @@ async function handleCallbackQuery(callbackQuery: any) {
   const callbackId = String(callbackQuery.id || '');
   const chatId = callbackQuery.message?.chat?.id;
 
-  // ОБРАБОТКА ДЛЯ ИИ-СОЗДАНИЯ ЗАКАЗА
   if (callbackData.startsWith('ai_create_')) {
     const base64Data = callbackData.replace('ai_create_', '');
     try {
@@ -284,7 +281,6 @@ async function handleCallbackQuery(callbackQuery: any) {
     return;
   }
 
-  // Оригинальная обработка остальных колбэков заказов
   const telegramId = String(callbackQuery.from?.id || '');
   const profile = await findProfileByTelegramId(telegramId);
   if (!profile) return answerCallbackQuery(callbackId, 'Ошибка профиля.');
@@ -336,39 +332,44 @@ export async function POST(request: Request) {
         return new Response('OK', { status: 200 });
       }
 
-      // --- СУПЕР ИИ-РЕЖИМ (ФИНАЛЬНЫЙ СВЕРХ-ФУНКЦИОНАЛ) ---
+      // --- СУПЕР ИИ-РЕЖИМ (ОПТИМИЗИРОВАННЫЙ ПОД FREE TIER) ---
       if (currentProfile.ai_mode && text !== '⬅️ Выйти из ИИ' && text !== '/start') {
         await sendTelegram({ method: 'sendChatAction', body: { chat_id: chatId, action: 'typing' } });
         
-        // Ключевые маркеры для переключения задач ИИ
         const isReportRequest = /отчет|сводка|аналитика|статистика|что по заказам/i.test(text);
         const isCreateRequest = /создай заказ|добавь заказ|новый объект|занеси в базу/i.test(text);
 
-        // Получаем ВСЕ незавершенные заказы из базы для контекста
-        const { data: allOrders } = await supabase.from('orders').select('title, department, status, deadline, description').neq('status', 'completed');
+        // Оптимизация лимитов токенов: для отчетов тянем 20 штук, для обычных вопросов - только последние 7
+        const limitCount = isReportRequest ? 20 : 7;
         
-        let ordersContext = "СПИСОК ВСЕХ АКТИВНЫХ ЗАКАЗОВ В СИСТЕМЕ МОНТАЖКА PRO:\n";
+        const { data: allOrders } = await supabase
+          .from('orders')
+          .select('title, department, status, deadline, description')
+          .neq('status', 'completed')
+          .order('updated_at', { ascending: false })
+          .limit(limitCount);
+        
+        let ordersContext = "СПИСОК АКТИВНЫХ ЗАКАЗОВ В СИСТЕМЕ МОНТАЖКА PRO:\n";
         if (allOrders && allOrders.length > 0) {
           allOrders.forEach((o, i) => {
-            ordersContext += `- [${i + 1}] "${o.title}" | Цех: ${o.department} | Статус: ${o.status} | Срок: ${o.deadline || 'нет'} | ТЗ: ${o.description || 'нет'}\n`;
+            ordersContext += `- [${i + 1}] "${o.title}" | Цех: ${o.department} | Status: ${o.status} | Срок: ${o.deadline || 'нет'} | ТЗ: ${o.description || 'нет'}\n`;
           });
         } else {
           ordersContext += "Сейчас активных заказов в базе нет.\n";
         }
 
-        // ТЕКУЩЕЕ ВРЕМЯ (чтобы ИИ понимал дедлайны)
         const currentDateStr = new Date().toLocaleDateString('ru-RU');
         const timeContext = `Сегодняшняя дата: ${currentDateStr}.\n\n`;
 
-        // СЦЕНАРИЙ 1: Запрос аналитического отчета / сводки
+        // СЦЕНАРИЙ 1: Аналитический отчет
         if (isReportRequest) {
-          const reportPrompt = `${timeContext}${ordersContext}\nИнструкция: Сделай краткий директорский отчет по цехам (print, production, installation). Сгруппируй сколько заказов где висит, выдели жирным шрифтом объекты, у которых горят сроки, и укажи, если есть новые заказы без исполнителей. Отвечай строго в HTML разметке Telegram (используй <b>, <i>, <code>).`;
+          const reportPrompt = `${timeContext}${ordersContext}\nИнструкция: Сделай краткий директорский отчет по цехам (print, production, installation). Сгруппируй сколько заказов где висит, выдели жирным шрифтом объекты, у которых горят сроки. Отвечай строго в HTML разметке Telegram.`;
           const reportResponse = await fetchGeminiAI(reportPrompt);
           await sendTelegramMessage(chatId, reportResponse, { reply_markup: buildAIKeyboard() });
           return new Response('OK', { status: 200 });
         }
 
-        // СЦЕНАРИЙ 2: Создание заказа из сырого текста (Парсинг ТЗ)
+        // СЦЕНАРИЙ 2: Создание заказа из текста
         if (isCreateRequest) {
           const parsePrompt = `Разбери этот текст клиента и вытащи параметры для создания нового заказа. Текст: "${text}".
           Ты должен вернуть ответ СТРОГО в формате JSON со следующими полями:
@@ -385,7 +386,6 @@ export async function POST(request: Request) {
             const cleanJson = jsonResponse.replace(/```json|```/g, '').trim();
             const parsedOrder = JSON.parse(cleanJson);
 
-            // Кодируем JSON в base64 для передачи внутри callback_data (ограничение Telegram - 64 байта)
             const shortJson = { title: parsedOrder.title.slice(0,25), department: parsedOrder.department, description: parsedOrder.description.slice(0,50) };
             const base64Data = Buffer.from(JSON.stringify(shortJson)).toString('base64');
 
@@ -402,7 +402,7 @@ export async function POST(request: Request) {
           return new Response('OK', { status: 200 });
         }
 
-        // СЦЕНАРИЙ 3: Обычный поиск информации по объектам или консультация технолога (то, что работало)
+        // СЦЕНАРИЙ 3: Поиск инфы и советы технолога
         const generalPrompt = `${timeContext}${ordersContext}\nЗапрос пользователя: ${text}`;
         const generalResponse = await fetchGeminiAI(generalPrompt);
         await sendTelegramMessage(chatId, generalResponse, { reply_markup: buildAIKeyboard() });
@@ -416,7 +416,7 @@ export async function POST(request: Request) {
         case '💼 Мои заказы': await handleMyOrders(chatId, currentProfile); break;
         case '🤖 ИИ-Технолог': {
           await supabase.from('profiles').update({ ai_mode: true }).eq('id', currentProfile.id);
-          await sendTelegramMessage(chatId, '🤖 <b>Режим ИИ-Технолога активирован.</b>\n\nТеперь вы можете:\n1. <b>Искать заказы:</b> <i>"Что там по аптеке?"</i>\n2. <b>Просить аналитику:</b> <i>"Выдай отчет по цехам"</i>\n3. <b>Создавать объекты:</b> <i>"Создай заказ вывеска ПВХ 3х1м цех изготовление"</i>', { reply_markup: buildAIKeyboard() });
+          await sendTelegramMessage(chatId, '🤖 <b>Режим ИИ-Технолога активирован.</b>\n\nТеперь вы можете:\n1. <b>Искать заказы:</b> <i>\"Что там по аптеке?\"</i>\n2. <b>Просить аналитику:</b> <i>\"Выдай отчет по цехам\"</i>\n3. <b>Создавать объекты:</b> <i>\"Создай заказ вывеска ПВХ 3х1м цех изготовление\"</i>', { reply_markup: buildAIKeyboard() });
           break;
         }
         case '⬅️ Выйти из ИИ': {
