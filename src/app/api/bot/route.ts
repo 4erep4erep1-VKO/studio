@@ -589,16 +589,21 @@ export async function POST(request: Request) {
         await sendTelegram({ method: 'sendChatAction', body: { chat_id: chatId, action: 'typing' } });
         
         try {
-          const aiResponse = await aiModel.generateContent(text);
-          const responseText = aiResponse.response.text();
+          // Более стабильный вызов для Node.js SDK
+          const aiResponse = await aiModel.generateContent({
+            contents: [{ role: 'user', parts: [{ text: text }] }]
+          });
+          
+          const responseText = aiResponse.response?.text ? aiResponse.response.text() : "Не удалось разобрать ответ от модели.";
           await sendTelegramMessage(chatId, responseText, { reply_markup: buildAIKeyboard() });
-        } catch (aiErr) {
+        } catch (aiErr: any) {
           console.error('❌ Ошибка Gemini API:', aiErr);
-          await sendTelegramMessage(chatId, '⚠️ Не удалось получить ответ от ИИ. Попробуйте позже.', { reply_markup: buildAIKeyboard() });
+          // Выводим точную ошибку прямо тебе в чат, чтобы сразу увидеть косяк
+          const errorMsg = aiErr?.message || JSON.stringify(aiErr) || 'Неизвестная ошибка API';
+          await sendTelegramMessage(chatId, `⚠️ Ошибка API:\n<code>${escapeHtml(errorMsg)}</code>`, { reply_markup: buildAIKeyboard() });
         }
         return new Response('OK', { status: 200 });
       }
-
       switch (text) {
         case '/start': 
           await handleStartCommand(chatId, telegramId); 
