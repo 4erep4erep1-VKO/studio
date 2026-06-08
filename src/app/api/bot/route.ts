@@ -28,25 +28,19 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#039;');
 }
 
-// Прямой HTTP-запрос к Gemini 2.5 без запрещенных полей
-async function fetchGeminiAI(promptText: string, isJsonMode = false): Promise<string> {
+// Прямой HTTP-запрос к Gemini 2.5 без спорных конфигураций
+async function fetchGeminiAI(promptText: string): Promise<string> {
   if (!GEMINI_API_KEY) return "Ошибка: На сервере не задан GEMINI_API_KEY.";
 
   const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
   
-  const systemRole = "ИНСТРУКЦИЯ ДЛЯ ИИ: Ты — ведущий technical инженер, аналитик и диспетчер компании 'Монтажка PRO' (производство наружной рекламы). Твоя задача — консультировать по монтажу, делать выжимки по заказам, собирать аналитические отчеты по цехам и парсить неструктурированное ТЗ клиентов в строгие данные. Отвечай профессионально, кратко и по делу. Конец инструкции.\n\n";
+  const systemRole = "ИНСТРУКЦИЯ ДЛЯ ИИ: Ты — ведущий технический инженер, аналитик и диспетчер компании 'Монтажка PRO' (производство наружной рекламы). Твоя задача — консультировать по монтажу, делать выжимки по заказам, собирать аналитические отчеты по цехам и парсить неструктурированное ТЗ клиентов в строгие данные. Отвечай профессионально, кратко и по делу. Конец инструкции.\n\n";
 
-  const payload: Record<string, any> = {
+  const payload = {
     contents: [{ 
       parts: [{ text: `${systemRole}${promptText}` }] 
     }]
   };
-
-  if (isJsonMode) {
-    payload.generationConfig = {
-      responseMimeType: "application/json"
-    };
-  }
 
   try {
     const response = await fetch(url, {
@@ -369,24 +363,33 @@ export async function POST(request: Request) {
           return new Response('OK', { status: 200 });
         }
 
-        // СЦЕНАРИЙ 2: Создание заказа из текста
+        // СЦЕНАРИЙ 2: Создание заказа из текста (Очищенный под текстовый режим)
         if (isCreateRequest) {
           const parsePrompt = `Разбери этот текст клиента и вытащи параметры для создания нового заказа. Текст: "${text}".
-          Ты должен вернуть ответ СТРОГО в формате JSON со следующими полями:
+          Ты должен вернуть ответ СТРОГО в формате JSON. Не пиши никакого текста, кроме этого JSON. Структура:
           {
             "title": "Короткое понятное название объекта",
-            "department": "одно из трех значений строго: print или production или installation",
-            "description": "Полное подробное ТЗ, размеры, материалы, особенности монтажа, которые удалось извлечь"
-          }
-          Никакого лишнего текста вокруг JSON быть не должно.`;
+            "department": "print" или "production" или "installation",
+            "description": "Полное подробное ТЗ, размеры, материалы, особенности монтажа"
+          }`;
 
-          const jsonResponse = await fetchGeminiAI(parsePrompt, true);
+          // Вызываем без флага JSON-моды, просто как текст
+          const jsonResponse = await fetchGeminiAI(parsePrompt);
           
           try {
-            const cleanJson = jsonResponse.replace(/```json|```/g, '').trim();
+            // Очищаем ответ от markdown-оберток, если ИИ их добавит
+            const cleanJson = jsonResponse
+              .replace(/```json/gi, '')
+              .replace(/```/g, '')
+              .trim();
+              
             const parsedOrder = JSON.parse(cleanJson);
 
-            const shortJson = { title: parsedOrder.title.slice(0,25), department: parsedOrder.department, description: parsedOrder.description.slice(0,50) };
+            const shortJson = { 
+              title: parsedOrder.title.slice(0,25), 
+              department: parsedOrder.department, 
+              description: parsedOrder.description.slice(0,50) 
+            };
             const base64Data = Buffer.from(JSON.stringify(shortJson)).toString('base64');
 
             const previewText = `🤖 <b>ИИ распознал параметры нового заказа:</b>\n\n🔹 <b>Название:</b> ${escapeHtml(parsedOrder.title)}\n🔹 <b>Направление:</b> <code>${parsedOrder.department}</code>\n🔹 <b>Тех. описание:</b> <i>${escapeHtml(parsedOrder.description)}</i>\n\nЗанести этот объект в общую базу Supabase?`;
@@ -397,7 +400,7 @@ export async function POST(request: Request) {
 
             await sendTelegramMessage(chatId, previewText, { reply_markup: inlineMarkup });
           } catch (e) {
-            await sendTelegramMessage(chatId, `❌ Не удалось автоматически распарсить ТЗ. Вот текстовый ответ ИИ:\n${jsonResponse}`, { reply_markup: buildAIKeyboard() });
+            await sendTelegramMessage(chatId, `❌ Не удалось автоматически распарсить ТЗ. Вот текстовый ответ ИИ:\n\n<code>${escapeHtml(jsonResponse)}</code>`, { reply_markup: buildAIKeyboard() });
           }
           return new Response('OK', { status: 200 });
         }
