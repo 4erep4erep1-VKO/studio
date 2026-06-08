@@ -32,8 +32,7 @@ function escapeHtml(value: string): string {
 async function fetchGeminiAI(promptText: string): Promise<string> {
   if (!GEMINI_API_KEY) return "Ошибка: На сервере не задан GEMINI_API_KEY.";
 
-  const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-  
+  const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash-exp:generateContent?key=${GEMINI_API_KEY}`;
   const systemRole = "ИНСТРУКЦИЯ ДЛЯ ИИ: Ты — ведущий технический инженер, аналитик и диспетчер компании 'Монтажка PRO' (производство наружной рекламы). Твоя задача — консультировать по монтажу, делать выжимки по заказам, собирать аналитические отчеты по цехам и парсить неструктурированное ТЗ клиентов в строгие данные. Отвечай профессионально, кратко и по делу. Конец инструкции.\n\n";
 
   const payload = {
