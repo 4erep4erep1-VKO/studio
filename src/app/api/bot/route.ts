@@ -28,19 +28,26 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#039;');
 }
 
-// Прямой HTTP-запрос к Gemini без использования библиотек
+// Прямой HTTP-запрос к Gemini с исправленным URL и структурой
 async function fetchGeminiAI(promptText: string): Promise<string> {
   if (!GEMINI_API_KEY) {
     return "Ошибка: На сервере не задан GEMINI_API_KEY.";
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+  // Изменили gemini-1.5-flash на gemini-1.5-flash-latest
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
   
-  const systemInstruction = "Ты — ведущий технический инженер и технолог компании 'Монтажка PRO'. Твоя задача — давать четкие, профессиональные рекомендации по изготовлению наружной рекламы, вывесок, металлоконструкций и их монтажу. Отвечай кратко, по делу, без лишней воды.";
+  const systemInstructionText = "Ты — ведущий технический инженер и технолог компании 'Монтажка PRO'. Твоя задача — давать четкие, профессиональные рекомендации по изготовлению наружной рекламы, вывесок, металлоконструкций и их монтажу. Отвечай кратко, по делу, без лишней воды.";
 
   const payload = {
-    contents: [{ parts: [{ text: promptText }] }],
-    systemInstruction: { parts: [{ text: systemInstruction }] }
+    contents: [
+      { 
+        parts: [{ text: promptText }] 
+      }
+    ],
+    systemInstruction: {
+      parts: [{ text: systemInstructionText }]
+    }
   };
 
   try {
