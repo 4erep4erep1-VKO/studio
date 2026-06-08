@@ -28,17 +28,19 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#039;');
 }
 
-// Прямой HTTP-запрос к Gemini 2.5
+// Прямой HTTP-запрос к Gemini 2.5 без запрещенных полей
 async function fetchGeminiAI(promptText: string, isJsonMode = false): Promise<string> {
   if (!GEMINI_API_KEY) return "Ошибка: На сервере не задан GEMINI_API_KEY.";
 
   const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
   
-  const systemInstructionText = "Ты — ведущий технический инженер, аналитик и диспетчер компании 'Монтажка PRO' (производство наружной рекламы). Твоя задача — консультировать по монтажу, делать выжимки по заказам, собирать аналитические отчеты по цехам и парсить неструктурированное ТЗ клиентов в строгие данные. Отвечай профессионально, кратко и по делу.";
+  // Базовая роль инженера, которую мы склеиваем с любым запросом
+  const systemRole = "ИНСТРУКЦИЯ ДЛЯ ИИ: Ты — ведущий технический инженер, аналитик и диспетчер компании 'Монтажка PRO' (производство наружной рекламы). Твоя задача — консультировать по монтажу, делать выжимки по заказам, собирать аналитические отчеты по цехам и парсить неструктурированное ТЗ клиентов в строгие данные. Отвечай профессионально, кратко и по делу. Конец инструкции.\n\n";
 
   const payload: Record<string, any> = {
-    contents: [{ parts: [{ text: promptText }] }],
-    systemInstruction: { parts: [{ text: systemInstructionText }] }
+    contents: [{ 
+      parts: [{ text: `${systemRole}${promptText}` }] 
+    }]
   };
 
   // Если нужен чистый JSON на выходе (для парсинга ТЗ)
