@@ -613,13 +613,39 @@ export async function POST(request: Request) {
         return new Response('OK', { status: 200 });
       }
 
-      // --- ЛОГИКА ДИАЛОГА С ИИ ---
+      // --- ЛОГИКА ДИАЛОГА С ИИ (С ПОДДЕРЖКОЙ ПОИСКА ПО ЗАКАЗАМ) ---
       if (currentProfile.ai_mode && text !== '⬅️ Выйти из ИИ' && text !== '/start') {
         await sendTelegram({ method: 'sendChatAction', body: { chat_id: chatId, action: 'typing' } });
         
-        // Вызываем наш кастомный HTTP метод
-        const responseText = await fetchGeminiAI(text);
-        await sendTelegramMessage(chatId, responseText, { reply_markup: buildAIKeyboard() });
+        try {
+          // 1. Вытягиваем из базы активные (не завершенные) заказы
+          const { data: activeOrders } = await supabase
+            .from('orders')
+            .select('title, department, status, deadline, description')
+            .neq('status', 'completed')
+            .limit(15); // Берем последние 15, чтобы не перегружать контекст
+
+          // 2. Формируем текстовый блок с заказами для ИИ
+          let ordersContext = "СПИСОК ТЕКУЩИХ АКТИВНЫХ ЗАКАЗОВ В СИСТЕМЕ:\n";
+          if (activeOrders && activeOrders.length > 0) {
+            activeOrders.forEach((o, i) => {
+              ordersContext += `${i + 1}. Название: "${o.title}", Цех: ${o.department}, Статус: ${o.status}, Дедлайн: ${o.deadline || 'не указан'}, Описание: ${o.description || 'нет'}\n`;
+            });
+          } else {
+            ordersContext += "Активных заказов в системе сейчас нет.\n";
+          }
+
+          // 3. Склеиваем контекст заказов и текущий вопрос пользователя
+          const fullPrompt = `${ordersContext}\nИспользуя список заказов выше, ответь на вопрос пользователя. Если пользователь спрашивает про конкретный заказ, найди его по смыслу или названию и дай выжимку. Если в списке нет такого заказа, так и скажи.\n\nВопрос пользователя: ${text}`;
+
+          // 4. Отправляем всё это в Gemini
+          const responseText = await fetchGeminiAI(fullPrompt);
+          await sendTelegramMessage(chatId, responseText, { reply_markup: buildAIKeyboard() });
+
+        } catch (err) {
+          console.error('❌ Ошибка контекстного поиска ИИ:', err);
+          await sendTelegramMessage(chatId, '⚠️ Ошибка при поиске информации в базе данных.', { reply_markup: buildAIKeyboard() });
+        }
         
         return new Response('OK', { status: 200 });
       }
