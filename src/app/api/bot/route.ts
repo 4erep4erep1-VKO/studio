@@ -9,7 +9,7 @@ const GROUP_CHAT_ID = process.env.TELEGRAM_GROUP_CHAT_ID;
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 const aiModel = genAI.getGenerativeModel({ 
-  model: "gemini-1.5-flash", // Если снова выдаст 404, то пишем "models/gemini-1.5-flash"
+  model: "models/gemini-1.5-flash"
   systemInstruction: "Ты — ведущий технический инженер и технолог компании 'Монтажка PRO'. Твоя задача — давать четкие, профессиональные рекомендации по изготовлению наружной рекламы, вывесок, металлоконструкций и их монтажу. Отвечай кратко, по делу, без лишней воды."
 });
 
