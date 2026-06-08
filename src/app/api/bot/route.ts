@@ -1,19 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const GROUP_CHAT_ID = process.env.TELEGRAM_GROUP_CHAT_ID;
-
-// Инициализация Gemini по новому стабильному стандарту
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-const aiModel = genAI.getGenerativeModel({ 
-  model: "gemini-1.5-flash" 
-}, {
-  apiVersion: "v1beta"
-});
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 let rawUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL || 'https://studio-cherepok.vercel.app';
 if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
@@ -34,6 +26,41 @@ function escapeHtml(value: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+// Прямой HTTP-запрос к Gemini без использования библиотек
+async function fetchGeminiAI(promptText: string): Promise<string> {
+  if (!GEMINI_API_KEY) {
+    return "Ошибка: На сервере не задан GEMINI_API_KEY.";
+  }
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+  
+  const systemInstruction = "Ты — ведущий технический инженер и технолог компании 'Монтажка PRO'. Твоя задача — давать четкие, профессиональные рекомендации по изготовлению наружной рекламы, вывесок, металлоконструкций и их монтажу. Отвечай кратко, по делу, без лишней воды.";
+
+  const payload = {
+    contents: [{ parts: [{ text: promptText }] }],
+    systemInstruction: { parts: [{ text: systemInstruction }] }
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return `Ошибка API Gemini (${response.status}): ${data?.error?.message || JSON.stringify(data)}`;
+    }
+
+    const aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    return aiText || "ИИ прислал пустой ответ.";
+  } catch (err: any) {
+    return `Ошибка сети при запросе к Gemini: ${err?.message || String(err)}`;
+  }
 }
 
 async function sendTelegram(payload: Record<string, any>) {
@@ -586,19 +613,10 @@ export async function POST(request: Request) {
       if (currentProfile.ai_mode && text !== '⬅️ Выйти из ИИ' && text !== '/start') {
         await sendTelegram({ method: 'sendChatAction', body: { chat_id: chatId, action: 'typing' } });
         
-        try {
-          const aiResponse = await aiModel.generateContent({
-            contents: [{ role: 'user', parts: [{ text: text }] }],
-            systemInstruction: "Ты — ведущий технический инженер и технолог компании 'Монтажка PRO'. Твоя задача — давать четкие, профессиональные рекомендации по изготовлению наружной рекламы, вывесок, металлоконструкций и их монтажу. Отвечай кратко, по делу, без лишней воды."
-          });
-          
-          const responseText = aiResponse.response?.text ? aiResponse.response.text() : "Не удалось разобрать ответ от модели.";
-          await sendTelegramMessage(chatId, responseText, { reply_markup: buildAIKeyboard() });
-        } catch (aiErr: any) {
-          console.error('❌ Ошибка Gemini API:', aiErr);
-          const errorMsg = aiErr?.message || JSON.stringify(aiErr) || 'Неизвестная ошибка API';
-          await sendTelegramMessage(chatId, `⚠️ Ошибка API:\n<code>${escapeHtml(errorMsg)}</code>`, { reply_markup: buildAIKeyboard() });
-        }
+        // Вызываем наш кастомный HTTP метод
+        const responseText = await fetchGeminiAI(text);
+        await sendTelegramMessage(chatId, responseText, { reply_markup: buildAIKeyboard() });
+        
         return new Response('OK', { status: 200 });
       }
 
