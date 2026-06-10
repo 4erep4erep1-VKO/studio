@@ -1,4 +1,3 @@
-// src/components/orders/OrderForm.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -82,7 +81,7 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
       } catch (e) { console.error(e); }
     }
     loadData();
-  }, [orderId, creatorId]); // Добавил creatorId в зависимости
+  }, [orderId, creatorId]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -121,6 +120,16 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
   };
 
   const uploadImages = async (files: FileList | File[]) => {
+    // ВАЛИДАЦИЯ НА ФРОНТЕНДЕ ОТ PDF И НЕ-КАРТИНОК
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      if (isPdf || !file.type.startsWith('image/')) {
+        alert('⚠️ Ошибка: Формат PDF и другие документы не поддерживаются! Пожалуйста, загружайте только файлы картинок (jpeg, png, webp).');
+        return;
+      }
+    }
+
     setLoading(true);
     const newUrls: string[] = [];
     for (let i = 0; i < files.length; i++) {
@@ -142,8 +151,17 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
 
   const handlePaste = (e: React.ClipboardEvent) => {
     const items = Array.from(e.clipboardData.items);
+    // Проверка при Ctrl+V — берем только изображения
     const files = items.filter(i => i.type.includes('image')).map(i => i.getAsFile()).filter((f): f is File => f !== null);
     if (files.length) uploadImages(files);
+  };
+
+  // ФУНКЦИЯ ДЛЯ УДАЛЕНИЯ КАРТИНКИ ИЗ ФОРМЫ
+  const handleDeleteImage = (indexToDelete: number) => {
+    setFormData(prev => ({
+      ...prev,
+      image_urls: prev.image_urls.filter((_, idx) => idx !== indexToDelete)
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -196,7 +214,6 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
         const currentAssigned = rawAssigned && rawAssigned.trim() !== "" ? rawAssigned : null;
 
         try {
-          // ИСПРАВЛЕНИЕ: Передаем orderId первым аргументом
           await notifyOrderUpdate(
             orderId, 
             initialData?.title || formData.title, 
@@ -308,11 +325,30 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
 
           <div>
              <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Эскиз / Фото (Можно Ctrl+V)</label>
-             <input type="file" accept="image/*" multiple onChange={e => e.target.files && uploadImages(e.target.files)} className="text-xs w-full text-foreground file:bg-primary file:text-primary-foreground file:border-0 file:rounded file:px-3 file:py-1 cursor-pointer" />
+             {/* Обновленный жесткий фильтр по форматам */}
+             <input 
+               type="file" 
+               accept="image/jpeg,image/png,image/webp" 
+               multiple 
+               onChange={e => e.target.files && uploadImages(e.target.files)} 
+               className="text-xs w-full text-foreground file:bg-primary file:text-primary-foreground file:border-0 file:rounded file:px-3 file:py-1 cursor-pointer" 
+             />
+             
              {formData.image_urls.length > 0 && (
-               <div className="flex gap-2 mt-3 flex-wrap">
+               <div className="flex gap-3 mt-3 flex-wrap">
                  {formData.image_urls.map((url, idx) => (
-                   <img key={idx} src={url} alt="Превью" className="w-16 h-16 object-cover rounded border border-border shadow-sm" />
+                   <div key={idx} className="relative w-16 h-16 group">
+                     <img src={url} alt="Превью" className="w-full h-full object-cover rounded border border-border shadow-sm" />
+                     {/* Иконка удаления поверх картинки при правках */}
+                     <button
+                       type="button"
+                       onClick={() => handleDeleteImage(idx)}
+                       className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground hover:bg-destructive/90 border border-border rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold shadow transition-transform group-hover:scale-110"
+                       title="Удалить картинку"
+                     >
+                       ×
+                     </button>
+                   </div>
                  ))}
                </div>
              )}

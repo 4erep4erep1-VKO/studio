@@ -221,6 +221,7 @@ function buildOrderPreview(order: any) {
   return text;
 }
 
+// ДИНАМИЧЕСКИЕ КНОПКИ ЗАКАЗА С ФУНКЦИЕЙ ОТКАЗА
 function buildOrderButtons(order: any) {
   const buttons: any[][] = [];
   if (order.department === 'print') {
@@ -231,6 +232,10 @@ function buildOrderButtons(order: any) {
     ]);
   } else if (order.department === 'production' || order.department === 'installation') {
     buttons.push([{ text: '✅ ЗАВЕРШИТЬ ЗАКАЗ', callback_data: `complete_${order.id}` }]);
+    // Добавляем кнопку отказа, если заказ находится в стадии выполнения
+    if (order.status === 'in_progress' || order.status === 'awaiting_photos') {
+      buttons.push([{ text: '🚫 ОТКАЗАТЬСЯ ОТ ЗАКАЗА', callback_data: `reject_${order.id}` }]);
+    }
   }
   buttons.push([{ text: '📄 ОПИСАНИЕ ЗАКАЗА', callback_data: `desc_${order.id}` }]);
   return buttons.length ? { inline_keyboard: buttons } : undefined;
@@ -284,7 +289,12 @@ async function handleActiveOrders(chatId: number | string) {
       text += `\n👤 Исполнитель: <b>Не назначен (Свободный)</b>`;
     }
 
-    await sendOrderToTelegram(chatId, text, undefined, order.image_urls);
+    // Решение проблемы 2: Ставим микрозадержку перед отправкой карточки, чтобы все картинки подгрузились
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    const { data: refreshedOrder } = await supabase.from('orders').select('image_urls').eq('id', order.id).single();
+    const urls = refreshedOrder?.image_urls || order.image_urls;
+
+    await sendOrderToTelegram(chatId, text, undefined, urls);
   }
 }
 
@@ -374,6 +384,39 @@ async function handleIncomingPhoto(chatId: number | string, telegramId: string, 
   }
 }
 
+// ОБРАБОТЧИК ОТКАЗА ОТ ЗАКАЗА
+async function handleRejectOrder(orderId: string, profile: any, callbackQuery: any) {
+  const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
+  if (!order || order.assigned_to !== profile.id) return 'Ошибка доступа.';
+
+  // Сбрасываем исполнителя и возвращаем статус "новый"
+  const { error } = await supabase
+    .from('orders')
+    .update({ assigned_to: null, status: 'new' })
+    .eq('id', orderId);
+
+  if (error) return `Ошибка БД: ${error.message}`;
+
+  const employeeName = profile.name || profile.full_name || 'Сотрудник';
+  // Оповещаем чат производства
+  await notifyGroup(`⚠️ Исполнитель ${escapeHtml(employeeName)} <b>отказался</b> от заказа <b>${escapeHtml(order.title)}</b>. Объект снова свободен.`);
+
+  // Обновляем сообщение у самого монтажника в чате
+  if (callbackQuery?.message?.chat?.id && callbackQuery?.message?.message_id) {
+    const chatId = callbackQuery.message.chat.id;
+    const messageId = callbackQuery.message.message_id;
+    const isPhoto = Boolean(callbackQuery.message.photo || callbackQuery.message.document);
+    const text = `<b>⚠️ Вы отказались от заказа (передан в свободные)</b>\n${buildOrderPreview(order)}`;
+
+    await sendTelegram({
+      method: isPhoto ? 'editMessageCaption' : 'editMessageText',
+      body: { chat_id: chatId, message_id: messageId, [isPhoto ? 'caption' : 'text']: text, parse_mode: 'HTML', reply_markup: { inline_keyboard: [] } },
+    });
+  }
+
+  return 'Вы успешно отказались от заказа.';
+}
+
 async function handleCallbackQuery(callbackQuery: any) {
   const callbackData = String(callbackQuery.data || '');
   const callbackId = String(callbackQuery.id || '');
@@ -396,6 +439,7 @@ async function handleCallbackQuery(callbackQuery: any) {
 
   let msg = 'Выполнено.';
   if (action === 'take' || action === 'take_print') msg = await handleTakeOrder(orderId, profile, callbackQuery);
+  else if (action === 'reject') msg = await handleRejectOrder(orderId, profile, callbackQuery); // Экшен отказа
   else if (action === 'office' || action === 'print_to_office') msg = await handleMoveToOffice(orderId, profile, callbackQuery);
   else if (action === 'production' || action === 'print_to_production') msg = await handleMoveToProduction(orderId, profile, callbackQuery);
   else if (action === 'installation' || action === 'print_to_installation') msg = await handleMoveToInstallation(orderId, profile, callbackQuery);
@@ -563,7 +607,7 @@ async function handlePrintQueue(chatId: number | string, profile: any) {
 
 function parseCallbackData(data: string) {
   const normalized = data.replace(/:/g, '_');
-  const knownActions = ['complete_without_photo', 'complete_with_photo', 'finish_without_photo', 'print_to_office', 'print_to_production', 'print_to_installation', 'take_print', 'take', 'office', 'production', 'installation', 'complete', 'desc'];
+  const knownActions = ['reject', 'complete_without_photo', 'complete_with_photo', 'finish_without_photo', 'print_to_office', 'print_to_production', 'print_to_installation', 'take_print', 'take', 'office', 'production', 'installation', 'complete', 'desc'];
   for (const action of knownActions) { if (normalized.startsWith(`${action}_`)) return { action, id: normalized.slice(action.length + 1) }; }
   const [action, ...rest] = normalized.split('_');
   return { action, id: rest.join('_') };
@@ -583,6 +627,19 @@ export async function POST(request: Request) {
     if (!chatId) return NextResponse.json({ ok: false }, { status: 400 });
 
     try {
+      // Решение проблемы 3: Жесткий блок PDF и других некорректных документов
+      if (update.message.document) {
+        const doc = update.message.document;
+        const mimeType = doc.mime_type || '';
+        const fileName = doc.file_name || '';
+        const isPdf = mimeType.includes('pdf') || fileName.toLowerCase().endsWith('.pdf');
+
+        if (isPdf || !mimeType.startsWith('image/')) {
+          await sendTelegramMessage(chatId, `⚠️ <b>Ошибка загрузки файла!</b>\nФормат PDF и другие документы не поддерживаются системой. Пожалуйста, отправляйте только изображения (картинки с расширением JPEG, PNG, WEBP).`);
+          return new Response('OK', { status: 200 });
+        }
+      }
+
       if (update.message.photo) {
         await handleIncomingPhoto(chatId, telegramId, update.message.photo, update.message.media_group_id);
         return new Response('OK', { status: 200 });
@@ -609,8 +666,6 @@ export async function POST(request: Request) {
         await sendTelegram({ method: 'sendChatAction', body: { chat_id: chatId, action: 'typing' } });
         
         const isReportRequest = /отчет|сводка|аналитика|статистика|что по заказам/i.test(text);
-
-        // Настройка лимитов для Free тарифа (20 для сводок, 7 последних для контекста вопросов)
         const limitCount = isReportRequest ? 20 : 7;
         
         const { data: allOrders } = await supabase
@@ -632,7 +687,6 @@ export async function POST(request: Request) {
         const currentDateStr = new Date().toLocaleDateString('ru-RU');
         const timeContext = `Сегодняшняя дата: ${currentDateStr}.\n\n`;
 
-        // Сводный директорский отчет
         if (isReportRequest) {
           const reportPrompt = `${timeContext}${ordersContext}\nИнструкция: Сделай краткий директорский отчет по цехам (print, production, installation). Сгруппируй сколько заказов где висит, выдели жирным шрифтом объекты, у которых горят сроки. Отвечай строго в HTML разметке Telegram (используй <b>, <i>, <code>).`;
           const reportResponse = await fetchGeminiAI(reportPrompt);
@@ -640,7 +694,6 @@ export async function POST(request: Request) {
           return new Response('OK', { status: 200 });
         }
 
-        // Поиск информации, советы технолога и экспертные комментарии к объектам
         const generalPrompt = `${timeContext}${ordersContext}\nИнструкция: Если пользователь спрашивает про конкретный заказ, найди его по смыслу, выведи его описание, ТЗ и дай свои экспертные рекомендации/комментарии по его выполнению или монтажу.\nЗапрос пользователя: ${text}`;
         const generalResponse = await fetchGeminiAI(generalPrompt);
         await sendTelegramMessage(chatId, generalResponse, { reply_markup: buildAIKeyboard() });

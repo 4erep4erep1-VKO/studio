@@ -173,7 +173,7 @@ export default function OrderMiniPage() {
                 console.error(err);
                 if (tg) {
                     tg.MainButton.hideProgress();
-                    tg.showAlert('Ошибка при сохранении в базу');
+                    tg.MainButton.showAlert('Ошибка при сохранении в базу');
                 }
             } finally {
                 setLoading(false);
@@ -205,8 +205,24 @@ export default function OrderMiniPage() {
 
     const handleImageUpload = async (files: FileList | null) => {
         if (!files || files.length === 0) return;
-        setUploading(true);
+        
         const tg = window.Telegram?.WebApp;
+
+        // ВАЛИДАЦИЯ ФОРМАТОВ ФАЙЛОВ ПРИ ЗАГРУЗКЕ
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+            if (isPdf || !file.type.startsWith('image/')) {
+                if (tg) {
+                    tg.showAlert('Файлы документов и PDF не поддерживаются! Загружайте строго картинки (jpeg, png, webp).');
+                } else {
+                    alert('Файлы документов и PDF не поддерживаются! Загружайте строго картинки (jpeg, png, webp).');
+                }
+                return;
+            }
+        }
+
+        setUploading(true);
         if (tg) tg.MainButton.showProgress();
 
         const newUrls: string[] = [];
@@ -229,6 +245,11 @@ export default function OrderMiniPage() {
         setImageUrls(prev => [...prev, ...newUrls]);
         setUploading(false);
         if (tg) tg.MainButton.hideProgress();
+    };
+
+    // ФУНКЦИЯ УДАЛЕНИЯ КАРТИНКИ ИЗ МАССИВА
+    const handleDeleteImage = (indexToDelete: number) => {
+        setImageUrls(prev => prev.filter((_, idx) => idx !== indexToDelete));
     };
 
     const inputStyle = {
@@ -311,11 +332,52 @@ export default function OrderMiniPage() {
 
                 <div>
                     <label style={labelStyle}>Фото / Эскиз {uploading && '(Загрузка...)'}</label>
-                    <input type="file" accept="image/*" multiple onChange={e => handleImageUpload(e.target.files)} style={{ ...inputStyle, padding: '8px' }} disabled={uploading} />
+                    {/* Жесткий фильтр на форматы в проводнике */}
+                    <input 
+                        type="file" 
+                        accept="image/jpeg,image/png,image/webp" 
+                        multiple 
+                        onChange={e => handleImageUpload(e.target.files)} 
+                        style={{ ...inputStyle, padding: '8px' }} 
+                        disabled={uploading} 
+                    />
+                    
                     {imageUrls.length > 0 && (
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+                        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
                             {imageUrls.map((url, idx) => (
-                                <img key={idx} src={url} alt="Превью" style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '8px' }} />
+                                <div key={idx} style={{ position: 'relative', width: '64px', height: '64px' }}>
+                                    <img 
+                                        src={url} 
+                                        alt="Превью" 
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }} 
+                                    />
+                                    {/* Кнопка удаления поверх изображения */}
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDeleteImage(idx)}
+                                        style={{
+                                            position: 'absolute',
+                                            top: '-6px',
+                                            right: '-6px',
+                                            backgroundColor: '#ff3b30',
+                                            color: '#ffffff',
+                                            border: 'none',
+                                            borderRadius: '50%',
+                                            width: '18px',
+                                            height: '18px',
+                                            fontSize: '10px',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                                            padding: 0,
+                                            fontWeight: 'bold'
+                                        }}
+                                    >
+                                        ×
+                                    </button>
+                                </div>
                             ))}
                         </div>
                     )}
