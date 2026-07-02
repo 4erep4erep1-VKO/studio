@@ -15,8 +15,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           enableSystem
           disableTransitionOnChange
         >
-          <header className="p-4 flex justify-between items-center border-b bg-card">
-            <Link href="/" className="flex items-center gap-3">
+          <header className="relative p-4 flex justify-between items-center border-b bg-card">
+            <Link href="/" className="font-bold text-secondary">
+              Монтажка PRO
+            </Link>
+            <Link
+              href="/"
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+            >
               <Image
                 src="/logo.png"
                 alt="Монтажка PRO"
@@ -24,7 +30,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 height={40}
                 className="h-10 w-10 object-contain"
               />
-              <span className="font-bold text-secondary">Монтажка PRO</span>
             </Link>
             <ThemeToggle />
           </header>
