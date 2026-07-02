@@ -440,16 +440,16 @@ export default function Dashboard() {
         <div className="flex flex-wrap justify-between items-center mb-8 gap-4">
           <div className="flex gap-4">
             <div className="flex bg-card p-1 rounded-xl border border-border">
-              <button onClick={() => setView('orders')} className={`px-6 py-2 rounded-lg text-sm font-bold transition ${view === 'orders' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>Заказы</button>
+              <button onClick={() => setView('orders')} className={`px-6 py-2 rounded-lg text-sm font-bold transition ${view === 'orders' ? 'bg-brand text-brand-foreground' : 'text-muted-foreground'}`}>Заказы</button>
               {isAdmin && (
-                <button onClick={() => setView('staff')} className={`px-6 py-2 rounded-lg text-sm font-bold transition ${view === 'staff' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>Команда</button>
+                <button onClick={() => setView('staff')} className={`px-6 py-2 rounded-lg text-sm font-bold transition ${view === 'staff' ? 'bg-brand text-brand-foreground' : 'text-muted-foreground'}`}>Команда</button>
               )}
             </div>
             
             {view === 'orders' && (
               <div className="flex bg-card p-1 rounded-xl border border-border">
-                <button onClick={() => setDisplayMode('kanban')} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${displayMode === 'kanban' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>📊 Канбан</button>
-                <button onClick={() => setDisplayMode('list')} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${displayMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>📋 Список</button>
+                <button onClick={() => setDisplayMode('kanban')} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${displayMode === 'kanban' ? 'bg-brand text-brand-foreground' : 'text-muted-foreground'}`}>📊 Канбан</button>
+                <button onClick={() => setDisplayMode('list')} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${displayMode === 'list' ? 'bg-brand text-brand-foreground' : 'text-muted-foreground'}`}>📋 Список</button>
               </div>
             )}
           </div>
@@ -463,7 +463,7 @@ export default function Dashboard() {
               }
               setEditingOrderId(null);
               setIsModalOpen(true);
-            }} className="bg-primary text-primary-foreground font-bold flex-1 md:flex-none">Новый объект</Button>
+            }} className="bg-brand text-brand-foreground font-bold flex-1 md:flex-none">Новый объект</Button>
           </div>
         </div>
 
