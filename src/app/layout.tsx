@@ -18,7 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <header className="p-4 flex justify-between items-center border-b bg-card">
             <Link href="/" className="flex items-center gap-3">
               <Image
-                src="/logo"
+                src="/logo.png"
                 alt="Монтажка PRO"
                 width={40}
                 height={40}
