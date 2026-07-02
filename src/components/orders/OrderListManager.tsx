@@ -156,7 +156,7 @@ export default function OrderListManager({
               >
                 <div>
                   <div className="flex items-center justify-between gap-1 mb-1">
-                    <span className={`text-[8px] px-1 rounded font-black uppercase ${order.department === 'print' ? 'bg-purple-500/20 text-purple-500' : order.department === 'production' ? 'bg-orange-500/20 text-orange-500' : 'bg-blue-500/20 text-blue-500'}`}>
+                    <span className={`text-[8px] px-1 rounded font-black uppercase ${order.department === 'print' ? 'bg-purple-500/20 text-purple-500' : order.department === 'production' ? 'bg-brand/20 text-brand' : 'bg-blue-500/20 text-blue-500'}`}>
                       {order.department === 'print' ? 'ПЕЧАТЬ' : order.department === 'production' ? 'ИЗГОТОВЛЕНИЕ' : 'МОНТАЖ'}
                     </span>
                     <span className="text-[10px]">{order.status === 'completed' ? '✅' : order.status === 'in_progress' ? '⏳' : '🆕'}</span>
@@ -188,13 +188,13 @@ export default function OrderListManager({
                 <div className="flex-grow min-w-0 text-left">
                   <div className="flex items-center gap-2 mb-1">
                     <h4 className="font-bold text-foreground truncate group-hover:text-primary transition uppercase">{order.title}</h4>
-                    <span className={`text-[9px] px-2 py-0.5 rounded font-bold whitespace-nowrap ${order.status === 'completed' ? 'bg-emerald-500/20 text-emerald-600' : order.status === 'in_progress' ? 'bg-amber-500/20 text-amber-600' : 'bg-blue-500/20 text-blue-600'}`}>
+                    <span className={`text-[9px] px-2 py-0.5 rounded font-bold whitespace-nowrap ${order.status === 'completed' ? 'bg-emerald-500/20 text-emerald-600' : order.status === 'in_progress' ? 'bg-brand/20 text-brand' : 'bg-blue-500/20 text-blue-600'}`}>
                       {order.status === 'completed' ? '✅ ГОТОВО' : order.status === 'in_progress' ? '⏳ В РАБОТЕ' : '🆕 НОВЫЙ'}
                     </span>
                   </div>
                   <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
                     {order.deadline && <span className="flex items-center gap-1 whitespace-nowrap">📅 {new Date(order.deadline).toLocaleDateString('ru-RU')}</span>}
-                    <span className={`text-[10px] font-bold ${order.department === 'print' ? 'text-purple-400' : order.department === 'production' ? 'text-orange-400' : 'text-blue-400'}`}>
+                    <span className={`text-[10px] font-bold ${order.department === 'print' ? 'text-purple-400' : order.department === 'production' ? 'text-brand' : 'text-blue-400'}`}>
                        {order.department === 'print' ? '🖨 ПЕЧАТЬ' : order.department === 'production' ? '🏭 ИЗГОТОВЛЕНИЕ' : '🛠 МОНТАЖ'}
                     </span>
                   </div>

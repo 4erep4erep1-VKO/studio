@@ -59,7 +59,7 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssig
         <div className="absolute inset-0 rounded-xl border-2 border-red-500 animate-pulse pointer-events-none z-10" />
       )}
       {deadlineStatus === 'warning' && (
-        <div className="absolute inset-0 rounded-xl border-2 border-amber-500 animate-pulse pointer-events-none z-10" />
+        <div className="absolute inset-0 rounded-xl border-2 border-brand animate-pulse pointer-events-none z-10" />
       )}
 
       {/* ЗАГОЛОВОК И ОПИСАНИЕ - КЛИКАБЕЛЬНЫЕ */}
@@ -70,7 +70,7 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssig
           </div>
           <div className="flex gap-2">
              {order.preview_url && <span className="text-[10px] text-primary bg-primary/10 border border-primary/20 px-2 py-1 rounded uppercase font-bold">Эскиз</span>}
-             <span className={`text-[10px] px-2 py-1 rounded uppercase font-bold ${order.department === 'print' ? 'bg-purple-500/10 text-purple-500' : order.department === 'production' ? 'bg-orange-500/10 text-orange-500' : 'bg-blue-500/10 text-blue-500'}`}>
+             <span className={`text-[10px] px-2 py-1 rounded uppercase font-bold ${order.department === 'print' ? 'bg-purple-500/10 text-purple-500' : order.department === 'production' ? 'bg-brand/10 text-brand' : 'bg-blue-500/10 text-blue-500'}`}>
                {order.department === 'print' ? '🖨 Печать' : order.department === 'production' ? '🏭 Изготовление' : '🛠 Монтаж'}
              </span>
           </div>
@@ -84,7 +84,7 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssig
       <div className="space-y-2 text-sm mb-4 bg-background/50 p-3 rounded-lg border border-border/50 relative z-20">
         <div className="flex justify-between">
           <span className="text-muted-foreground">Дедлайн:</span>
-          <span className={`font-bold ${deadlineStatus === 'critical' ? 'text-red-500' : deadlineStatus === 'warning' ? 'text-amber-500' : 'text-foreground'}`}>
+          <span className={`font-bold ${deadlineStatus === 'critical' ? 'text-red-500' : deadlineStatus === 'warning' ? 'text-brand' : 'text-foreground'}`}>
             {order.deadline ? new Date(order.deadline).toLocaleDateString('ru-RU') : '—'}
           </span>
         </div>
@@ -124,7 +124,7 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssig
         <div className="flex items-center gap-2">
           <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
             order.status === 'completed' ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 
-            order.status === 'in_progress' ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400' : 
+            order.status === 'in_progress' ? 'bg-brand/20 text-brand' : 
             'bg-muted text-muted-foreground border border-border'
           }`}>
             {order.status === 'completed' ? 'Завершен' : order.status === 'in_progress' ? 'В работе' : 'Новый'}
@@ -133,7 +133,7 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssig
 
         <div className="flex items-center gap-1">
           {order.status === 'new' && onAssignOrder && (
-            <button onClick={() => onAssignOrder(order.id)} className="flex items-center gap-1 px-2 py-1 text-amber-600 hover:bg-amber-500/10 rounded-lg text-xs font-bold transition" title="Назначить исполнителя">
+            <button onClick={() => onAssignOrder(order.id)} className="flex items-center gap-1 px-2 py-1 text-brand hover:bg-brand/10 rounded-lg text-xs font-bold transition" title="Назначить исполнителя">
               <UserPlus className="w-4 h-4"/> Назначить
             </button>
           )}

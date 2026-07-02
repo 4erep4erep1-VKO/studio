@@ -411,7 +411,7 @@ export default function Dashboard() {
             <div><p className="text-xs text-muted-foreground font-bold">Заказы</p><p className="text-2xl font-bold">{stats.total}</p></div>
           </div>
           <div className="bg-card p-4 rounded-xl border border-border flex items-center gap-4">
-            <div className="p-3 bg-amber-500/10 rounded-lg"><Clock className="text-amber-500" /></div>
+            <div className="p-3 bg-brand/10 rounded-lg"><Clock className="text-brand" /></div>
             <div><p className="text-xs text-muted-foreground font-bold">В работе</p><p className="text-2xl font-bold">{stats.active}</p></div>
           </div>
           <div className="bg-card p-4 rounded-xl border border-border flex items-center gap-4">
@@ -522,8 +522,8 @@ export default function Dashboard() {
                 </div>
 
                 {/* КОЛОНКА 2: В РАБОТЕ */}
-                <div className="w-full md:min-w-[320px] md:flex-1 bg-amber-500/5 border border-amber-500/20 p-4 rounded-xl flex flex-col gap-4">
-                  <h3 className="font-bold border-b border-amber-500/20 pb-2 flex justify-between">⏳ В работе <span>{filteredOrders.filter(o => o.status === 'in_progress').length}</span></h3>
+                <div className="w-full md:min-w-[320px] md:flex-1 bg-brand/5 border border-brand/20 p-4 rounded-xl flex flex-col gap-4">
+                  <h3 className="font-bold border-b border-brand/20 pb-2 flex justify-between">⏳ В работе <span>{filteredOrders.filter(o => o.status === 'in_progress').length}</span></h3>
                   {filteredOrders.filter(o => o.status === 'in_progress').map((o: any) => (
                     <OrderCard key={o.id} order={o} onView={setViewingOrder} onEdit={id => {
                       if (!currentUserId) {
@@ -650,12 +650,12 @@ export default function Dashboard() {
                 <div>
                   <h3 className="font-bold text-lg text-primary mb-2">{viewingOrder.title}</h3>
                   <div className="flex gap-2 flex-wrap mb-3">
-                    <span className={`text-[10px] px-3 py-1 rounded font-bold uppercase ${viewingOrder.department === 'print' ? 'bg-purple-500/20 text-purple-500' : viewingOrder.department === 'production' ? 'bg-orange-500/20 text-orange-500' : 'bg-blue-500/20 text-blue-500'}`}>
+                    <span className={`text-[10px] px-3 py-1 rounded font-bold uppercase ${viewingOrder.department === 'print' ? 'bg-purple-500/20 text-purple-500' : viewingOrder.department === 'production' ? 'bg-brand/20 text-brand' : 'bg-blue-500/20 text-blue-500'}`}>
                       {viewingOrder.department === 'print' ? '🖨 Печать' : viewingOrder.department === 'production' ? '🏭 Изготовление' : '🛠 Монтаж'}
                     </span>
                     <span className={`text-[10px] px-3 py-1 rounded font-bold uppercase ${
                       viewingOrder.status === 'completed' ? 'bg-emerald-500/20 text-emerald-600' : 
-                      viewingOrder.status === 'in_progress' ? 'bg-amber-500/20 text-amber-600' : 
+                      viewingOrder.status === 'in_progress' ? 'bg-brand/20 text-brand' : 
                       'bg-muted text-muted-foreground'
                     }`}>
                       {viewingOrder.status === 'completed' ? 'Завершен' : viewingOrder.status === 'in_progress' ? 'В работе' : 'Новый'}
