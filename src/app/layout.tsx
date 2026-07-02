@@ -26,9 +26,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Image
                 src="/logo.png"
                 alt="Монтажка PRO"
-                width={56}
-                height={56}
-                className="h-14 w-14 object-contain"
+                width={140}
+                height={50}
+                className="object-contain"
               />
             </Link>
             <ThemeToggle />
