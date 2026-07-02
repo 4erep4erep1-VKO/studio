@@ -16,19 +16,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           disableTransitionOnChange
         >
           <header className="relative p-4 flex justify-between items-center border-b bg-card">
-            <Link href="/" className="font-bold text-secondary">
+            <Link href="/" className="font-bold text-secondary hidden md:block">
               Монтажка PRO
             </Link>
             <Link
               href="/"
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+              className="relative md:absolute md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2"
             >
               <Image
                 src="/logo.png"
                 alt="Монтажка PRO"
                 width={280}
                 height={100}
-                className="object-contain"
+                className="object-contain h-8 w-auto md:h-auto"
               />
             </Link>
             <ThemeToggle />
