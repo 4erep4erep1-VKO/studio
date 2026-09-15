@@ -42,6 +42,7 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<'active' | 'general' | 'completed' | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewingOrder, setViewingOrder] = useState<any | null>(null);
+  const [stats, setStats] = useState({ total: 0, active: 0, done: 0 });
 
   const [notifications, setNotifications] = useState<{id: string, text: string, time: string}[]>([]);
   const [showNotifs, setShowNotifs] = useState(false);
@@ -115,10 +116,16 @@ export default function Dashboard() {
 
   const fetchAllData = async () => {
     try {
-      const { data: rawOrders } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+      const [{ data: rawOrders }, { count: totalCount }, { count: activeCount }, { count: doneCount }] = await Promise.all([
+        supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(1000),
+        supabase.from('orders').select('*', { count: 'exact', head: true }),
+        supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'in_progress'),
+        supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'completed'),
+      ]);
       const { data: rawProfiles } = await supabase.from('profiles').select('*').order('full_name', { ascending: true });
 
       if (rawProfiles) setProfiles(rawProfiles);
+      setStats({ total: totalCount || 0, active: activeCount || 0, done: doneCount || 0 });
 
       const mergedOrders = (rawOrders || []).map((order: any) => {
         const assignedProfile = rawProfiles?.find(p => p.id === order.assigned_to);
@@ -381,12 +388,6 @@ export default function Dashboard() {
     if (activeTab === 'general') return o.is_general === true;
     return true;
   });
-
-  const stats = {
-    total: orders.length,
-    active: orders.filter(o => o.status !== 'completed').length,
-    done: orders.filter(o => o.status === 'completed').length
-  };
 
   if (!isAuthenticated) {
     return (
