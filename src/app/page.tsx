@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  Plus, Loader2, Megaphone, 
+import {
+  Plus, Loader2, Activity,
   Users, User, LayoutDashboard, Search, Bell, 
   Trash2, UserPlus, CheckCircle2, Clock, 
   BarChart3, X, LogOut, ShieldCheck, Download
@@ -13,6 +13,7 @@ import { Order, OrderTemplate } from '@/lib/types';
 import OrderForm from '@/components/orders/OrderForm';
 import { OrderCard } from '@/components/orders/OrderCard';
 import OrderListManager from '@/components/orders/OrderListManager';
+import ActivityFeed from '@/components/orders/ActivityFeed';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import * as XLSX from 'xlsx';
@@ -62,7 +63,7 @@ export default function Dashboard() {
   const [assigningOrderId, setAssigningOrderId] = useState<string | null>(null);
 
   const [view, setView] = useState<'orders' | 'staff'>('orders');
-  const [displayMode, setDisplayMode] = useState<'kanban' | 'list'>('kanban');
+  const [displayMode, setDisplayMode] = useState<'kanban' | 'list' | 'feed'>('kanban');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserName, setCurrentUserName] = useState<string | null>(null);
@@ -76,7 +77,6 @@ export default function Dashboard() {
   const [stats, setStats] = useState({ total: 0, done: 0, cancelled: 0 });
 
   const [notifications, setNotifications] = useState<{id: string, text: string, time: string}[]>([]);
-  const [showNotifs, setShowNotifs] = useState(false);
   
   const { toast } = useToast();
 
@@ -439,15 +439,6 @@ export default function Dashboard() {
     setIsExportModalOpen(false);
   };
 
-  const handleBroadcast = async () => {
-    const msg = prompt("Введите текст объявления для всех сотрудников:");
-    if (!msg) return;
-    setLoading(true);
-    profiles.forEach(p => p.telegram_chat_id && notifyTelegram(p.telegram_chat_id, `📢 <b>ОБЪЯВЛЕНИЕ:</b>\n\n${msg}`));
-    setLoading(false);
-    toast({ title: "Рассылка запущена" });
-  };
-
   const addStaff = async () => {
     const name = prompt("ФИО сотрудника:");
     if (!name) return;
@@ -515,9 +506,9 @@ export default function Dashboard() {
             <div><p className="text-xs text-muted-foreground font-bold">Отменено</p><p className="text-2xl font-bold">{stats.cancelled}</p></div>
           </div>
           <div className="bg-card p-4 rounded-xl border border-border flex items-center gap-4 relative">
-             <div className="p-3 bg-secondary/10 rounded-lg cursor-pointer" onClick={() => setShowNotifs(!showNotifs)}>
+             <button type="button" aria-label="Открыть ленту событий" className="p-3 bg-secondary/10 rounded-lg cursor-pointer" onClick={() => { setView('orders'); setDisplayMode('feed'); }}>
                 <Bell className={notifications.length > 0 ? "text-secondary animate-pulse" : "text-muted-foreground"} />
-             </div>
+             </button>
              <div className="flex-grow">
                 <p className="text-xs text-muted-foreground font-bold">Система</p>
                 <div className="flex items-center gap-2">
@@ -546,12 +537,12 @@ export default function Dashboard() {
               <div className="flex bg-card p-1 rounded-xl border border-border">
                 <button onClick={() => setDisplayMode('kanban')} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${displayMode === 'kanban' ? 'bg-brand text-brand-foreground' : 'text-muted-foreground'}`}>📊 Канбан</button>
                 <button onClick={() => setDisplayMode('list')} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${displayMode === 'list' ? 'bg-brand text-brand-foreground' : 'text-muted-foreground'}`}>📋 Список</button>
+                <button onClick={() => setDisplayMode('feed')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition ${displayMode === 'feed' ? 'bg-brand text-brand-foreground' : 'text-muted-foreground'}`}><Activity className="h-4 w-4" />Лента</button>
               </div>
             )}
           </div>
           <div className="flex gap-2 w-full md:w-auto">
             <Button onClick={() => setIsExportModalOpen(true)} className="bg-emerald-600 text-white font-bold flex-1 md:flex-none">Excel Отчет</Button>
-            {isAdmin && <Button onClick={handleBroadcast} className="bg-secondary text-secondary-foreground font-bold flex-1 md:flex-none">Объявление</Button>}
             <Button onClick={() => {
               if (!currentUserId) {
                 alert('❌ Ошибка: Вы не авторизованы. Пожалуйста, пройдите вход в систему, используя ПИН-код.');
@@ -590,6 +581,26 @@ export default function Dashboard() {
                 onView={setViewingOrder}
                 isAdmin={isAdmin}
               />
+            ) : displayMode === 'feed' ? (
+              loading ? <Loader2 className="animate-spin mx-auto mt-20" /> : (
+                <ActivityFeed
+                  orders={orders}
+                  profiles={profiles}
+                  searchQuery={searchQuery}
+                  onSearch={setSearchQuery}
+                  onView={setViewingOrder}
+                  onEdit={(id) => {
+                    if (!currentUserId) {
+                      alert('❌ Ошибка: Вы не авторизованы. Пожалуйста, пройдите вход в систему.');
+                      return;
+                    }
+                    setEditingOrderId(id);
+                    setDuplicateOrder(null);
+                    setIsModalOpen(true);
+                  }}
+                  onDuplicate={openDuplicateOrder}
+                />
+              )
             ) : (
               // РЕЖИМ КАНБАНА
               <>
