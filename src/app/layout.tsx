@@ -16,8 +16,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           disableTransitionOnChange
         >
           <header className="relative p-4 flex justify-between items-center border-b bg-card">
-            <Link href="/" className="font-bold text-secondary hidden md:block">
-              Монтажка PRO
+            <Link href="/" className="flex items-center gap-2.5">
+              <img
+                src="/Logo2.png"
+                alt="Монтажка PRO"
+                className="h-9 w-auto object-contain rounded-md shrink-0"
+              />
+              <span className="hidden sm:inline-block text-sm md:text-base font-bold tracking-tight text-foreground/90">
+                Монтажка <span className="text-red-500">PRO</span>
+              </span>
             </Link>
             <Link
               href="/"
