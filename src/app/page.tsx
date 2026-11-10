@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import {
-  Plus, Loader2, Activity,
+  Plus, Loader2,
   Users, User, LayoutDashboard, Search, Bell, 
   Trash2, UserPlus, CheckCircle2, Clock, 
   BarChart3, X, LogOut, ShieldCheck, Download
@@ -13,7 +13,6 @@ import { Order, OrderTemplate } from '@/lib/types';
 import OrderForm from '@/components/orders/OrderForm';
 import { OrderCard } from '@/components/orders/OrderCard';
 import OrderListManager from '@/components/orders/OrderListManager';
-import ActivityFeed from '@/components/orders/ActivityFeed';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import * as XLSX from 'xlsx';
@@ -66,7 +65,7 @@ export default function Dashboard() {
   const [isCompletingOrder, setIsCompletingOrder] = useState(false);
 
   const [view, setView] = useState<'orders' | 'staff'>('orders');
-  const [displayMode, setDisplayMode] = useState<'kanban' | 'list' | 'feed'>('kanban');
+  const [displayMode, setDisplayMode] = useState<'kanban' | 'list'>('kanban');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserName, setCurrentUserName] = useState<string | null>(null);
@@ -375,14 +374,14 @@ export default function Dashboard() {
 
       const { data: currentOrder, error: fetchError } = await supabase
         .from('orders')
-        .select('report_photos')
+        .select('image_urls')
         .eq('id', completingOrderId)
         .single();
       if (fetchError) throw fetchError;
-      const currentReportPhotos = Array.isArray(currentOrder.report_photos)
-        ? currentOrder.report_photos as string[]
-        : (order as any).report_photo
-          ? [(order as any).report_photo as string]
+      const currentImages = Array.isArray(currentOrder.image_urls)
+        ? currentOrder.image_urls as string[]
+        : Array.isArray(order.image_urls)
+          ? order.image_urls
           : [];
       const uploadedPhotos: string[] = [];
 
@@ -399,7 +398,7 @@ export default function Dashboard() {
 
       const { error } = await supabase.from('orders').update({
         status: 'completed',
-        report_photos: [...currentReportPhotos, ...uploadedPhotos],
+        image_urls: [...currentImages, ...uploadedPhotos],
       }).eq('id', completingOrderId);
       if (error) throw error;
       toast({ title: "Заказ завершен!", description: uploadedPhotos.length ? 'Фотоотчет прикреплен.' : undefined });
@@ -415,7 +414,7 @@ export default function Dashboard() {
 
   const handleRestore = async (id: string) => {
     try {
-      const { error } = await supabase.from('orders').update({ status: 'in_progress', report_photo: null, report_photos: [] }).eq('id', id);
+      const { error } = await supabase.from('orders').update({ status: 'in_progress' }).eq('id', id);
       if (error) throw error;
       toast({ title: 'Заказ возвращен в работу' });
       fetchAllData();
@@ -553,9 +552,9 @@ export default function Dashboard() {
             <div><p className="text-xs text-muted-foreground font-bold">Отменено</p><p className="text-2xl font-bold">{stats.cancelled}</p></div>
           </div>
           <div className="bg-card p-4 rounded-xl border border-border flex items-center gap-4 relative">
-             <button type="button" aria-label="Открыть ленту событий" className="p-3 bg-secondary/10 rounded-lg cursor-pointer" onClick={() => { setView('orders'); setDisplayMode('feed'); }}>
+             <div className="p-3 bg-secondary/10 rounded-lg">
                 <Bell className={notifications.length > 0 ? "text-secondary animate-pulse" : "text-muted-foreground"} />
-             </button>
+             </div>
              <div className="flex-grow">
                 <p className="text-xs text-muted-foreground font-bold">Система</p>
                 <div className="flex items-center gap-2">
@@ -584,7 +583,6 @@ export default function Dashboard() {
               <div className="flex bg-card p-1 rounded-xl border border-border">
                 <button onClick={() => setDisplayMode('kanban')} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${displayMode === 'kanban' ? 'bg-brand text-brand-foreground' : 'text-muted-foreground'}`}>📊 Канбан</button>
                 <button onClick={() => setDisplayMode('list')} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${displayMode === 'list' ? 'bg-brand text-brand-foreground' : 'text-muted-foreground'}`}>📋 Список</button>
-                <button onClick={() => setDisplayMode('feed')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition ${displayMode === 'feed' ? 'bg-brand text-brand-foreground' : 'text-muted-foreground'}`}><Activity className="h-4 w-4" />Лента</button>
               </div>
             )}
           </div>
@@ -628,26 +626,6 @@ export default function Dashboard() {
                 onView={setViewingOrder}
                 isAdmin={isAdmin}
               />
-            ) : displayMode === 'feed' ? (
-              loading ? <Loader2 className="animate-spin mx-auto mt-20" /> : (
-                <ActivityFeed
-                  orders={orders}
-                  profiles={profiles}
-                  searchQuery={searchQuery}
-                  onSearch={setSearchQuery}
-                  onView={setViewingOrder}
-                  onEdit={(id) => {
-                    if (!currentUserId) {
-                      alert('❌ Ошибка: Вы не авторизованы. Пожалуйста, пройдите вход в систему.');
-                      return;
-                    }
-                    setEditingOrderId(id);
-                    setDuplicateOrder(null);
-                    setIsModalOpen(true);
-                  }}
-                  onDuplicate={openDuplicateOrder}
-                />
-              )
             ) : (
               // РЕЖИМ КАНБАНА
               <>
@@ -911,27 +889,16 @@ export default function Dashboard() {
                 </div>
 
                 {/* ИЗОБРАЖЕНИЯ */}
-                {(viewingOrder.image_urls || viewingOrder.report_photos || viewingOrder.report_photo) && (
+                {viewingOrder.image_urls && Array.isArray(viewingOrder.image_urls) && viewingOrder.image_urls.length > 0 && (
                   <div>
                     <p className="text-xs text-muted-foreground font-bold uppercase mb-3">Изображения</p>
                     <div className="grid grid-cols-2 gap-3">
                       {viewingOrder.image_urls && Array.isArray(viewingOrder.image_urls) && viewingOrder.image_urls.map((url: string, idx: number) => (
                         <a key={`preview-${idx}`} href={url} target="_blank" rel="noopener noreferrer" className="relative group overflow-hidden rounded-lg border border-border">
                           <img src={url} alt={`Изображение ${idx + 1}`} className="w-full h-auto object-cover group-hover:scale-105 transition" />
-                          <span className="absolute bottom-1 left-1 rounded bg-background/90 px-1.5 py-0.5 text-[10px] font-bold text-foreground">📎 Макет</span>
+                          <span className="absolute bottom-1 left-1 rounded bg-background/90 px-1.5 py-0.5 text-[10px] font-bold text-foreground">📷 Фото</span>
                         </a>
                       ))}
-                      {Array.isArray(viewingOrder.report_photos) && viewingOrder.report_photos.map((url: string, idx: number) => (
-                        <a key={`report-${idx}`} href={url} target="_blank" rel="noopener noreferrer" className="relative group overflow-hidden rounded-lg border border-border">
-                          <img src={url} alt={`Фотоотчет ${idx + 1}`} className="w-full h-auto object-cover group-hover:scale-105 transition" />
-                          <span className="absolute bottom-1 left-1 rounded bg-background/90 px-1.5 py-0.5 text-[10px] font-bold text-foreground">📸 Фотоотчет</span>
-                        </a>
-                      ))}
-                      {viewingOrder.report_photo && (
-                        <a key="legacy-report" href={viewingOrder.report_photo} target="_blank" rel="noopener noreferrer" className="relative group overflow-hidden rounded-lg border border-border">
-                          <img src={viewingOrder.report_photo} alt="Отчет" className="w-full h-auto object-cover group-hover:scale-105 transition" />
-                        </a>
-                      )}
                     </div>
                   </div>
                 )}

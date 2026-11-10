@@ -371,7 +371,7 @@ async function handleIncomingPhoto(chatId: number | string, telegramId: string, 
   const { data: urlData } = supabase.storage.from('order-photos').getPublicUrl(storagePath);
   const { data: freshData, error: fetchError } = await supabase
     .from('orders')
-    .select('report_photos, description')
+    .select('image_urls, description')
     .eq('id', order.id)
     .maybeSingle();
   if (fetchError) {
@@ -380,14 +380,14 @@ async function handleIncomingPhoto(chatId: number | string, telegramId: string, 
     return;
   }
 
-  const currentReportPhotos = Array.isArray(freshData?.report_photos)
-    ? freshData.report_photos
-    : Array.isArray(order.report_photos)
-      ? order.report_photos
+  const currentImages = Array.isArray(freshData?.image_urls)
+    ? freshData.image_urls
+    : Array.isArray(order.image_urls)
+      ? order.image_urls
       : [];
   const updatePayload: Record<string, any> = {
     status: 'completed',
-    report_photos: [...currentReportPhotos, urlData.publicUrl],
+    image_urls: [...currentImages, urlData.publicUrl],
   };
 
   if (mediaGroupId && !isAlbumAppend) {
@@ -398,7 +398,7 @@ async function handleIncomingPhoto(chatId: number | string, telegramId: string, 
   const { error: updateError } = await supabase.from('orders').update(updatePayload).eq('id', order.id);
   if (updateError) {
     console.error('❌ Ошибка сохранения фотоотчета:', updateError);
-    await sendTelegramMessage(chatId, '❌ Не удалось сохранить фотоотчет. Убедитесь, что обновлена схема базы данных.');
+    await sendTelegramMessage(chatId, '❌ Не удалось сохранить фотоотчет. Попробуйте отправить фотографию еще раз.');
     return;
   }
   const empName = profile.name || profile.full_name || 'Сотрудник';
