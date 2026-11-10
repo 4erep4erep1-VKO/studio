@@ -19,6 +19,8 @@ import * as XLSX from 'xlsx';
 
 export default function Dashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [listSearchResults, setListSearchResults] = useState<Order[] | null>(null);
+  const [totalOrdersCount, setTotalOrdersCount] = useState(0);
   const [profiles, setProfiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -116,8 +118,8 @@ export default function Dashboard() {
 
   const fetchAllData = async () => {
     try {
-      const [{ data: rawOrders }, { count: totalCount }, { count: activeCount }, { count: doneCount }] = await Promise.all([
-        supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(1000),
+      const [{ data: rawOrders, count: totalCount }, { count: activeCount }, { count: doneCount }] = await Promise.all([
+        supabase.from('orders').select('*', { count: 'exact' }).order('created_at', { ascending: false }).limit(5000),
         supabase.from('orders').select('*', { count: 'exact', head: true }),
         supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'in_progress'),
         supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'completed'),
@@ -126,6 +128,7 @@ export default function Dashboard() {
 
       if (rawProfiles) setProfiles(rawProfiles);
       setStats({ total: totalCount || 0, active: activeCount || 0, done: doneCount || 0 });
+      setTotalOrdersCount(totalCount || 0);
 
       const mergedOrders = (rawOrders || []).map((order: any) => {
         const assignedProfile = rawProfiles?.find(p => p.id === order.assigned_to);
@@ -147,6 +150,41 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const searchOrders = async (query: string) => {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) {
+      setListSearchResults(null);
+      return;
+    }
+
+    const { data: rawOrders, error } = await supabase
+      .from('orders')
+      .select('*')
+      .or(`title.ilike.%${trimmedQuery}%,description.ilike.%${trimmedQuery}%`)
+      .limit(5000);
+
+    if (error) {
+      console.error('Ошибка поиска заказов:', error.message);
+      return;
+    }
+
+    const results = (rawOrders || []).map((order: any) => {
+      const assignedProfile = profiles.find(profile => profile.id === order.assigned_to);
+      const creatorProfile = profiles.find(profile => profile.id === order.created_by);
+
+      return {
+        ...order,
+        profiles: assignedProfile ? {
+          full_name: assignedProfile.full_name,
+          telegram_chat_id: assignedProfile.telegram_chat_id
+        } : null,
+        creator_name: creatorProfile ? creatorProfile.full_name : 'Админ'
+      };
+    });
+
+    setListSearchResults(results);
   };
 
   useEffect(() => {
@@ -473,7 +511,9 @@ export default function Dashboard() {
             {displayMode === 'list' ? (
               // РЕЖИМ СПИСКА/СЕТКИ
               <OrderListManager
-                orders={filteredOrders}
+                orders={listSearchResults ?? orders}
+                totalOrdersCount={totalOrdersCount}
+                onSearch={searchOrders}
                 onEdit={(id) => {
                   if (!currentUserId) {
                     alert('❌ Ошибка: Вы не авторизованы. Пожалуйста, пройдите вход в систему.');

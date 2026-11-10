@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation';
 
 interface OrderListManagerProps {
   orders: any[];
+  totalOrdersCount?: number;
+  onSearch?: (query: string) => void;
   onEdit: (orderId: string) => void;
   onDelete: (id: string, creatorId: string, title: string, status: string) => void;
   onComplete: (id: string, title: string) => void;
@@ -19,6 +21,8 @@ interface OrderListManagerProps {
 
 export default function OrderListManager({
   orders,
+  totalOrdersCount,
+  onSearch,
   onEdit,
   onDelete,
   onComplete,
@@ -33,17 +37,8 @@ export default function OrderListManager({
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'name_asc' | 'deadline'>('newest');
 
-  const searchedOrders = useMemo(() => {
-    return orders.filter((order) => {
-      const searchLower = searchQuery.toLowerCase();
-      const titleMatch = (order.title || '').toLowerCase().includes(searchLower);
-      const descriptionMatch = (order.description || '').toLowerCase().includes(searchLower);
-      return titleMatch || descriptionMatch;
-    });
-  }, [orders, searchQuery]);
-
   const sortedOrders = useMemo(() => {
-    const arr = [...searchedOrders];
+    const arr = [...orders];
     switch (sortBy) {
       case 'newest':
         return arr.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -60,7 +55,7 @@ export default function OrderListManager({
       default:
         return arr;
     }
-  }, [searchedOrders, sortBy]);
+  }, [orders, sortBy]);
 
   return (
     <div className="space-y-4">
@@ -71,7 +66,11 @@ export default function OrderListManager({
             type="text"
             placeholder="🔍 Поиск по названию или описанию..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              const query = e.target.value;
+              setSearchQuery(query);
+              onSearch?.(query);
+            }}
             className="w-full p-3 bg-background text-foreground placeholder:text-muted-foreground border border-border rounded-lg outline-none focus:border-primary transition"
           />
         </div>
@@ -126,7 +125,7 @@ export default function OrderListManager({
         </div>
 
         <div className="mt-3 text-xs text-muted-foreground font-medium">
-          Найдено заказов: <span className="font-bold text-foreground">{sortedOrders.length}</span> / {orders.length}
+          Найдено заказов: <span className="font-bold text-foreground">{sortedOrders.length}</span> / {totalOrdersCount ?? orders.length}
         </div>
       </div>
 
