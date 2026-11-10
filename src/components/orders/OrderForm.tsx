@@ -274,17 +274,17 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
   };
 
   return (
-    <div className="flex flex-col h-full bg-card text-foreground overflow-hidden p-6" onPaste={handlePaste}>
+    <div className="flex h-full flex-col overflow-hidden bg-[#0f1011] p-6 text-[#d0d6e0]" onPaste={handlePaste}>
       <form onSubmit={handleSubmit} className="flex flex-col h-full">
         <div className="flex-grow overflow-y-auto space-y-5 pr-2 custom-scrollbar" style={{ maxHeight: '70vh' }}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Объект</label>
-              <input required className="w-full p-2 bg-background text-foreground placeholder:text-muted-foreground border border-border rounded focus:border-primary outline-none transition" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+              <label className="mb-1 block text-xs font-normal uppercase text-[#8a8f98]">Объект</label>
+              <input required className="w-full rounded-md border border-[#23252a] bg-[#08090a] p-2 text-[#d0d6e0] outline-none transition placeholder:text-[#8a8f98] focus:border-[#C62828]" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
             </div>
             <div>
-              <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Куда отправить</label>
-              <select className="w-full p-2 bg-background text-foreground border border-border rounded focus:border-primary outline-none transition" value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})}>
+              <label className="mb-1 block text-xs font-normal uppercase text-[#8a8f98]">Куда отправить</label>
+              <select className="w-full rounded-md border border-[#23252a] bg-[#08090a] p-2 text-[#d0d6e0] outline-none transition focus:border-[#C62828]" value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})}>
                 <option value="installation">🛠 На монтаж</option>
                 <option value="print">🖨 На печать</option>
                 <option value="production">🏭 Изготовление</option>
@@ -294,12 +294,12 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Дедлайн</label>
-              <input type="date" className="w-full p-2 bg-background text-foreground border border-border rounded focus:border-primary outline-none transition" value={formData.deadline} onChange={e => setFormData({...formData, deadline: e.target.value})} />
+              <label className="mb-1 block text-xs font-normal uppercase text-[#8a8f98]">Дедлайн</label>
+              <input type="date" className="w-full rounded-md border border-[#23252a] bg-[#08090a] p-2 text-[#d0d6e0] outline-none transition focus:border-[#C62828]" value={formData.deadline} onChange={e => setFormData({...formData, deadline: e.target.value})} />
             </div>
             <div>
-              <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Лично исполнителю</label>
-              <select disabled={formData.is_general} className="w-full p-2 bg-background text-foreground border border-border rounded focus:border-primary outline-none transition disabled:opacity-30" value={formData.assigned_to} onChange={e => setFormData({...formData, assigned_to: e.target.value})}>
+              <label className="mb-1 block text-xs font-normal uppercase text-[#8a8f98]">Лично исполнителю</label>
+              <select disabled={formData.is_general} className="w-full rounded-md border border-[#23252a] bg-[#08090a] p-2 text-[#d0d6e0] outline-none transition focus:border-[#C62828] disabled:opacity-30" value={formData.assigned_to} onChange={e => setFormData({...formData, assigned_to: e.target.value})}>
                 <option value="">Не назначен...</option>
                 {installers.map(i => <option key={i.id} value={i.id}>{i.full_name}</option>)}
               </select>
@@ -307,43 +307,43 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center sm:gap-4 gap-3">
-            <label className="flex items-center gap-2 p-3 border border-border bg-background/50 rounded cursor-pointer">
-              <input type="checkbox" checked={formData.is_general} onChange={e => setFormData({...formData, is_general: e.target.checked})} className="w-5 h-5 accent-primary" />
-              <span className="font-bold text-sm cursor-pointer text-foreground">Общий заказ (увидят все в отделе)</span>
+            <label className="flex cursor-pointer items-center gap-2 rounded-md border border-[#23252a] bg-[#08090a] p-3">
+              <input type="checkbox" checked={formData.is_general} onChange={e => setFormData({...formData, is_general: e.target.checked})} className="h-5 w-5 accent-[#C62828]" />
+              <span className="cursor-pointer text-sm font-medium text-[#d0d6e0]">Общий заказ (увидят все в отделе)</span>
             </label>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <input placeholder="Размеры (3х6м)" className="w-full p-2 bg-background text-foreground placeholder:text-muted-foreground border border-border rounded focus:border-primary outline-none" value={formData.dimensions} onChange={e => setFormData({...formData, dimensions: e.target.value})} />
-            <input placeholder="Материал" className="w-full p-2 bg-background text-foreground placeholder:text-muted-foreground border border-border rounded focus:border-primary outline-none" value={formData.material} onChange={e => setFormData({...formData, material: e.target.value})} />
+            <input placeholder="Размеры (3х6м)" className="w-full rounded-md border border-[#23252a] bg-[#08090a] p-2 text-[#d0d6e0] outline-none placeholder:text-[#8a8f98] focus:border-[#C62828]" value={formData.dimensions} onChange={e => setFormData({...formData, dimensions: e.target.value})} />
+            <input placeholder="Материал" className="w-full rounded-md border border-[#23252a] bg-[#08090a] p-2 text-[#d0d6e0] outline-none placeholder:text-[#8a8f98] focus:border-[#C62828]" value={formData.material} onChange={e => setFormData({...formData, material: e.target.value})} />
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Ссылка на макет</label>
-            <input placeholder="Облако / Диск" className="w-full p-2 bg-background text-foreground placeholder:text-muted-foreground border border-border rounded focus:border-primary outline-none" value={formData.source_link} onChange={e => setFormData({...formData, source_link: e.target.value})} />
+            <label className="mb-1 block text-xs font-normal uppercase text-[#8a8f98]">Ссылка на макет</label>
+            <input placeholder="Облако / Диск" className="w-full rounded-md border border-[#23252a] bg-[#08090a] p-2 text-[#d0d6e0] outline-none placeholder:text-[#8a8f98] focus:border-[#C62828]" value={formData.source_link} onChange={e => setFormData({...formData, source_link: e.target.value})} />
           </div>
 
           <div>
-             <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Эскиз / Фото (Можно Ctrl+V)</label>
+             <label className="mb-1 block text-xs font-normal uppercase text-[#8a8f98]">Эскиз / Фото (Можно Ctrl+V)</label>
              {/* Обновленный жесткий фильтр по форматам */}
              <input 
                type="file" 
                accept="image/jpeg,image/png,image/webp" 
                multiple 
                onChange={e => e.target.files && uploadImages(e.target.files)} 
-               className="text-xs w-full text-foreground file:bg-primary file:text-primary-foreground file:border-0 file:rounded file:px-3 file:py-1 cursor-pointer" 
+               className="w-full cursor-pointer text-xs text-[#d0d6e0] file:rounded-md file:border-0 file:bg-[#C62828] file:px-3 file:py-1 file:text-white"
              />
              
              {formData.image_urls.length > 0 && (
                <div className="flex gap-3 mt-3 flex-wrap">
                  {formData.image_urls.map((url, idx) => (
                    <div key={idx} className="relative w-16 h-16 group">
-                     <img src={url} alt="Превью" className="w-full h-full object-cover rounded border border-border shadow-sm" />
+                     <img src={url} alt="Превью" className="h-full w-full rounded-md border border-[#23252a] object-cover" />
                      {/* Иконка удаления поверх картинки при правках */}
                      <button
                        type="button"
                        onClick={() => handleDeleteImage(idx)}
-                       className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground hover:bg-destructive/90 border border-border rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold shadow transition-transform group-hover:scale-110"
+                       className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-md border border-[#23252a] bg-[#C62828] text-[10px] font-normal text-white transition-transform hover:bg-red-800 group-hover:scale-110"
                        title="Удалить картинку"
                      >
                        ×
@@ -355,13 +355,13 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Задача</label>
-            <textarea rows={3} placeholder="Что именно нужно сделать..." className="w-full p-2 bg-background text-foreground placeholder:text-muted-foreground border border-border rounded focus:border-primary outline-none" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+            <label className="mb-1 block text-xs font-normal uppercase text-[#8a8f98]">Задача</label>
+            <textarea rows={3} placeholder="Что именно нужно сделать..." className="w-full rounded-md border border-[#23252a] bg-[#08090a] p-2 text-[#d0d6e0] outline-none placeholder:text-[#8a8f98] focus:border-[#C62828]" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
           </div>
         </div>
 
         <div className="pt-4 mt-auto border-t border-border">
-          <button type="submit" disabled={loading} className="w-full bg-primary text-primary-foreground p-3 rounded font-bold uppercase hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed">
+          <button type="submit" disabled={loading} className="w-full rounded-md bg-[#C62828] p-3 font-medium uppercase text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-50">
             {loading ? 'Секунду...' : 'Запустить в работу'}
           </button>
         </div>

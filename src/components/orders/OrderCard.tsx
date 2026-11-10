@@ -50,7 +50,7 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssig
   const deadlineStatus = getDeadlineStatus();
 
   // Добавили relative, чтобы абсолютная рамка легла ровно по краям карточки
-  const containerClass = `relative p-5 rounded-xl shadow-sm hover:border-muted-foreground/30 transition flex flex-col h-full bg-card border border-border`;
+  const containerClass = `relative flex h-full flex-col rounded-xl border border-[#23252a] bg-[#0f1011] p-5 transition hover:border-[#C62828]`;
 
   return (
     <div className={containerClass}>
@@ -59,40 +59,40 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssig
         <div className="absolute inset-0 rounded-xl border-2 border-red-500 animate-pulse pointer-events-none z-10" />
       )}
       {deadlineStatus === 'warning' && (
-        <div className="absolute inset-0 rounded-xl border-2 border-brand animate-pulse pointer-events-none z-10" />
+        <div className="pointer-events-none absolute inset-0 z-10 animate-pulse rounded-xl border-2 border-[#C62828]" />
       )}
 
       {/* ЗАГОЛОВОК И ОПИСАНИЕ - КЛИКАБЕЛЬНЫЕ */}
       <div onClick={() => onView(order)} className="cursor-pointer group mb-4 -mx-5 -mt-5 px-5 pt-5 pb-4 relative z-20">
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-2">
-            <h3 className="font-bold text-lg text-card-foreground group-hover:text-primary transition mb-2">{order.title}</h3>
+            <h3 className="mb-2 text-lg font-medium text-white transition group-hover:text-[#C62828]">{order.title}</h3>
           </div>
           <div className="flex gap-2">
-             {order.preview_url && <span className="text-[10px] text-primary bg-primary/10 border border-primary/20 px-2 py-1 rounded uppercase font-bold">Эскиз</span>}
-             <span className={`text-[10px] px-2 py-1 rounded uppercase font-bold ${order.department === 'print' ? 'bg-purple-500/10 text-purple-500' : order.department === 'production' ? 'bg-brand/10 text-brand' : 'bg-blue-500/10 text-blue-500'}`}>
+             {order.preview_url && <span className="rounded-md border border-[#23252a] bg-[#161718] px-2 py-1 text-[10px] font-normal uppercase text-[#d0d6e0]">Эскиз</span>}
+             <span className={`rounded-md border border-[#23252a] bg-[#161718] px-2 py-1 text-[10px] font-normal uppercase text-[#d0d6e0]`}>
                {order.department === 'print' ? '🖨 Печать' : order.department === 'production' ? '🏭 Изготовление' : '🛠 Монтаж'}
              </span>
           </div>
         </div>
         
-        <p className="text-muted-foreground text-sm line-clamp-2 flex-grow">
+        <p className="line-clamp-2 flex-grow text-sm text-[#d0d6e0]">
           {order.description || 'Нет описания'}
         </p>
       </div>
       
-      <div className="space-y-2 text-sm mb-4 bg-background/50 p-3 rounded-lg border border-border/50 relative z-20">
+      <div className="relative z-20 mb-4 space-y-2 rounded-md border border-[#23252a] bg-[#08090a] p-3 text-sm">
         <div className="flex justify-between">
-          <span className="text-muted-foreground">Дедлайн:</span>
-          <span className={`font-bold ${deadlineStatus === 'critical' ? 'text-red-500' : deadlineStatus === 'warning' ? 'text-brand' : 'text-foreground'}`}>
+          <span className="text-[#8a8f98]">Дедлайн:</span>
+          <span className={`font-medium ${deadlineStatus === 'critical' ? 'text-red-400' : deadlineStatus === 'warning' ? 'text-[#C62828]' : 'text-[#8a8f98]'}`}>
             {order.deadline ? new Date(order.deadline).toLocaleDateString('ru-RU') : '—'}
           </span>
         </div>
         <div className="flex justify-between items-center">
-          <span className="text-muted-foreground">Исполнитель:</span>
-          <span className="text-foreground font-medium">
+          <span className="text-[#8a8f98]">Исполнитель:</span>
+          <span className="font-medium text-[#d0d6e0]">
             {order.is_general ? (
-              <span className="text-primary text-xs uppercase font-bold">Общий заказ</span>
+              <span className="text-xs font-medium uppercase text-[#C62828]">Общий заказ</span>
             ) : (
               order.profiles?.full_name || 'Не назначен'
             )}
@@ -100,8 +100,8 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssig
         </div>
         
         <div className="flex justify-between items-center border-t border-border/80 pt-2 mt-2">
-          <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider">Создал:</span>
-          <div className="flex items-center gap-1 text-muted-foreground">
+          <span className="text-xs font-normal uppercase tracking-wider text-[#8a8f98]">Создал:</span>
+          <div className="flex items-center gap-1 text-[#8a8f98]">
             <User className="w-3 h-3" />
             <span className="text-xs">{order.creator_name || 'Админ'}</span>
           </div>
@@ -109,10 +109,10 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssig
       </div>
 
       {order.report_photo && (
-        <div className="mb-4 bg-background p-2 rounded-lg border border-border relative z-20">
-          <p className="text-[10px] text-muted-foreground uppercase font-bold mb-2">📸 Отчет:</p>
+        <div className="relative z-20 mb-4 rounded-md border border-[#23252a] bg-[#08090a] p-2">
+          <p className="mb-2 text-[10px] font-normal uppercase text-[#8a8f98]">📸 Отчет:</p>
           <a href={order.report_photo} target="_blank" rel="noopener noreferrer" className="block relative group">
-            <img src={order.report_photo} alt="Отчет" className="w-full h-24 object-cover rounded-md border border-border" />
+            <img src={order.report_photo} alt="Отчет" className="h-24 w-full rounded-md border border-[#23252a] object-cover" />
             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition rounded-md">
               <ExternalLink className="text-white w-5 h-5" />
             </div>
@@ -122,9 +122,9 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssig
 
       <div className="pt-4 border-t border-border flex flex-wrap gap-2 justify-between items-center mt-auto relative z-20">
         <div className="flex items-center gap-2">
-          <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
+          <span className={`rounded-md border border-[#23252a] px-2 py-1 text-[10px] font-normal uppercase tracking-wider ${
             order.status === 'completed' ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 
-            order.status === 'in_progress' ? 'bg-brand/20 text-brand' : 
+            order.status === 'in_progress' ? 'bg-[#C62828]/15 text-[#d0d6e0]' :
             'bg-muted text-muted-foreground border border-border'
           }`}>
             {order.status === 'completed' ? 'Завершен' : order.status === 'in_progress' ? 'В работе' : 'Новый'}
@@ -133,7 +133,7 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssig
 
         <div className="flex items-center gap-1">
           {order.status === 'new' && onAssignOrder && (
-            <button onClick={() => onAssignOrder(order.id)} className="flex items-center gap-1 px-2 py-1 text-brand hover:bg-brand/10 rounded-lg text-xs font-bold transition" title="Назначить исполнителя">
+            <button onClick={() => onAssignOrder(order.id)} className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-normal text-[#d0d6e0] transition hover:bg-[#C62828]/15 hover:text-white" title="Назначить исполнителя">
               <UserPlus className="w-4 h-4"/> Назначить
             </button>
           )}
@@ -142,7 +142,7 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssig
             <>
               <button 
                 onClick={handleComplete}
-                className="flex items-center gap-1 px-2 py-1 text-emerald-600 hover:bg-emerald-500/10 rounded-lg text-xs font-bold transition"
+                className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-normal text-[#d0d6e0] transition hover:bg-[#C62828]/15 hover:text-white"
                 title="Завершить (В офис)"
               >
                 <CheckCircle className="w-4 h-4" /> В офис
@@ -150,7 +150,7 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssig
               {onTransferToInstallation && (
                 <button 
                   onClick={() => onTransferToInstallation(order.id)}
-                  className="flex items-center gap-1 px-2 py-1 text-blue-600 hover:bg-blue-500/10 rounded-lg text-xs font-bold transition"
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-normal text-[#d0d6e0] transition hover:bg-[#C62828]/15 hover:text-white"
                   title="Передать на монтаж"
                 >
                   <Truck className="w-4 h-4" /> На монтаж
@@ -159,7 +159,7 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssig
             </>
           ) : (
             order.status !== 'completed' && (
-              <button onClick={handleComplete} className="p-2 text-emerald-600 hover:bg-emerald-500/10 rounded-lg transition" title="Завершить">
+              <button onClick={handleComplete} className="rounded-md p-2 text-[#d0d6e0] transition hover:bg-[#C62828]/15 hover:text-white" title="Завершить">
                 <CheckCircle className="w-5 h-5" />
               </button>
             )
@@ -168,15 +168,15 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssig
           {order.status === 'completed' && isAdmin && onRestore && (
             <button
               onClick={() => onRestore(order.id)}
-              className="flex items-center gap-1 px-2 py-1 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-bold transition"
+              className="flex items-center gap-1 rounded-md border border-[#23252a] px-2 py-1 text-xs font-normal text-[#d0d6e0] transition hover:bg-[#C62828] hover:text-white"
               title="Вернуть заказ в работу"
             >
               ↩️ Вернуть в работу
             </button>
           )}
 
-          <button onClick={() => onEdit(order.id)} className="px-3 py-1.5 text-primary hover:bg-primary/10 rounded-lg text-sm font-bold transition">Правка</button>
-          <button onClick={() => onDelete(order.id, chatId, order.title)} className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition" title="Удалить"><Trash2 className="w-5 h-5" /></button>
+          <button onClick={() => onEdit(order.id)} className="rounded-md px-3 py-1.5 text-sm font-normal text-[#d0d6e0] transition hover:bg-[#C62828]/15 hover:text-white">Правка</button>
+          <button onClick={() => onDelete(order.id, chatId, order.title)} className="rounded-md p-2 text-[#8a8f98] transition hover:bg-[#C62828]/15 hover:text-[#C62828]" title="Удалить"><Trash2 className="w-5 h-5" /></button>
         </div>
       </div>
     </div>
