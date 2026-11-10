@@ -72,7 +72,7 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<'active' | 'general' | 'completed' | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewingOrder, setViewingOrder] = useState<any | null>(null);
-  const [stats, setStats] = useState({ total: 0, active: 0, done: 0 });
+  const [stats, setStats] = useState({ total: 0, active: 0, done: 0, cancelled: 0 });
 
   const [notifications, setNotifications] = useState<{id: string, text: string, time: string}[]>([]);
   const [showNotifs, setShowNotifs] = useState(false);
@@ -146,15 +146,25 @@ export default function Dashboard() {
 
   const fetchAllData = async () => {
     try {
-      const [{ orders: rawOrders, count: totalCount }, { count: activeCount }, { count: doneCount }] = await Promise.all([
+      const [
+        { orders: rawOrders, count: totalCount },
+        { count: doneCount, error: doneCountError },
+        { count: cancelledCount, error: cancelledCountError },
+      ] = await Promise.all([
         fetchAllOrders(),
-        supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'in_progress'),
-        supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'completed'),
+        supabase.from('orders').select('id', { count: 'exact', head: true }).eq('status', 'completed'),
+        supabase.from('orders').select('id', { count: 'exact', head: true }).eq('status', 'cancelled'),
       ]);
+      if (doneCountError) throw doneCountError;
+      if (cancelledCountError) throw cancelledCountError;
+
       const { data: rawProfiles } = await supabase.from('profiles').select('*').order('full_name', { ascending: true });
 
       if (rawProfiles) setProfiles(rawProfiles);
-      setStats({ total: totalCount || 0, active: activeCount || 0, done: doneCount || 0 });
+      const total = totalCount || 0;
+      const done = doneCount || 0;
+      const cancelled = cancelledCount || 0;
+      setStats({ total, active: total - done - cancelled, done, cancelled });
       setTotalOrdersCount(totalCount || 0);
 
       const mergedOrders = (rawOrders || []).map((order: any) => {
@@ -468,18 +478,22 @@ export default function Dashboard() {
       <div className="max-w-7xl mx-auto">
         
         {/* СТАТИСТИКА */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
           <div className="flex items-center gap-4 rounded-xl border border-[#23252a] bg-[#0f1011] p-4">
             <div className="rounded-md bg-[#C62828]/15 p-3"><BarChart3 className="text-[#C62828]" /></div>
             <div><p className="text-xs font-normal text-[#8a8f98]">Заказы</p><p className="text-2xl font-medium text-white">{stats.total}</p></div>
           </div>
           <div className="flex items-center gap-4 rounded-xl border border-[#23252a] bg-[#0f1011] p-4">
             <div className="rounded-md bg-[#C62828]/15 p-3"><Clock className="text-[#C62828]" /></div>
-            <div><p className="text-xs font-normal text-[#8a8f98]">В работе</p><p className="text-2xl font-medium text-white">{stats.active}</p></div>
+            <div><p className="text-xs font-normal text-[#8a8f98]">Активные</p><p className="text-2xl font-medium text-white">{stats.active}</p></div>
           </div>
           <div className="flex items-center gap-4 rounded-xl border border-[#23252a] bg-[#0f1011] p-4">
             <div className="rounded-md bg-[#161718] p-3"><CheckCircle2 className="text-[#8a8f98]" /></div>
             <div><p className="text-xs font-normal text-[#8a8f98]">Сделано</p><p className="text-2xl font-medium text-white">{stats.done}</p></div>
+          </div>
+          <div className="flex items-center gap-4 rounded-xl border border-[#23252a] bg-[#0f1011] p-4">
+            <div className="rounded-md bg-[#161718] p-3"><X className="text-[#8a8f98]" /></div>
+            <div><p className="text-xs font-normal text-[#8a8f98]">Отменено</p><p className="text-2xl font-medium text-white">{stats.cancelled}</p></div>
           </div>
           <div className="relative flex items-center gap-4 rounded-xl border border-[#23252a] bg-[#0f1011] p-4">
              <div className="cursor-pointer rounded-md bg-[#161718] p-3" onClick={() => setShowNotifs(!showNotifs)}>
