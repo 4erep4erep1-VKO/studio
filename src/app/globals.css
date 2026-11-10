@@ -4,52 +4,54 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 20 25% 15%;
+    /* СВЕТЛАЯ ТЕМА: Белый, Шоколад и Коралл */
+    --background: 0 0% 100%; /* Белый */
+    --foreground: 20 25% 15%; /* Почти черный с оттенком шоколада */
     
     --card: 0 0% 100%;
     --card-foreground: 20 25% 15%;
  
-    --primary: 0 58.1% 46.7%;
+    --primary: 16 100% 66%; /* Коралловый (#FF7F50) */
     --primary-foreground: 0 0% 100%;
  
-    --secondary: 220 9% 15%;
+    --secondary: 19 40% 21%; /* Шоколадный (#4B2C20) */
     --secondary-foreground: 0 0% 100%;
  
     --muted: 20 10% 95%;
     --muted-foreground: 20 10% 40%;
  
-    --accent: 0 58.1% 46.7%;
+    --accent: 16 100% 66%;
     --accent-foreground: 0 0% 100%;
  
     --border: 20 15% 90%;
     --input: 20 15% 90%;
-    --ring: 0 58.1% 46.7%;
+    --ring: 16 100% 66%;
     --radius: 0.75rem;
   }
  
   .dark {
-    --background: 210 11.1% 3.53%;
-    --foreground: 0 0% 100%;
+    /* ТЕМНАЯ ТЕМА: Оставляем классический темный, но с коралловым акцентом */
+    --background: 20 20% 4%;
+    --foreground: 0 0% 98%;
  
-    --card: 210 6.25% 6.27%;
-    --card-foreground: 0 0% 100%;
+    --card: 20 20% 6%;
+    --card-foreground: 0 0% 98%;
  
-    --primary: 0 58.1% 46.7%;
+    --primary: 16 100% 66%; /* Коралл остается акцентом */
     --primary-foreground: 0 0% 100%;
  
-    --secondary: 210 2% 9%;
-    --secondary-foreground: 216 18% 85%;
+    --secondary: 20 15% 15%;
+    --secondary-foreground: 0 0% 98%;
  
-    --muted: 210 2% 9%;
-    --muted-foreground: 219 7% 57%;
+    --muted: 20 15% 15%;
+    --muted-foreground: 20 10% 65%;
  
-    --accent: 0 58.1% 46.7%;
+    --accent: 16 100% 66%;
     --accent-foreground: 0 0% 100%;
  
-    --border: 223 9.1% 15.1%;
-    --input: 223 9.1% 15.1%;
-    --ring: 0 58.1% 46.7%;
+    --border: 20 15% 15%;
+    --input: 20 15% 15%;
+    --ring: 16 100% 66%;
   }
 }
 
@@ -58,6 +60,6 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground font-normal;
+    @apply bg-background text-foreground;
   }
 }

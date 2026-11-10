@@ -482,49 +482,49 @@ export default function Dashboard() {
 
   if (!isAuthenticated) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#08090a]">
-        <div className="w-96 rounded-xl border border-[#23252a] bg-[#0f1011] p-8 text-center">
-          <h2 className="mb-6 text-2xl font-medium text-white">Montazhka PRO</h2>
-          <input type="password" placeholder="ПИН-код" className="mb-4 w-full rounded-md border border-[#23252a] bg-[#08090a] p-3 text-center text-[#d0d6e0]" onKeyDown={e => e.key === 'Enter' && handleLogin()} onChange={e => setPassword(e.target.value)} />
-          <Button onClick={handleLogin} disabled={isLoggingIn} className="h-12 w-full rounded-md bg-[#C62828] font-medium text-white hover:bg-red-800">{isLoggingIn ? '...' : 'Войти'}</Button>
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="bg-card p-8 rounded-2xl border border-border w-96 text-center">
+          <h2 className="text-2xl font-bold mb-6 text-secondary">Montazhka PRO</h2>
+          <input type="password" placeholder="ПИН-код" className="w-full p-3 bg-background border border-border rounded-lg mb-4 text-center" onKeyDown={e => e.key === 'Enter' && handleLogin()} onChange={e => setPassword(e.target.value)} />
+          <Button onClick={handleLogin} disabled={isLoggingIn} className="w-full bg-primary h-12">{isLoggingIn ? '...' : 'Войти'}</Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#08090a] p-6 text-[#d0d6e0] transition-colors duration-300">
+    <div className="p-6 bg-background min-h-screen text-foreground transition-colors duration-300">
       <div className="max-w-7xl mx-auto">
         
         {/* СТАТИСТИКА */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-          <div className="flex items-center gap-4 rounded-xl border border-[#23252a] bg-[#0f1011] p-4">
-            <div className="rounded-md bg-[#C62828]/15 p-3"><BarChart3 className="text-[#C62828]" /></div>
-            <div><p className="text-xs font-normal text-[#8a8f98]">Заказы</p><p className="text-2xl font-medium text-white">{stats.total}</p></div>
+          <div className="bg-card p-4 rounded-xl border border-border flex items-center gap-4">
+            <div className="p-3 bg-primary/10 rounded-lg"><BarChart3 className="text-primary" /></div>
+            <div><p className="text-xs text-muted-foreground font-bold">Заказы</p><p className="text-2xl font-bold">{stats.total}</p></div>
           </div>
-          <div className="flex items-center gap-4 rounded-xl border border-[#23252a] bg-[#0f1011] p-4">
-            <div className="rounded-md bg-[#C62828]/15 p-3"><Clock className="text-[#C62828]" /></div>
-            <div><p className="text-xs font-normal text-[#8a8f98]">В работе</p><p className="text-2xl font-medium text-white">{orders.filter(o => o.status === 'new' || o.status === 'in_progress').length}</p></div>
+          <div className="bg-card p-4 rounded-xl border border-border flex items-center gap-4">
+            <div className="p-3 bg-brand/10 rounded-lg"><Clock className="text-brand" /></div>
+            <div><p className="text-xs text-muted-foreground font-bold">В работе</p><p className="text-2xl font-bold">{orders.filter(o => o.status === 'new' || o.status === 'in_progress').length}</p></div>
           </div>
-          <div className="flex items-center gap-4 rounded-xl border border-[#23252a] bg-[#0f1011] p-4">
-            <div className="rounded-md bg-[#161718] p-3"><CheckCircle2 className="text-[#8a8f98]" /></div>
-            <div><p className="text-xs font-normal text-[#8a8f98]">Сделано</p><p className="text-2xl font-medium text-white">{stats.done}</p></div>
+          <div className="bg-card p-4 rounded-xl border border-border flex items-center gap-4">
+            <div className="p-3 bg-emerald-500/10 rounded-lg"><CheckCircle2 className="text-emerald-500" /></div>
+            <div><p className="text-xs text-muted-foreground font-bold">Сделано</p><p className="text-2xl font-bold">{stats.done}</p></div>
           </div>
-          <div className="flex items-center gap-4 rounded-xl border border-[#23252a] bg-[#0f1011] p-4">
-            <div className="rounded-md bg-[#161718] p-3"><X className="text-[#8a8f98]" /></div>
-            <div><p className="text-xs font-normal text-[#8a8f98]">Отменено</p><p className="text-2xl font-medium text-white">{stats.cancelled}</p></div>
+          <div className="bg-card p-4 rounded-xl border border-border flex items-center gap-4">
+            <div className="p-3 bg-red-500/10 rounded-lg"><X className="text-red-500" /></div>
+            <div><p className="text-xs text-muted-foreground font-bold">Отменено</p><p className="text-2xl font-bold">{stats.cancelled}</p></div>
           </div>
-          <div className="relative flex items-center gap-4 rounded-xl border border-[#23252a] bg-[#0f1011] p-4">
-             <div className="cursor-pointer rounded-md bg-[#161718] p-3" onClick={() => setShowNotifs(!showNotifs)}>
-                <Bell className={notifications.length > 0 ? "animate-pulse text-[#C62828]" : "text-[#8a8f98]"} />
+          <div className="bg-card p-4 rounded-xl border border-border flex items-center gap-4 relative">
+             <div className="p-3 bg-secondary/10 rounded-lg cursor-pointer" onClick={() => setShowNotifs(!showNotifs)}>
+                <Bell className={notifications.length > 0 ? "text-secondary animate-pulse" : "text-muted-foreground"} />
              </div>
              <div className="flex-grow">
-                <p className="text-xs font-normal text-[#8a8f98]">Система</p>
+                <p className="text-xs text-muted-foreground font-bold">Система</p>
                 <div className="flex items-center gap-2">
                   {isCurrentUserLoading ? (
                     <div className="h-5 w-24 rounded-full bg-slate-200/70 dark:bg-slate-700/50 animate-pulse" />
                   ) : currentUserName ? (
-                    <span className="text-sm text-[#8a8f98]">{currentUserName}</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">{currentUserName}</span>
                   ) : null}
                   <LogOut onClick={handleLogout} className="w-5 h-5 text-destructive cursor-pointer" aria-label="Выйти" />
                 </div>
@@ -535,23 +535,23 @@ export default function Dashboard() {
         {/* ПЕРЕКЛЮЧАТЕЛИ И КНОПКИ */}
         <div className="flex flex-wrap justify-between items-center mb-8 gap-4">
           <div className="flex gap-4">
-            <div className="flex rounded-xl border border-[#23252a] bg-[#0f1011] p-1">
-              <button onClick={() => setView('orders')} className={`rounded-md px-6 py-2 text-sm font-normal transition ${view === 'orders' ? 'bg-[#C62828] text-white' : 'text-[#8a8f98] hover:text-white'}`}>Заказы</button>
+            <div className="flex bg-card p-1 rounded-xl border border-border">
+              <button onClick={() => setView('orders')} className={`px-6 py-2 rounded-lg text-sm font-bold transition ${view === 'orders' ? 'bg-brand text-brand-foreground' : 'text-muted-foreground'}`}>Заказы</button>
               {isAdmin && (
-                <button onClick={() => setView('staff')} className={`rounded-md px-6 py-2 text-sm font-normal transition ${view === 'staff' ? 'bg-[#C62828] text-white' : 'text-[#8a8f98] hover:text-white'}`}>Команда</button>
+                <button onClick={() => setView('staff')} className={`px-6 py-2 rounded-lg text-sm font-bold transition ${view === 'staff' ? 'bg-brand text-brand-foreground' : 'text-muted-foreground'}`}>Команда</button>
               )}
             </div>
             
             {view === 'orders' && (
-              <div className="flex rounded-xl border border-[#23252a] bg-[#0f1011] p-1">
-                <button onClick={() => setDisplayMode('kanban')} className={`rounded-md px-4 py-2 text-sm font-normal transition ${displayMode === 'kanban' ? 'bg-[#C62828] text-white' : 'text-[#8a8f98] hover:text-white'}`}>📊 Канбан</button>
-                <button onClick={() => setDisplayMode('list')} className={`rounded-md px-4 py-2 text-sm font-normal transition ${displayMode === 'list' ? 'bg-[#C62828] text-white' : 'text-[#8a8f98] hover:text-white'}`}>📋 Список</button>
+              <div className="flex bg-card p-1 rounded-xl border border-border">
+                <button onClick={() => setDisplayMode('kanban')} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${displayMode === 'kanban' ? 'bg-brand text-brand-foreground' : 'text-muted-foreground'}`}>📊 Канбан</button>
+                <button onClick={() => setDisplayMode('list')} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${displayMode === 'list' ? 'bg-brand text-brand-foreground' : 'text-muted-foreground'}`}>📋 Список</button>
               </div>
             )}
           </div>
           <div className="flex gap-2 w-full md:w-auto">
-            <Button onClick={() => setIsExportModalOpen(true)} className="flex-1 rounded-md border border-[#23252a] bg-[#0f1011] font-normal text-[#d0d6e0] hover:bg-[#161718] md:flex-none">Excel Отчет</Button>
-            {isAdmin && <Button onClick={handleBroadcast} className="flex-1 rounded-md border border-[#23252a] bg-[#0f1011] font-normal text-[#d0d6e0] hover:bg-[#161718] md:flex-none">Объявление</Button>}
+            <Button onClick={() => setIsExportModalOpen(true)} className="bg-emerald-600 text-white font-bold flex-1 md:flex-none">Excel Отчет</Button>
+            {isAdmin && <Button onClick={handleBroadcast} className="bg-secondary text-secondary-foreground font-bold flex-1 md:flex-none">Объявление</Button>}
             <Button onClick={() => {
               if (!currentUserId) {
                 alert('❌ Ошибка: Вы не авторизованы. Пожалуйста, пройдите вход в систему, используя ПИН-код.');
@@ -560,7 +560,7 @@ export default function Dashboard() {
               setEditingOrderId(null);
               setDuplicateOrder(null);
               setIsModalOpen(true);
-            }} className="flex-1 rounded-md bg-[#C62828] font-medium text-white hover:bg-red-800 md:flex-none">Новый объект</Button>
+            }} className="bg-brand text-brand-foreground font-bold flex-1 md:flex-none">Новый объект</Button>
           </div>
         </div>
 
@@ -594,10 +594,10 @@ export default function Dashboard() {
               // РЕЖИМ КАНБАНА
               <>
                 <div className="flex flex-col md:flex-row gap-4 mb-6">
-                  <input placeholder="Поиск..." className="w-full flex-grow rounded-md border border-[#23252a] bg-[#0f1011] p-2 text-[#d0d6e0] outline-none placeholder:text-[#8a8f98] focus:border-[#C62828] md:max-w-md" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-                  <div className="flex w-full flex-wrap gap-2 rounded-md border border-[#23252a] bg-[#0f1011] p-1 md:w-auto">
+                  <input placeholder="Поиск..." className="flex-grow w-full md:max-w-md p-2 bg-card border border-border rounded-lg outline-none focus:border-primary" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                  <div className="flex flex-wrap gap-2 bg-card p-1 rounded-lg border border-border w-full md:w-auto">
                     {['active', 'general', 'completed', 'all'].map(t => (
-                      <button key={t} onClick={() => setActiveTab(t as any)} className={`flex-1 rounded-md px-4 py-1.5 text-xs font-normal transition md:flex-none ${activeTab === t ? 'bg-[#C62828] text-white' : 'text-[#8a8f98] hover:bg-[#C62828]/15 hover:text-white'}`}>
+                      <button key={t} onClick={() => setActiveTab(t as any)} className={`flex-1 md:flex-none px-4 py-1.5 rounded-md text-xs font-bold transition ${activeTab === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>
                         {t === 'active' ? '🔥 Актив' : t === 'general' ? '🌍 Общие' : t === 'completed' ? '✅ Архив' : '📦 Все'}
                       </button>
                     ))}
@@ -608,8 +608,8 @@ export default function Dashboard() {
                   <div className="flex flex-col md:flex-row gap-6 md:overflow-x-auto pb-6 items-start">
                 
                 {/* КОЛОНКА 1: НОВЫЕ */}
-                <div className="flex w-full flex-col gap-4 rounded-xl border border-[#23252a] bg-[#0f1011] p-4 md:min-w-[320px] md:flex-1">
-                  <h3 className="flex justify-between border-b border-[#23252a] pb-2 font-medium text-white">🆕 Новые <span className="text-[#8a8f98]">{filteredOrders.filter(o => o.status === 'new').length}</span></h3>
+                <div className="w-full md:min-w-[320px] md:flex-1 bg-muted/20 border border-border p-4 rounded-xl flex flex-col gap-4">
+                  <h3 className="font-bold border-b border-border pb-2 flex justify-between">🆕 Новые <span>{filteredOrders.filter(o => o.status === 'new').length}</span></h3>
                   {filteredOrders.filter(o => o.status === 'new').map((o: any) => (
                     <OrderCard key={o.id} order={o} onView={setViewingOrder} onEdit={id => {
                       if (!currentUserId) {
@@ -624,8 +624,8 @@ export default function Dashboard() {
                 </div>
 
                 {/* КОЛОНКА 2: В РАБОТЕ */}
-                <div className="flex w-full flex-col gap-4 rounded-xl border border-[#23252a] bg-[#0f1011] p-4 md:min-w-[320px] md:flex-1">
-                  <h3 className="flex justify-between border-b border-[#23252a] pb-2 font-medium text-white">⏳ В работе <span className="text-[#8a8f98]">{filteredOrders.filter(o => o.status === 'in_progress').length}</span></h3>
+                <div className="w-full md:min-w-[320px] md:flex-1 bg-brand/5 border border-brand/20 p-4 rounded-xl flex flex-col gap-4">
+                  <h3 className="font-bold border-b border-brand/20 pb-2 flex justify-between">⏳ В работе <span>{filteredOrders.filter(o => o.status === 'in_progress').length}</span></h3>
                   {filteredOrders.filter(o => o.status === 'in_progress').map((o: any) => (
                     <OrderCard key={o.id} order={o} onView={setViewingOrder} onEdit={id => {
                       if (!currentUserId) {
@@ -640,8 +640,8 @@ export default function Dashboard() {
                 </div>
 
                 {/* КОЛОНКА 3: ГОТОВО */}
-                <div className="flex w-full flex-col gap-4 rounded-xl border border-[#23252a] bg-[#0f1011] p-4 md:min-w-[320px] md:flex-1">
-                  <h3 className="flex justify-between border-b border-[#23252a] pb-2 font-medium text-white">✅ Готово <span className="text-[#8a8f98]">{filteredOrders.filter(o => o.status === 'completed').length}</span></h3>
+                <div className="w-full md:min-w-[320px] md:flex-1 bg-emerald-500/5 border border-emerald-500/20 p-4 rounded-xl flex flex-col gap-4">
+                  <h3 className="font-bold border-b border-emerald-500/20 pb-2 flex justify-between">✅ Готово <span>{filteredOrders.filter(o => o.status === 'completed').length}</span></h3>
                   {filteredOrders.filter(o => o.status === 'completed').map((o: any) => (
                     <OrderCard
                       key={o.id}
@@ -675,17 +675,17 @@ export default function Dashboard() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {profiles.map(p => (
-              <div key={p.id} className="rounded-xl border border-[#23252a] bg-[#0f1011] p-5">
+              <div key={p.id} className="bg-card border border-border p-5 rounded-xl shadow-sm">
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h3 className="flex items-center gap-2 text-lg font-medium text-white">
+                    <h3 className="font-bold text-lg flex items-center gap-2">
                       {p.full_name} {p.role === 'admin' && '🛡️'}
                     </h3>
                     <div className="flex items-center gap-3 mt-1.5">
                       <span className="text-sm font-mono text-muted-foreground bg-background px-2 py-0.5 rounded border border-border">
                         PIN: {p.pin_code}
                       </span>
-                      <span className={`rounded-md border border-[#23252a] px-2 py-1 text-[10px] font-normal uppercase tracking-wider ${
+                      <span className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider ${
                         p.telegram_chat_id 
                           ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
                           : 'bg-red-500/10 text-red-500 border border-red-500/20'
@@ -694,14 +694,14 @@ export default function Dashboard() {
                       </span>
                     </div>
                   </div>
-                  <button onClick={() => deleteStaff(p.id)} className="rounded-md p-2 text-[#8a8f98] transition hover:bg-[#C62828]/15 hover:text-[#C62828]" title="Удалить сотрудника">
+                  <button onClick={() => deleteStaff(p.id)} className="text-destructive hover:bg-destructive/10 p-2 rounded-lg transition" title="Удалить сотрудника">
                     <Trash2 className="w-5 h-5" />
                   </button>
                 </div>
                 <div className="flex flex-wrap gap-2 text-[10px]">
-                  <label className="flex items-center gap-1 text-[#d0d6e0]"><input type="checkbox" className="accent-[#C62828]" checked={p.can_design} onChange={() => toggleRole(p.id, 'can_design', p.can_design)} /> 🎨 Дизайн</label>
-                  <label className="flex items-center gap-1 text-[#d0d6e0]"><input type="checkbox" className="accent-[#C62828]" checked={p.can_print} onChange={() => toggleRole(p.id, 'can_print', p.can_print)} /> 🖨 Печать</label>
-                  <label className="flex items-center gap-1 text-[#d0d6e0]"><input type="checkbox" className="accent-[#C62828]" checked={p.can_install} onChange={() => toggleRole(p.id, 'can_install', p.can_install)} /> 🛠 Монтаж</label>
+                  <label className="flex items-center gap-1"><input type="checkbox" checked={p.can_design} onChange={() => toggleRole(p.id, 'can_design', p.can_design)} /> 🎨 Дизайн</label>
+                  <label className="flex items-center gap-1"><input type="checkbox" checked={p.can_print} onChange={() => toggleRole(p.id, 'can_print', p.can_print)} /> 🖨 Печать</label>
+                  <label className="flex items-center gap-1"><input type="checkbox" checked={p.can_install} onChange={() => toggleRole(p.id, 'can_install', p.can_install)} /> 🛠 Монтаж</label>
                 </div>
               </div>
             ))}
@@ -714,31 +714,31 @@ export default function Dashboard() {
           setIsModalOpen(open);
           if (!open) setDuplicateOrder(null);
         }}>
-          <DialogContent className="max-w-xl overflow-hidden rounded-xl border border-[#23252a] bg-[#0f1011] p-0 text-[#d0d6e0]">
-            <DialogHeader className="p-6 pb-0"><DialogTitle className="text-xl font-medium uppercase tracking-tight text-white">Параметры объекта</DialogTitle></DialogHeader>
+          <DialogContent className="max-w-xl bg-card border-border text-foreground p-0 shadow-2xl overflow-hidden">
+            <DialogHeader className="p-6 pb-0"><DialogTitle className="text-xl font-bold uppercase italic tracking-tight text-secondary">Параметры объекта</DialogTitle></DialogHeader>
             <OrderForm orderId={editingOrderId} duplicateFrom={duplicateOrder} onSave={() => { setIsModalOpen(false); setDuplicateOrder(null); fetchAllData(); }} creatorId={currentUserId || ''} editorName={currentUserName || undefined} />
           </DialogContent>
         </Dialog>
 
         <Dialog open={isExportModalOpen} onOpenChange={setIsExportModalOpen}>
-          <DialogContent className="max-w-sm rounded-xl border border-[#23252a] bg-[#0f1011] text-[#d0d6e0]">
-            <DialogHeader><DialogTitle className="text-lg font-medium text-white">Выгрузка в Excel</DialogTitle></DialogHeader>
+          <DialogContent className="max-w-sm bg-card border-border text-foreground shadow-2xl">
+            <DialogHeader><DialogTitle className="text-lg font-bold text-secondary">Выгрузка в Excel</DialogTitle></DialogHeader>
             <div className="flex flex-col gap-4 py-2">
-              <div><label className="mb-1 block text-xs font-normal uppercase text-[#8a8f98]">С даты:</label><input type="date" value={exportStart} onChange={e => setExportStart(e.target.value)} className="w-full rounded-md border border-[#23252a] bg-[#08090a] p-2 text-[#d0d6e0] outline-none focus:border-[#C62828]" /></div>
-              <div><label className="mb-1 block text-xs font-normal uppercase text-[#8a8f98]">По дату:</label><input type="date" value={exportEnd} onChange={e => setExportEnd(e.target.value)} className="w-full rounded-md border border-[#23252a] bg-[#08090a] p-2 text-[#d0d6e0] outline-none focus:border-[#C62828]" /></div>
-              <Button onClick={executeExport} className="mt-2 w-full rounded-md bg-[#C62828] font-medium text-white hover:bg-red-800">Скачать таблицу</Button>
+              <div><label className="block text-xs font-bold text-muted-foreground uppercase mb-1">С даты:</label><input type="date" value={exportStart} onChange={e => setExportStart(e.target.value)} className="w-full p-2 bg-background border border-border rounded outline-none" /></div>
+              <div><label className="block text-xs font-bold text-muted-foreground uppercase mb-1">По дату:</label><input type="date" value={exportEnd} onChange={e => setExportEnd(e.target.value)} className="w-full p-2 bg-background border border-border rounded outline-none" /></div>
+              <Button onClick={executeExport} className="w-full bg-emerald-600 text-white font-bold mt-2">Скачать таблицу</Button>
             </div>
           </DialogContent>
         </Dialog>
 
         <Dialog open={isAssignModalOpen} onOpenChange={setIsAssignModalOpen}>
-          <DialogContent className="max-w-sm rounded-xl border border-[#23252a] bg-[#0f1011] text-[#d0d6e0]">
+          <DialogContent className="max-w-sm bg-card border-border text-foreground shadow-2xl">
             <DialogHeader>
-              <DialogTitle className="text-lg font-medium text-white">Кому передать в работу?</DialogTitle>
+              <DialogTitle className="text-lg font-bold text-secondary">Кому передать в работу?</DialogTitle>
             </DialogHeader>
             <div className="flex flex-col gap-2 py-4 max-h-[60vh] overflow-y-auto">
               {profiles.filter(p => p.role !== 'admin').map(p => (
-                <Button key={p.id} onClick={() => executeAssign(p.id)} className="justify-start rounded-md border border-[#23252a] bg-[#161718] font-normal text-[#d0d6e0] transition hover:bg-[#C62828] hover:text-white">
+                <Button key={p.id} onClick={() => executeAssign(p.id)} className="justify-start bg-muted hover:bg-primary hover:text-primary-foreground text-foreground font-bold transition border border-border">
                   <User className="w-4 h-4 mr-2"/> {p.full_name}
                 </Button>
               ))}
@@ -747,23 +747,23 @@ export default function Dashboard() {
         </Dialog>
 
         <Dialog open={!!viewingOrder} onOpenChange={() => setViewingOrder(null)}>
-          <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto rounded-xl border border-[#23252a] bg-[#0f1011] text-[#d0d6e0]">
+          <DialogContent className="max-w-2xl bg-card border-border text-foreground shadow-2xl overflow-y-auto max-h-[90vh]">
             <DialogHeader>
-              <DialogTitle className="text-xl font-medium uppercase text-white">Полная информация о заказе</DialogTitle>
+              <DialogTitle className="text-xl font-bold text-secondary uppercase">Полная информация о заказе</DialogTitle>
             </DialogHeader>
             
             {viewingOrder && (
               <div className="space-y-6 py-4">
                 {/* ОСНОВНАЯ ИНФОРМАЦИЯ */}
                 <div>
-                  <h3 className="mb-2 text-lg font-medium text-white">{viewingOrder.title}</h3>
+                  <h3 className="font-bold text-lg text-primary mb-2">{viewingOrder.title}</h3>
                   <div className="flex gap-2 flex-wrap mb-3">
-                    <span className="rounded-md border border-[#23252a] bg-[#161718] px-3 py-1 text-[10px] font-normal uppercase text-[#8a8f98]">
+                    <span className={`text-[10px] px-3 py-1 rounded font-bold uppercase ${viewingOrder.department === 'print' ? 'bg-purple-500/20 text-purple-500' : viewingOrder.department === 'production' ? 'bg-brand/20 text-brand' : 'bg-blue-500/20 text-blue-500'}`}>
                       {viewingOrder.department === 'print' ? '🖨 Печать' : viewingOrder.department === 'production' ? '🏭 Изготовление' : '🛠 Монтаж'}
                     </span>
-                    <span className={`rounded-md border border-[#23252a] px-3 py-1 text-[10px] font-normal uppercase ${
+                    <span className={`text-[10px] px-3 py-1 rounded font-bold uppercase ${
                       viewingOrder.status === 'completed' ? 'bg-emerald-500/20 text-emerald-600' : 
-                      viewingOrder.status === 'in_progress' ? 'bg-[#C62828]/15 text-[#d0d6e0]' :
+                      viewingOrder.status === 'in_progress' ? 'bg-brand/20 text-brand' :
                       'bg-muted text-muted-foreground'
                     }`}>
                       {viewingOrder.status === 'completed' ? 'Завершен' : viewingOrder.status === 'in_progress' ? 'В работе' : 'Новый'}
@@ -773,67 +773,67 @@ export default function Dashboard() {
 
                 {/* ОПИСАНИЕ */}
                 {viewingOrder.description && (
-                  <div className="rounded-md border border-[#23252a] bg-[#08090a] p-4">
-                    <p className="mb-2 text-xs font-normal uppercase text-[#8a8f98]">Описание</p>
-                    <p className="break-words leading-relaxed text-[#d0d6e0] whitespace-pre-wrap">{viewingOrder.description}</p>
+                  <div className="bg-background/50 p-4 rounded-lg border border-border/50">
+                    <p className="text-xs text-muted-foreground font-bold uppercase mb-2">Описание</p>
+                    <p className="text-foreground leading-relaxed whitespace-pre-wrap break-words">{viewingOrder.description}</p>
                   </div>
                 )}
 
                 {/* ДЕТАЛИ */}
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="rounded-md border border-[#23252a] bg-[#08090a] p-3">
-                    <p className="mb-1 text-[10px] font-normal uppercase text-[#8a8f98]">Дедлайн</p>
-                    <p className="font-normal text-[#d0d6e0]">{viewingOrder.deadline ? new Date(viewingOrder.deadline).toLocaleDateString('ru-RU') : '—'}</p>
+                  <div className="bg-background/50 p-3 rounded-lg border border-border/50">
+                    <p className="text-[10px] text-muted-foreground font-bold uppercase mb-1">Дедлайн</p>
+                    <p className="text-foreground font-medium">{viewingOrder.deadline ? new Date(viewingOrder.deadline).toLocaleDateString('ru-RU') : '—'}</p>
                   </div>
                   
-                  <div className="rounded-md border border-[#23252a] bg-[#08090a] p-3">
-                    <p className="mb-1 text-[10px] font-normal uppercase text-[#8a8f98]">Исполнитель</p>
-                    <p className="font-normal text-[#d0d6e0]">
+                  <div className="bg-background/50 p-3 rounded-lg border border-border/50">
+                    <p className="text-[10px] text-muted-foreground font-bold uppercase mb-1">Исполнитель</p>
+                    <p className="text-foreground font-medium">
                       {viewingOrder.is_general ? 'Общий заказ' : (viewingOrder.profiles?.full_name || 'Не назначен')}
                     </p>
                   </div>
 
                   {viewingOrder.dimensions && (
-                    <div className="rounded-md border border-[#23252a] bg-[#08090a] p-3">
-                      <p className="mb-1 text-[10px] font-normal uppercase text-[#8a8f98]">Размеры</p>
-                      <p className="font-normal text-[#d0d6e0]">{viewingOrder.dimensions}</p>
+                    <div className="bg-background/50 p-3 rounded-lg border border-border/50">
+                      <p className="text-[10px] text-muted-foreground font-bold uppercase mb-1">Размеры</p>
+                      <p className="text-foreground font-medium">{viewingOrder.dimensions}</p>
                     </div>
                   )}
 
                   {viewingOrder.material && (
-                    <div className="rounded-md border border-[#23252a] bg-[#08090a] p-3">
-                      <p className="mb-1 text-[10px] font-normal uppercase text-[#8a8f98]">Материал</p>
-                      <p className="font-normal text-[#d0d6e0]">{viewingOrder.material}</p>
+                    <div className="bg-background/50 p-3 rounded-lg border border-border/50">
+                      <p className="text-[10px] text-muted-foreground font-bold uppercase mb-1">Материал</p>
+                      <p className="text-foreground font-medium">{viewingOrder.material}</p>
                     </div>
                   )}
 
                   {viewingOrder.source_link && (
-                    <div className="col-span-2 rounded-md border border-[#23252a] bg-[#08090a] p-3">
-                      <p className="mb-1 text-[10px] font-normal uppercase text-[#8a8f98]">Источник</p>
-                      <a href={viewingOrder.source_link} target="_blank" rel="noopener noreferrer" className="break-all text-[#C62828] hover:underline">
+                    <div className="bg-background/50 p-3 rounded-lg border border-border/50 col-span-2">
+                      <p className="text-[10px] text-muted-foreground font-bold uppercase mb-1">Источник</p>
+                      <a href={viewingOrder.source_link} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all">
                         {viewingOrder.source_link}
                       </a>
                     </div>
                   )}
 
-                  <div className="rounded-md border border-[#23252a] bg-[#08090a] p-3">
-                    <p className="mb-1 text-[10px] font-normal uppercase text-[#8a8f98]">Создал</p>
-                    <p className="font-normal text-[#d0d6e0]">{viewingOrder.creator_name || 'Админ'}</p>
+                  <div className="bg-background/50 p-3 rounded-lg border border-border/50">
+                    <p className="text-[10px] text-muted-foreground font-bold uppercase mb-1">Создал</p>
+                    <p className="text-foreground font-medium">{viewingOrder.creator_name || 'Админ'}</p>
                   </div>
                 </div>
 
                 {/* ИЗОБРАЖЕНИЯ */}
                 {(viewingOrder.image_urls || viewingOrder.report_photo) && (
                   <div>
-                    <p className="mb-3 text-xs font-normal uppercase text-[#8a8f98]">Изображения</p>
+                    <p className="text-xs text-muted-foreground font-bold uppercase mb-3">Изображения</p>
                     <div className="grid grid-cols-2 gap-3">
                       {viewingOrder.image_urls && Array.isArray(viewingOrder.image_urls) && viewingOrder.image_urls.map((url: string, idx: number) => (
-                        <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="group relative overflow-hidden rounded-md border border-[#23252a]">
+                        <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="relative group overflow-hidden rounded-lg border border-border">
                           <img src={url} alt={`Изображение ${idx + 1}`} className="w-full h-auto object-cover group-hover:scale-105 transition" />
                         </a>
                       ))}
                       {viewingOrder.report_photo && (
-                        <a href={viewingOrder.report_photo} target="_blank" rel="noopener noreferrer" className="group relative overflow-hidden rounded-md border border-[#23252a]">
+                        <a href={viewingOrder.report_photo} target="_blank" rel="noopener noreferrer" className="relative group overflow-hidden rounded-lg border border-border">
                           <img src={viewingOrder.report_photo} alt="Отчет" className="w-full h-auto object-cover group-hover:scale-105 transition" />
                         </a>
                       )}

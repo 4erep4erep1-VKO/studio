@@ -11,12 +11,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <ThemeProvider
           attribute="class"
-          defaultTheme="dark"
-          enableSystem={false}
+          defaultTheme="system"
+          enableSystem
           disableTransitionOnChange
         >
-          <header className="relative flex items-center justify-between border-b border-[#23252a] bg-[#0f1011] p-4">
-            <Link href="/" className="hidden font-medium text-white md:block">
+          <header className="relative p-4 flex justify-between items-center border-b bg-card">
+            <Link href="/" className="font-bold text-secondary hidden md:block">
               Монтажка PRO
             </Link>
             <Link
