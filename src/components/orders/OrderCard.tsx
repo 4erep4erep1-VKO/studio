@@ -133,10 +133,10 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onDupli
           </span>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1.5">
           {order.status === 'new' && onAssignOrder && (
-            <button onClick={() => onAssignOrder(order.id)} className="flex items-center gap-1 px-2 py-1 text-brand hover:bg-brand/10 rounded-lg text-xs font-bold transition" title="Назначить исполнителя">
-              <UserPlus className="w-4 h-4"/> Назначить
+            <button onClick={() => onAssignOrder(order.id)} className="flex items-center gap-1 px-1.5 py-1 text-brand hover:bg-brand/10 rounded-lg text-xs font-bold transition whitespace-nowrap" title="Назначить исполнителя">
+              <UserPlus className="w-3.5 h-3.5"/> Назначить
             </button>
           )}
 
@@ -144,25 +144,25 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onDupli
             <>
               <button 
                 onClick={handleComplete}
-                className="flex items-center gap-1 px-2 py-1 text-emerald-600 hover:bg-emerald-500/10 rounded-lg text-xs font-bold transition"
+                className="flex items-center gap-1 px-1.5 py-1 text-emerald-600 hover:bg-emerald-500/10 rounded-lg text-xs font-bold transition whitespace-nowrap"
                 title="Завершить (В офис)"
               >
-                <CheckCircle className="w-4 h-4" /> В офис
+                <CheckCircle className="w-3.5 h-3.5" /> В офис
               </button>
               {onTransferToInstallation && (
                 <button 
                   onClick={() => onTransferToInstallation(order.id)}
-                  className="flex items-center gap-1 px-2 py-1 text-blue-600 hover:bg-blue-500/10 rounded-lg text-xs font-bold transition"
+                  className="flex items-center gap-1 px-1.5 py-1 text-blue-600 hover:bg-blue-500/10 rounded-lg text-xs font-bold transition whitespace-nowrap"
                   title="Передать на монтаж"
                 >
-                  <Truck className="w-4 h-4" /> На монтаж
+                  <Truck className="w-3.5 h-3.5" /> На монтаж
                 </button>
               )}
             </>
           ) : (
             order.status !== 'completed' && (
-              <button onClick={handleComplete} className="p-2 text-emerald-600 hover:bg-emerald-500/10 rounded-lg transition" title="Завершить">
-                <CheckCircle className="w-5 h-5" />
+              <button onClick={handleComplete} className="p-1.5 text-emerald-600 hover:bg-emerald-500/10 rounded-lg transition" title="Завершить">
+                <CheckCircle className="w-4 h-4" />
               </button>
             )
           )}
@@ -170,16 +170,18 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onDupli
           {order.status === 'completed' && isAdmin && onRestore && (
             <button
               onClick={() => onRestore(order.id)}
-              className="flex items-center gap-1 px-2 py-1 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-bold transition"
+              className="flex items-center gap-1 px-1.5 py-1 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-bold transition whitespace-nowrap"
               title="Вернуть заказ в работу"
             >
               ↩️ Вернуть в работу
             </button>
           )}
 
-          <button onClick={() => onDuplicate?.(order)} className="flex items-center gap-1 px-3 py-1.5 text-primary hover:bg-primary/10 rounded-lg text-sm font-bold transition" title="Как образец" aria-label={`Создать заказ по образцу: ${order.title}`}><Copy className="h-4 w-4" /> Как образец</button>
-          <button onClick={() => onEdit(order.id)} className="px-3 py-1.5 text-primary hover:bg-primary/10 rounded-lg text-sm font-bold transition">Правка</button>
-          <button onClick={() => onDelete(order.id, chatId, order.title)} className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition" title="Удалить"><Trash2 className="w-5 h-5" /></button>
+          <div className="flex shrink-0 items-center gap-1">
+            <button onClick={() => onDuplicate?.(order)} className="flex items-center gap-1 px-1.5 py-1 text-primary hover:bg-primary/10 rounded-lg text-xs font-bold transition whitespace-nowrap" title="Как образец" aria-label={`Создать заказ по образцу: ${order.title}`}><Copy className="h-3.5 w-3.5" /> Как образец</button>
+            <button onClick={() => onEdit(order.id)} className="px-1.5 py-1 text-primary hover:bg-primary/10 rounded-lg text-xs font-bold transition whitespace-nowrap">Правка</button>
+          </div>
+          <button onClick={() => onDelete(order.id, chatId, order.title)} className="p-1.5 text-destructive hover:bg-destructive/10 rounded-lg transition" title="Удалить"><Trash2 className="w-4 h-4" /></button>
         </div>
       </div>
     </div>
