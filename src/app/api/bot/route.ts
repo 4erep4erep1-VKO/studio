@@ -352,28 +352,55 @@ async function handleIncomingPhoto(chatId: number | string, telegramId: string, 
 
   const photo = photoArray[photoArray.length - 1];
   const fileRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/getFile?file_id=${photo.file_id}`).then(r => r.json());
-  if (!fileRes.ok) return;
+  if (!fileRes.ok) {
+    console.error('❌ Telegram не смог получить фотоотчет:', fileRes);
+    await sendTelegramMessage(chatId, '❌ Не удалось загрузить фотоотчет. Попробуйте отправить фотографию еще раз.');
+    return;
+  }
 
   const blob = await fetch(`https://api.telegram.org/file/bot${TELEGRAM_TOKEN}/${fileRes.result.file_path}`).then(r => r.blob());
   const storagePath = `completed/${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
   
   const { error: uploadErr } = await supabase.storage.from('order-photos').upload(storagePath, blob, { contentType: 'image/jpeg' });
-  if (uploadErr) return;
+  if (uploadErr) {
+    console.error('❌ Ошибка загрузки фотоотчета в Supabase Storage:', uploadErr);
+    await sendTelegramMessage(chatId, '❌ Не удалось сохранить фотоотчет. Попробуйте отправить фотографию еще раз.');
+    return;
+  }
 
   const { data: urlData } = supabase.storage.from('order-photos').getPublicUrl(storagePath);
-  const { data: freshData } = await supabase.from('orders').select('image_urls, description').eq('id', order.id).maybeSingle();
-  
-  const currentImages = freshData && Array.isArray(freshData.image_urls) ? freshData.image_urls : (order && Array.isArray(order.image_urls) ? order.image_urls : []);
-  const updatedImages = [...currentImages, urlData.publicUrl];
+  const { data: freshData, error: fetchError } = await supabase
+    .from('orders')
+    .select('report_photos, description')
+    .eq('id', order.id)
+    .maybeSingle();
+  if (fetchError) {
+    console.error('❌ Ошибка загрузки текущего фотоотчета:', fetchError);
+    await sendTelegramMessage(chatId, '❌ Не удалось обновить фотоотчет. Попробуйте отправить фотографию еще раз.');
+    return;
+  }
 
-  const updatePayload: Record<string, any> = { status: 'completed', image_urls: updatedImages };
+  const currentReportPhotos = Array.isArray(freshData?.report_photos)
+    ? freshData.report_photos
+    : Array.isArray(order.report_photos)
+      ? order.report_photos
+      : [];
+  const updatePayload: Record<string, any> = {
+    status: 'completed',
+    report_photos: [...currentReportPhotos, urlData.publicUrl],
+  };
 
   if (mediaGroupId && !isAlbumAppend) {
     const currentDesc = freshData?.description || order.description || '';
     updatePayload.description = `${currentDesc}\n[album:${mediaGroupId}]`.trim();
   }
 
-  await supabase.from('orders').update(updatePayload).eq('id', order.id);
+  const { error: updateError } = await supabase.from('orders').update(updatePayload).eq('id', order.id);
+  if (updateError) {
+    console.error('❌ Ошибка сохранения фотоотчета:', updateError);
+    await sendTelegramMessage(chatId, '❌ Не удалось сохранить фотоотчет. Убедитесь, что обновлена схема базы данных.');
+    return;
+  }
   const empName = profile.name || profile.full_name || 'Сотрудник';
 
   if (isAlbumAppend) {

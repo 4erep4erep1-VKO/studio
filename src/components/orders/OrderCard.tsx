@@ -1,6 +1,6 @@
 // components/orders/OrderCard.tsx
 import React from 'react';
-import { Trash2, CheckCircle, ExternalLink, User, UserPlus, Truck, Copy } from 'lucide-react';
+import { Trash2, CheckCircle, User, UserPlus, Truck, Copy } from 'lucide-react';
 import { OrderTemplate } from '@/lib/types';
 import confetti from 'canvas-confetti';
 
@@ -19,6 +19,10 @@ interface OrderCardProps {
 
 export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onDuplicate, onAssignOrder, onTransferToInstallation, onRestore, isAdmin }: OrderCardProps) {
   const chatId = order.profiles?.telegram_chat_id || null;
+  const reportPhotos = Array.from(new Set([
+    ...(Array.isArray(order.report_photos) ? order.report_photos : []),
+    ...(order.report_photo ? [order.report_photo] : []),
+  ].filter((photo): photo is string => typeof photo === 'string' && photo.length > 0)));
 
   const handleComplete = () => {
     confetti({
@@ -110,15 +114,16 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onDupli
         </div>
       </div>
 
-      {order.report_photo && (
+      {reportPhotos.length > 0 && (
         <div className="mb-4 bg-background p-2 rounded-lg border border-border relative z-20">
           <p className="text-[10px] text-muted-foreground uppercase font-bold mb-2">📸 Отчет:</p>
-          <a href={order.report_photo} target="_blank" rel="noopener noreferrer" className="block relative group">
-            <img src={order.report_photo} alt="Отчет" className="w-full h-24 object-cover rounded-md border border-border" />
-            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition rounded-md">
-              <ExternalLink className="text-white w-5 h-5" />
-            </div>
-          </a>
+          <div className="grid grid-cols-2 gap-2">
+            {reportPhotos.slice(0, 4).map((photo, index) => (
+              <a key={`${photo}-${index}`} href={photo} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-md border border-border">
+                <img src={photo} alt={`Фотоотчет ${index + 1}`} className="h-24 w-full object-cover transition hover:scale-105" />
+              </a>
+            ))}
+          </div>
         </div>
       )}
 

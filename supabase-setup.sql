@@ -28,6 +28,7 @@ CREATE TABLE orders (
   description TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'В работе',
   image_urls TEXT[] DEFAULT '{}',
+  report_photos TEXT[] NOT NULL DEFAULT '{}',
   assigned_to TEXT DEFAULT 'general',
   due_date DATE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

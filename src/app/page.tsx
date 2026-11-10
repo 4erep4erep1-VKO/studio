@@ -61,6 +61,9 @@ export default function Dashboard() {
   const [exportEnd, setExportEnd] = useState('');
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [assigningOrderId, setAssigningOrderId] = useState<string | null>(null);
+  const [completingOrderId, setCompletingOrderId] = useState<string | null>(null);
+  const [completionPhotos, setCompletionPhotos] = useState<File[]>([]);
+  const [isCompletingOrder, setIsCompletingOrder] = useState(false);
 
   const [view, setView] = useState<'orders' | 'staff'>('orders');
   const [displayMode, setDisplayMode] = useState<'kanban' | 'list' | 'feed'>('kanban');
@@ -356,19 +359,63 @@ export default function Dashboard() {
   };
 
   const handleComplete = async (id: string) => {
+    setCompletingOrderId(id);
+    setCompletionPhotos([]);
+  };
+
+  const submitOrderCompletion = async () => {
+    if (!completingOrderId) return;
+    setIsCompletingOrder(true);
     try {
-      const { error } = await supabase.from('orders').update({ status: 'completed' }).eq('id', id);
+      const order = orders.find(item => item.id === completingOrderId);
+      if (!order) throw new Error('Заказ не найден. Обновите список и попробуйте снова.');
+      if (completionPhotos.some(file => !file.type.startsWith('image/'))) {
+        throw new Error('Фотоотчет должен содержать только изображения.');
+      }
+
+      const { data: currentOrder, error: fetchError } = await supabase
+        .from('orders')
+        .select('report_photos')
+        .eq('id', completingOrderId)
+        .single();
+      if (fetchError) throw fetchError;
+      const currentReportPhotos = Array.isArray(currentOrder.report_photos)
+        ? currentOrder.report_photos as string[]
+        : (order as any).report_photo
+          ? [(order as any).report_photo as string]
+          : [];
+      const uploadedPhotos: string[] = [];
+
+      for (const file of completionPhotos) {
+        const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+        const filePath = `reports/${completingOrderId}/${Date.now()}-${crypto.randomUUID()}.${extension}`;
+        const { error: uploadError } = await supabase.storage.from('order-photos').upload(filePath, file, {
+          contentType: file.type,
+        });
+        if (uploadError) throw uploadError;
+        const { data } = supabase.storage.from('order-photos').getPublicUrl(filePath);
+        uploadedPhotos.push(data.publicUrl);
+      }
+
+      const { error } = await supabase.from('orders').update({
+        status: 'completed',
+        report_photos: [...currentReportPhotos, ...uploadedPhotos],
+      }).eq('id', completingOrderId);
       if (error) throw error;
-      toast({ title: "Заказ завершен!" });
-      fetchAllData();
+      toast({ title: "Заказ завершен!", description: uploadedPhotos.length ? 'Фотоотчет прикреплен.' : undefined });
+      setCompletingOrderId(null);
+      setCompletionPhotos([]);
+      await fetchAllData();
     } catch (err: any) {
-      alert('Ошибка: ' + err.message);
+      toast({ title: 'Не удалось завершить заказ', description: err.message, variant: 'destructive' });
+    } finally {
+      setIsCompletingOrder(false);
     }
   };
 
   const handleRestore = async (id: string) => {
     try {
-      const { error } = await supabase.from('orders').update({ status: 'in_progress', report_photo: null }).eq('id', id);
+      const { error } = await supabase.from('orders').update({ status: 'in_progress', report_photo: null, report_photos: [] }).eq('id', id);
       if (error) throw error;
       toast({ title: 'Заказ возвращен в работу' });
       fetchAllData();
@@ -757,6 +804,36 @@ export default function Dashboard() {
           </DialogContent>
         </Dialog>
 
+        <Dialog open={!!completingOrderId} onOpenChange={(open) => {
+          if (!open && !isCompletingOrder) {
+            setCompletingOrderId(null);
+            setCompletionPhotos([]);
+          }
+        }}>
+          <DialogContent className="max-w-lg border-border bg-card text-card-foreground shadow-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-bold text-card-foreground">Завершение заказа</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">Прикрепите фотографии выполненной работы. Они попадут в фотоотчеты отдельно от макетов заказа.</p>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(event) => setCompletionPhotos(Array.from(event.target.files || []))}
+                className="block w-full rounded-lg border border-border bg-background p-3 text-sm text-foreground file:mr-3 file:rounded-md file:border-0 file:bg-accent file:px-3 file:py-2 file:text-accent-foreground"
+              />
+              {completionPhotos.length > 0 && <p className="text-xs text-muted-foreground">Выбрано фотографий: {completionPhotos.length}</p>}
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button variant="outline" disabled={isCompletingOrder} onClick={() => setCompletionPhotos([])}>Сбросить фото</Button>
+                <Button disabled={isCompletingOrder} onClick={submitOrderCompletion} className="bg-emerald-600 font-bold text-white hover:bg-emerald-700">
+                  {isCompletingOrder ? 'Завершение...' : completionPhotos.length ? 'Завершить с фотоотчетом' : 'Завершить без фото'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         <Dialog open={!!viewingOrder} onOpenChange={() => setViewingOrder(null)}>
           <DialogContent className="max-w-2xl bg-card border-border text-foreground shadow-2xl overflow-y-auto max-h-[90vh]">
             <DialogHeader>
@@ -834,17 +911,24 @@ export default function Dashboard() {
                 </div>
 
                 {/* ИЗОБРАЖЕНИЯ */}
-                {(viewingOrder.image_urls || viewingOrder.report_photo) && (
+                {(viewingOrder.image_urls || viewingOrder.report_photos || viewingOrder.report_photo) && (
                   <div>
                     <p className="text-xs text-muted-foreground font-bold uppercase mb-3">Изображения</p>
                     <div className="grid grid-cols-2 gap-3">
                       {viewingOrder.image_urls && Array.isArray(viewingOrder.image_urls) && viewingOrder.image_urls.map((url: string, idx: number) => (
-                        <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="relative group overflow-hidden rounded-lg border border-border">
+                        <a key={`preview-${idx}`} href={url} target="_blank" rel="noopener noreferrer" className="relative group overflow-hidden rounded-lg border border-border">
                           <img src={url} alt={`Изображение ${idx + 1}`} className="w-full h-auto object-cover group-hover:scale-105 transition" />
+                          <span className="absolute bottom-1 left-1 rounded bg-background/90 px-1.5 py-0.5 text-[10px] font-bold text-foreground">📎 Макет</span>
+                        </a>
+                      ))}
+                      {Array.isArray(viewingOrder.report_photos) && viewingOrder.report_photos.map((url: string, idx: number) => (
+                        <a key={`report-${idx}`} href={url} target="_blank" rel="noopener noreferrer" className="relative group overflow-hidden rounded-lg border border-border">
+                          <img src={url} alt={`Фотоотчет ${idx + 1}`} className="w-full h-auto object-cover group-hover:scale-105 transition" />
+                          <span className="absolute bottom-1 left-1 rounded bg-background/90 px-1.5 py-0.5 text-[10px] font-bold text-foreground">📸 Фотоотчет</span>
                         </a>
                       ))}
                       {viewingOrder.report_photo && (
-                        <a href={viewingOrder.report_photo} target="_blank" rel="noopener noreferrer" className="relative group overflow-hidden rounded-lg border border-border">
+                        <a key="legacy-report" href={viewingOrder.report_photo} target="_blank" rel="noopener noreferrer" className="relative group overflow-hidden rounded-lg border border-border">
                           <img src={viewingOrder.report_photo} alt="Отчет" className="w-full h-auto object-cover group-hover:scale-105 transition" />
                         </a>
                       )}

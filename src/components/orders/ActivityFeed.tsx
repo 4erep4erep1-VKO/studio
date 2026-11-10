@@ -26,17 +26,24 @@ interface FeedEvent {
   date: string;
 }
 
-const getOrderPhotos = (order: any): string[] => {
-  const photoFields = [order.image_urls, order.photos, order.report_photos, order.report_photo];
-  return Array.from(new Set(photoFields.flatMap((value) => {
-    if (typeof value === 'string') return [value];
-    if (!Array.isArray(value)) return [];
-    return value.flatMap((photo) => {
-      if (typeof photo === 'string') return [photo];
-      if (photo && typeof photo.url === 'string') return [photo.url];
-      return [];
-    });
-  }).filter(Boolean)));
+const normalizePhotos = (values: unknown[]): string[] => Array.from(new Set(values.flatMap((value) => {
+  if (typeof value === 'string') return [value];
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((photo) => {
+    if (typeof photo === 'string') return [photo];
+    if (photo && typeof photo.url === 'string') return [photo.url];
+    return [];
+  });
+}).filter(Boolean)));
+
+const getPreviewPhotos = (order: any): string[] => normalizePhotos([order.image_urls, order.preview_url]);
+
+const getReportPhotos = (order: any): string[] => {
+  const explicitPhotos = normalizePhotos([order.report_photos, order.report_photo]);
+  if (explicitPhotos.length > 0 || order.status !== 'completed') return explicitPhotos;
+
+  // Older bot versions stored completion photos in image_urls.
+  return normalizePhotos([order.image_urls]);
 };
 
 const formatDate = (value: string) => {
@@ -58,16 +65,16 @@ const departmentLabel = (department?: string) => {
 };
 
 const eventStyle: Record<FeedEventType, { label: string; color: string; badge: string }> = {
-  all: { label: 'СОБЫТИЕ', color: 'border-l-slate-500', badge: 'bg-slate-500/15 text-slate-400' },
-  photos: { label: '📸 ФОТООТЧЕТ', color: 'border-l-pink-500', badge: 'bg-pink-500/15 text-pink-400' },
-  stages: { label: '🔄 В РАБОТЕ', color: 'border-l-blue-500', badge: 'bg-blue-500/15 text-blue-400' },
-  completed: { label: '✅ ВЫПОЛНЕНО', color: 'border-l-emerald-500', badge: 'bg-emerald-500/15 text-emerald-400' },
-  new: { label: '🆕 НОВЫЙ ЗАКАЗ', color: 'border-l-amber-500', badge: 'bg-amber-500/15 text-amber-400' },
+  all: { label: 'СОБЫТИЕ', color: 'border-l-slate-500', badge: 'bg-muted text-muted-foreground' },
+  photos: { label: '📸 ФОТООТЧЕТ', color: 'border-l-pink-500', badge: 'bg-pink-500/15 text-pink-700 dark:text-pink-300' },
+  stages: { label: '🔄 В РАБОТЕ', color: 'border-l-blue-500', badge: 'bg-blue-500/15 text-blue-700 dark:text-blue-300' },
+  completed: { label: '✅ ВЫПОЛНЕНО', color: 'border-l-emerald-500', badge: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' },
+  new: { label: '🆕 НОВЫЙ ЗАКАЗ', color: 'border-l-amber-500', badge: 'bg-amber-500/15 text-amber-700 dark:text-amber-300' },
 };
 
 const buildFeedEvents = (orders: Order[]): FeedEvent[] => orders.flatMap((order) => {
   const row = order as any;
-  const photos = getOrderPhotos(row);
+  const reportPhotos = row.status === 'completed' ? getReportPhotos(row) : [];
   const createdAt = row.created_at || row.updated_at || new Date().toISOString();
   const updatedAt = row.updated_at || createdAt;
   const events: FeedEvent[] = [{
@@ -92,7 +99,7 @@ const buildFeedEvents = (orders: Order[]): FeedEvent[] => orders.flatMap((order)
     events.push({ id: `${row.id}-stage`, type: 'stages', label, order: row, date: updatedAt });
   }
 
-  if (photos.length > 0) {
+  if (reportPhotos.length > 0) {
     events.push({ id: `${row.id}-photos`, type: 'photos', label: '📸 ФОТООТЧЕТ', order: row, date: updatedAt });
   }
 
@@ -195,7 +202,7 @@ export default function ActivityFeed({
                 activeTab === tab.id ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:text-foreground'
               }`}
             >
-              {tab.label}<span className="rounded-full bg-black/10 px-2 py-0.5 text-xs dark:bg-white/10">{counts[tab.id]}</span>
+              {tab.label}<span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{counts[tab.id]}</span>
             </button>
           ))}
         </div>
@@ -219,10 +226,10 @@ export default function ActivityFeed({
         </div>
       ) : activeTab === 'photos' && photoView === 'gallery' ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {pageEvents.flatMap((event) => getOrderPhotos(event.order).map((photo, index) => (
-            <button key={`${event.id}-${photo}`} onClick={() => setLightbox({ photos: getOrderPhotos(event.order), index })} className="group relative overflow-hidden rounded-xl border border-border bg-card text-left">
+          {pageEvents.flatMap((event) => getReportPhotos(event.order).map((photo, index) => (
+            <button key={`${event.id}-${photo}`} onClick={() => setLightbox({ photos: getReportPhotos(event.order), index })} className="group relative overflow-hidden rounded-xl border border-border bg-card text-left">
               <img src={photo} alt={`Фото: ${event.order.title}`} loading="lazy" className="h-48 w-full object-cover transition group-hover:scale-105" />
-              <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-3 pt-8 text-sm font-bold text-white">{event.order.title}</span>
+              <span className="absolute inset-x-0 bottom-0 bg-background/90 p-3 text-sm font-bold text-foreground">{event.order.title}</span>
             </button>
           )))}
         </div>
@@ -230,10 +237,16 @@ export default function ActivityFeed({
         <div className="mx-auto max-w-3xl space-y-3">
           {pageEvents.map((event) => {
             const order = event.order;
-            const photos = getOrderPhotos(order);
+            const previewPhotos = getPreviewPhotos(order);
+            const reportPhotos = order.status === 'completed' ? getReportPhotos(order) : [];
             const style = eventStyle[event.type];
             const employeeName = order.profiles?.full_name || 'Не назначен';
             const creatorName = order.creator_name || 'Админ';
+            const categoryStyle = order.department === 'print'
+              ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30'
+              : order.department === 'production'
+                ? 'bg-brand/10 text-brand border-brand/30'
+                : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30';
             return (
               <article key={event.id} className={`overflow-hidden rounded-xl border border-border border-l-4 ${style.color} bg-card shadow-sm`}>
                 <div className="p-4 sm:p-5">
@@ -252,17 +265,31 @@ export default function ActivityFeed({
                     <h3 className="text-lg font-extrabold leading-snug">{order.title || 'Без названия'}</h3>
                     {order.description && <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">{order.description}</p>}
                     <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <span className="rounded-md bg-secondary/10 px-2 py-1 text-[10px] font-bold tracking-wide text-secondary">{departmentLabel(order.department)}</span>
+                      <span className={`rounded-md border px-2 py-1 text-[10px] font-bold tracking-wide ${categoryStyle}`}>{departmentLabel(order.department)}</span>
                       {order.deadline && <span className="text-xs text-muted-foreground">📅 Дедлайн: {new Date(order.deadline).toLocaleDateString('ru-RU')}</span>}
                     </div>
 
-                    {photos.length > 0 && (
+                    {activeTab !== 'photos' && previewPhotos.length > 0 && (
                       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                        {photos.slice(0, 6).map((photo, index) => (
-                          <button key={`${photo}-${index}`} onClick={() => setLightbox({ photos, index })} className="overflow-hidden rounded-lg border border-border bg-background">
-                            <img src={photo} alt={`Фото ${index + 1}: ${order.title}`} loading="lazy" className="h-32 w-full object-cover transition hover:scale-105" />
+                        {previewPhotos.slice(0, 6).map((photo, index) => (
+                          <button key={`${photo}-${index}`} onClick={() => setLightbox({ photos: previewPhotos, index })} className="relative overflow-hidden rounded-lg border border-border bg-background">
+                            <img src={photo} alt={`Макет ${index + 1}: ${order.title}`} loading="lazy" className="h-32 w-full object-cover transition hover:scale-105" />
+                            <span className="absolute bottom-1 left-1 rounded bg-background/90 px-1.5 py-0.5 text-[10px] font-bold text-foreground">📎 МАКЕТ</span>
                           </button>
                         ))}
+                      </div>
+                    )}
+
+                    {reportPhotos.length > 0 && (
+                      <div className="mt-4">
+                        <p className="mb-2 text-xs font-bold text-muted-foreground">📸 ФОТООТЧЕТ</p>
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                            {reportPhotos.slice(0, 6).map((photo, index) => (
+                            <button key={`${photo}-${index}`} onClick={() => setLightbox({ photos: reportPhotos, index })} className="overflow-hidden rounded-lg border border-border bg-background">
+                                <img src={photo} alt={`Фотоотчет ${index + 1}: ${order.title}`} loading="lazy" className="h-32 w-full object-cover transition hover:scale-105" />
+                              </button>
+                            ))}
+                          </div>
                       </div>
                     )}
 
@@ -288,17 +315,17 @@ export default function ActivityFeed({
       )}
 
       <Dialog open={!!lightbox} onOpenChange={(open) => { if (!open) setLightbox(null); }}>
-        <DialogContent className="max-w-6xl border-border bg-black/95 p-3 text-white sm:p-5">
+        <DialogContent className="max-w-6xl border-border bg-background p-3 text-foreground sm:p-5">
           {lightbox && (
             <div className="relative flex min-h-[50vh] flex-col items-center justify-center gap-4">
-              <button onClick={() => setLightbox(null)} aria-label="Закрыть" className="absolute right-2 top-2 z-10 rounded-full bg-black/60 p-2 hover:bg-black"><X className="h-5 w-5" /></button>
+              <button onClick={() => setLightbox(null)} aria-label="Закрыть" className="absolute right-2 top-2 z-10 rounded-full bg-accent p-2 text-accent-foreground hover:bg-accent/80"><X className="h-5 w-5" /></button>
               <img src={lightbox.photos[lightbox.index]} alt="Фотоотчет" className="max-h-[72vh] max-w-full object-contain" />
               <div className="flex items-center gap-3">
-                <button onClick={() => setLightbox((current) => current && ({ ...current, index: (current.index - 1 + current.photos.length) % current.photos.length }))} className="rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20">←</button>
-                <span className="text-sm text-white/70">{lightbox.index + 1} / {lightbox.photos.length}</span>
-                <button onClick={() => setLightbox((current) => current && ({ ...current, index: (current.index + 1) % current.photos.length }))} className="rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20">→</button>
-                <a href={lightbox.photos[lightbox.index]} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20"><ExternalLink className="h-4 w-4" />Открыть оригинал</a>
-                <a href={lightbox.photos[lightbox.index]} download className="flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20"><Download className="h-4 w-4" />Скачать</a>
+                <button onClick={() => setLightbox((current) => current && ({ ...current, index: (current.index - 1 + current.photos.length) % current.photos.length }))} className="rounded-lg bg-accent px-3 py-2 text-sm text-accent-foreground hover:bg-accent/80">←</button>
+                <span className="text-sm text-muted-foreground">{lightbox.index + 1} / {lightbox.photos.length}</span>
+                <button onClick={() => setLightbox((current) => current && ({ ...current, index: (current.index + 1) % current.photos.length }))} className="rounded-lg bg-accent px-3 py-2 text-sm text-accent-foreground hover:bg-accent/80">→</button>
+                <a href={lightbox.photos[lightbox.index]} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm text-accent-foreground hover:bg-accent/80"><ExternalLink className="h-4 w-4" />Открыть оригинал</a>
+                <a href={lightbox.photos[lightbox.index]} download className="flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm text-accent-foreground hover:bg-accent/80"><Download className="h-4 w-4" />Скачать</a>
               </div>
             </div>
           )}
