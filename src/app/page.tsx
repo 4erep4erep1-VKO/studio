@@ -73,7 +73,7 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<'active' | 'general' | 'completed' | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewingOrder, setViewingOrder] = useState<any | null>(null);
-  const [stats, setStats] = useState({ total: 0, active: 0, done: 0, cancelled: 0 });
+  const [stats, setStats] = useState({ total: 0, done: 0, cancelled: 0 });
 
   const [notifications, setNotifications] = useState<{id: string, text: string, time: string}[]>([]);
   const [showNotifs, setShowNotifs] = useState(false);
@@ -183,7 +183,7 @@ export default function Dashboard() {
       const total = totalCount || 0;
       const done = doneCount || 0;
       const cancelled = cancelledCount || 0;
-      setStats({ total, active: total - done - cancelled, done, cancelled });
+      setStats({ total, done, cancelled });
       setTotalOrdersCount(totalCount || 0);
 
       const mergedOrders = (rawOrders || []).map((order: any) => {
@@ -504,7 +504,7 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center gap-4 rounded-xl border border-[#23252a] bg-[#0f1011] p-4">
             <div className="rounded-md bg-[#C62828]/15 p-3"><Clock className="text-[#C62828]" /></div>
-            <div><p className="text-xs font-normal text-[#8a8f98]">Активные</p><p className="text-2xl font-medium text-white">{stats.active}</p></div>
+            <div><p className="text-xs font-normal text-[#8a8f98]">В работе</p><p className="text-2xl font-medium text-white">{orders.filter(o => o.status === 'new' || o.status === 'in_progress').length}</p></div>
           </div>
           <div className="flex items-center gap-4 rounded-xl border border-[#23252a] bg-[#0f1011] p-4">
             <div className="rounded-md bg-[#161718] p-3"><CheckCircle2 className="text-[#8a8f98]" /></div>

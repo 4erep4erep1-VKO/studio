@@ -134,16 +134,6 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onDupli
         </div>
 
         <div className="flex items-center gap-1">
-          {onDuplicate && (
-            <button
-              onClick={() => onDuplicate(order)}
-              className="flex items-center gap-1 rounded-md p-2 text-[#8a8f98] transition hover:bg-[#C62828]/15 hover:text-[#C62828]"
-              title="Как образец"
-              aria-label={`Создать заказ по образцу: ${order.title}`}
-            >
-              <Copy className="h-4 w-4" />
-            </button>
-          )}
           {order.status === 'new' && onAssignOrder && (
             <button onClick={() => onAssignOrder(order.id)} className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-normal text-[#d0d6e0] transition hover:bg-[#C62828]/15 hover:text-white" title="Назначить исполнителя">
               <UserPlus className="w-4 h-4"/> Назначить
@@ -187,6 +177,7 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onDupli
             </button>
           )}
 
+          <button onClick={() => onDuplicate?.(order)} className="flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-normal text-[#d0d6e0] transition hover:bg-[#C62828]/15 hover:text-white" title="Как образец" aria-label={`Создать заказ по образцу: ${order.title}`}><Copy className="h-4 w-4" /> Как образец</button>
           <button onClick={() => onEdit(order.id)} className="rounded-md px-3 py-1.5 text-sm font-normal text-[#d0d6e0] transition hover:bg-[#C62828]/15 hover:text-white">Правка</button>
           <button onClick={() => onDelete(order.id, chatId, order.title)} className="rounded-md p-2 text-[#8a8f98] transition hover:bg-[#C62828]/15 hover:text-[#C62828]" title="Удалить"><Trash2 className="w-5 h-5" /></button>
         </div>
