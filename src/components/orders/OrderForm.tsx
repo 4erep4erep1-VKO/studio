@@ -5,15 +5,17 @@ import imageCompression from 'browser-image-compression';
 import { supabase } from '@/lib/supabase';
 import { notifyNewOrderToGroup, notifyOrderToUser, notifyOrderUpdate } from '@/app/actions/telegram';
 import { useRouter } from 'next/navigation';
+import { OrderTemplate } from '@/lib/types';
 
 interface OrderFormProps {
   orderId: string | null;
+  duplicateFrom?: OrderTemplate | null;
   onSave: () => void;
   creatorId: string;
   editorName?: string;
 }
 
-export default function OrderForm({ orderId, onSave, creatorId, editorName }: OrderFormProps) {
+export default function OrderForm({ orderId, duplicateFrom, onSave, creatorId, editorName }: OrderFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [installers, setInstallers] = useState<any[]>([]);
@@ -39,6 +41,22 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
   });
 
   useEffect(() => {
+    if (duplicateFrom) {
+      setFormData({
+        ...initialFormState,
+        title: duplicateFrom.title ?? '',
+        description: duplicateFrom.description ?? '',
+        dimensions: duplicateFrom.dimensions ?? '',
+        material: duplicateFrom.material ?? '',
+        source_link: duplicateFrom.source_link ?? '',
+        department: duplicateFrom.department ?? 'installation'
+      });
+      setInitialData(null);
+    } else if (!orderId) {
+      setFormData(initialFormState);
+      setInitialData(null);
+    }
+
     async function loadData() {
       try {
         const { data: inst } = await supabase
@@ -81,7 +99,7 @@ export default function OrderForm({ orderId, onSave, creatorId, editorName }: Or
       } catch (e) { console.error(e); }
     }
     loadData();
-  }, [orderId, creatorId]);
+  }, [orderId, creatorId, duplicateFrom]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

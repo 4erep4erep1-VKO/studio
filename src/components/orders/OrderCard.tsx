@@ -1,6 +1,7 @@
 // components/orders/OrderCard.tsx
 import React from 'react';
-import { Trash2, CheckCircle, ExternalLink, User, UserPlus, Truck } from 'lucide-react';
+import { Trash2, CheckCircle, ExternalLink, User, UserPlus, Truck, Copy } from 'lucide-react';
+import { OrderTemplate } from '@/lib/types';
 import confetti from 'canvas-confetti';
 
 interface OrderCardProps {
@@ -9,13 +10,14 @@ interface OrderCardProps {
   onEdit: (id: string) => void;
   onDelete: (id: string, assignedToChatId: string | null, title: string) => void;
   onComplete: (id: string) => void;
+  onDuplicate?: (order: OrderTemplate) => void;
   onAssignOrder?: (id: string) => void;
   onTransferToInstallation?: (id: string) => void;
   onRestore?: (id: string) => void;
   isAdmin?: boolean;
 }
 
-export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssignOrder, onTransferToInstallation, onRestore, isAdmin }: OrderCardProps) {
+export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onDuplicate, onAssignOrder, onTransferToInstallation, onRestore, isAdmin }: OrderCardProps) {
   const chatId = order.profiles?.telegram_chat_id || null;
 
   const handleComplete = () => {
@@ -132,6 +134,16 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onAssig
         </div>
 
         <div className="flex items-center gap-1">
+          {onDuplicate && (
+            <button
+              onClick={() => onDuplicate(order)}
+              className="flex items-center gap-1 rounded-md p-2 text-[#8a8f98] transition hover:bg-[#C62828]/15 hover:text-[#C62828]"
+              title="Как образец"
+              aria-label={`Создать заказ по образцу: ${order.title}`}
+            >
+              <Copy className="h-4 w-4" />
+            </button>
+          )}
           {order.status === 'new' && onAssignOrder && (
             <button onClick={() => onAssignOrder(order.id)} className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-normal text-[#d0d6e0] transition hover:bg-[#C62828]/15 hover:text-white" title="Назначить исполнителя">
               <UserPlus className="w-4 h-4"/> Назначить

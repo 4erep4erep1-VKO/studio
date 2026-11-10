@@ -9,7 +9,7 @@ import {
   Trash2, UserPlus, CheckCircle2, Clock, 
   BarChart3, X, LogOut, ShieldCheck, Download
 } from 'lucide-react';
-import { Order } from '@/lib/types';
+import { Order, OrderTemplate } from '@/lib/types';
 import OrderForm from '@/components/orders/OrderForm';
 import { OrderCard } from '@/components/orders/OrderCard';
 import OrderListManager from '@/components/orders/OrderListManager';
@@ -53,6 +53,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [duplicateOrder, setDuplicateOrder] = useState<OrderTemplate | null>(null);
   
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [exportStart, setExportStart] = useState('');
@@ -78,6 +79,24 @@ export default function Dashboard() {
   const [showNotifs, setShowNotifs] = useState(false);
   
   const { toast } = useToast();
+
+  const openDuplicateOrder = (order: OrderTemplate) => {
+    if (!currentUserId) {
+      alert('❌ Ошибка: Вы не авторизованы. Пожалуйста, пройдите вход в систему.');
+      return;
+    }
+
+    setEditingOrderId(null);
+    setDuplicateOrder({
+      title: order.title,
+      description: order.description,
+      department: order.department,
+      dimensions: order.dimensions,
+      material: order.material,
+      source_link: order.source_link,
+    });
+    setIsModalOpen(true);
+  };
 
   useEffect(() => {
     const savedAuth = localStorage.getItem('adminAuth');
@@ -539,6 +558,7 @@ export default function Dashboard() {
                 return;
               }
               setEditingOrderId(null);
+              setDuplicateOrder(null);
               setIsModalOpen(true);
             }} className="flex-1 rounded-md bg-[#C62828] font-medium text-white hover:bg-red-800 md:flex-none">Новый объект</Button>
           </div>
@@ -558,8 +578,10 @@ export default function Dashboard() {
                     return;
                   }
                   setEditingOrderId(id);
+                  setDuplicateOrder(null);
                   setIsModalOpen(true);
                 }}
+                onDuplicate={openDuplicateOrder}
                 onDelete={(id, cid, title) => handleDelete(id, cid, title, '')}
                 onComplete={handleComplete}
                 onAssignOrder={openAssignModal}
@@ -595,8 +617,9 @@ export default function Dashboard() {
                         return;
                       }
                       setEditingOrderId(id);
+                      setDuplicateOrder(null);
                       setIsModalOpen(true);
-                    }} onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} onComplete={handleComplete} onAssignOrder={openAssignModal} onTransferToInstallation={handleTransferToInstallation} />
+                    }} onDuplicate={openDuplicateOrder} onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} onComplete={handleComplete} onAssignOrder={openAssignModal} onTransferToInstallation={handleTransferToInstallation} />
                   ))}
                 </div>
 
@@ -610,8 +633,9 @@ export default function Dashboard() {
                         return;
                       }
                       setEditingOrderId(id);
+                      setDuplicateOrder(null);
                       setIsModalOpen(true);
-                    }} onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} onComplete={handleComplete} onAssignOrder={openAssignModal} onTransferToInstallation={handleTransferToInstallation} />
+                    }} onDuplicate={openDuplicateOrder} onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} onComplete={handleComplete} onAssignOrder={openAssignModal} onTransferToInstallation={handleTransferToInstallation} />
                   ))}
                 </div>
 
@@ -629,8 +653,10 @@ export default function Dashboard() {
                           return;
                         }
                         setEditingOrderId(id);
+                        setDuplicateOrder(null);
                         setIsModalOpen(true);
                       }}
+                      onDuplicate={openDuplicateOrder}
                       onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)}
                       onComplete={handleComplete}
                       onAssignOrder={openAssignModal}
@@ -684,10 +710,13 @@ export default function Dashboard() {
         )}
 
         {/* МОДАЛКИ */}
-        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <Dialog open={isModalOpen} onOpenChange={open => {
+          setIsModalOpen(open);
+          if (!open) setDuplicateOrder(null);
+        }}>
           <DialogContent className="max-w-xl overflow-hidden rounded-xl border border-[#23252a] bg-[#0f1011] p-0 text-[#d0d6e0]">
             <DialogHeader className="p-6 pb-0"><DialogTitle className="text-xl font-medium uppercase tracking-tight text-white">Параметры объекта</DialogTitle></DialogHeader>
-            <OrderForm orderId={editingOrderId} onSave={() => { setIsModalOpen(false); fetchAllData(); }} creatorId={currentUserId || ''} editorName={currentUserName || undefined} />
+            <OrderForm orderId={editingOrderId} duplicateFrom={duplicateOrder} onSave={() => { setIsModalOpen(false); setDuplicateOrder(null); fetchAllData(); }} creatorId={currentUserId || ''} editorName={currentUserName || undefined} />
           </DialogContent>
         </Dialog>
 

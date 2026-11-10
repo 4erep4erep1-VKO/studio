@@ -19,3 +19,10 @@ export interface Order {
   created_at: string;
   updated_at: string;
 }
+
+export type OrderTemplate = Pick<Order, 'title' | 'description'> & {
+  department?: Order['department'];
+  dimensions?: string | null;
+  material?: string | null;
+  source_link?: string | null;
+};

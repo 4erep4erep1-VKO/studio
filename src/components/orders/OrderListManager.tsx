@@ -1,15 +1,17 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Grid3x3, List, LayoutGrid, ChevronDown, Eye, Pencil } from 'lucide-react';
+import { Grid3x3, List, LayoutGrid, ChevronDown, Eye, Pencil, Copy } from 'lucide-react';
 import { OrderCard } from './OrderCard';
 import { useRouter } from 'next/navigation';
+import { OrderTemplate } from '@/lib/types';
 
 interface OrderListManagerProps {
   orders: any[];
   totalOrdersCount?: number;
   onSearch?: (query: string) => void;
   onEdit: (orderId: string) => void;
+  onDuplicate?: (order: OrderTemplate) => void;
   onDelete: (id: string, creatorId: string, title: string, status: string) => void;
   onComplete: (id: string, title: string) => void;
   onAssignOrder: (orderId: string) => void;
@@ -24,6 +26,7 @@ export default function OrderListManager({
   totalOrdersCount,
   onSearch,
   onEdit,
+  onDuplicate,
   onDelete,
   onComplete,
   onAssignOrder,
@@ -140,7 +143,7 @@ export default function OrderListManager({
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {sortedOrders.map((order) => (
               <div key={order.id} className="h-full">
-                <OrderCard order={order} onView={onView} onEdit={onEdit} onDelete={(id, cid, title) => onDelete(id, cid, title, order.status)} onComplete={onComplete} onAssignOrder={onAssignOrder} onTransferToInstallation={onTransferToInstallation} onRestore={onRestore} isAdmin={isAdmin} />
+                <OrderCard order={order} onView={onView} onEdit={onEdit} onDuplicate={onDuplicate} onDelete={(id, cid, title) => onDelete(id, cid, title, order.status)} onComplete={onComplete} onAssignOrder={onAssignOrder} onTransferToInstallation={onTransferToInstallation} onRestore={onRestore} isAdmin={isAdmin} />
               </div>
             ))}
           </div>
@@ -172,6 +175,7 @@ export default function OrderListManager({
                       </div>
                    )}
                    <div className="flex gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {onDuplicate && <button onClick={(e) => { e.stopPropagation(); onDuplicate(order); }} className="rounded-md border border-[#23252a] bg-[#08090a] p-1 text-[#8a8f98] transition hover:bg-[#C62828]/15 hover:text-[#C62828]" title="Как образец" aria-label={`Создать заказ по образцу: ${order.title}`}><Copy className="w-3 h-3"/></button>}
                       <button onClick={(e) => { e.stopPropagation(); onEdit(order.id); }} className="rounded-md border border-[#23252a] bg-[#08090a] p-1 text-[#8a8f98] hover:bg-[#C62828] hover:text-white"><Pencil className="w-3 h-3"/></button>
                       <button onClick={(e) => { e.stopPropagation(); onView(order); }} className="rounded-md border border-[#23252a] bg-[#08090a] p-1 text-[#8a8f98] hover:bg-[#C62828] hover:text-white"><Eye className="w-3 h-3"/></button>
                    </div>
@@ -200,6 +204,7 @@ export default function OrderListManager({
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                   <button onClick={() => onView(order)} className="rounded-md border border-[#23252a] bg-[#08090a] px-2 py-1 text-xs font-normal text-[#d0d6e0] transition hover:bg-[#C62828] hover:text-white">👁</button>
+                  {onDuplicate && <button onClick={() => onDuplicate(order)} className="rounded-md border border-[#23252a] bg-[#08090a] p-2 text-[#8a8f98] transition hover:bg-[#C62828]/15 hover:text-[#C62828]" title="Как образец" aria-label={`Создать заказ по образцу: ${order.title}`}><Copy className="w-4 h-4"/></button>}
                   <button onClick={() => onEdit(order.id)} className="rounded-md border border-[#23252a] bg-[#08090a] px-2 py-1 text-xs font-normal text-[#d0d6e0] transition hover:bg-[#C62828] hover:text-white">✏️</button>
                 </div>
               </div>
