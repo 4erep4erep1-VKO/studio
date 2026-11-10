@@ -17,6 +17,34 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import * as XLSX from 'xlsx';
 
+async function fetchAllOrders(searchQuery = '') {
+  const filter = searchQuery
+    ? `title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`
+    : null;
+  let countQuery = supabase.from('orders').select('*', { count: 'exact', head: true });
+  if (filter) countQuery = countQuery.or(filter);
+
+  const { count, error: countError } = await countQuery;
+  if (countError) throw countError;
+
+  const orders: any[] = [];
+  let offset = 0;
+  while (offset < (count || 0)) {
+    let pageQuery = supabase.from('orders').select('*').order('created_at', { ascending: false });
+    if (filter) pageQuery = pageQuery.or(filter);
+
+    const { data, error } = await pageQuery.range(offset, offset + 999);
+    if (error) throw error;
+
+    const page = data || [];
+    if (page.length === 0) break;
+    orders.push(...page);
+    offset += page.length;
+  }
+
+  return { orders, count: count || 0 };
+}
+
 export default function Dashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [listSearchResults, setListSearchResults] = useState<Order[] | null>(null);
@@ -118,9 +146,8 @@ export default function Dashboard() {
 
   const fetchAllData = async () => {
     try {
-      const [{ data: rawOrders, count: totalCount }, { count: activeCount }, { count: doneCount }] = await Promise.all([
-        supabase.from('orders').select('*', { count: 'exact' }).order('created_at', { ascending: false }).limit(5000),
-        supabase.from('orders').select('*', { count: 'exact', head: true }),
+      const [{ orders: rawOrders, count: totalCount }, { count: activeCount }, { count: doneCount }] = await Promise.all([
+        fetchAllOrders(),
         supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'in_progress'),
         supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'completed'),
       ]);
@@ -159,18 +186,15 @@ export default function Dashboard() {
       return;
     }
 
-    const { data: rawOrders, error } = await supabase
-      .from('orders')
-      .select('*')
-      .or(`title.ilike.%${trimmedQuery}%,description.ilike.%${trimmedQuery}%`)
-      .limit(5000);
-
-    if (error) {
+    let rawOrders: any[];
+    try {
+      ({ orders: rawOrders } = await fetchAllOrders(trimmedQuery));
+    } catch (error: any) {
       console.error('Ошибка поиска заказов:', error.message);
       return;
     }
 
-    const results = (rawOrders || []).map((order: any) => {
+    const results = rawOrders.map((order: any) => {
       const assignedProfile = profiles.find(profile => profile.id === order.assigned_to);
       const creatorProfile = profiles.find(profile => profile.id === order.created_by);
 
