@@ -15,6 +15,27 @@ interface OrderFormProps {
   editorName?: string;
 }
 
+function getAlmatyDateString(date: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Almaty',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+function isOrderUrgent(deadline: unknown, todayStr: string): boolean {
+  if (!deadline) return false;
+  const raw = String(deadline).trim();
+  if (!raw) return false;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return raw <= todayStr;
+  }
+  const parsed = new Date(raw);
+  if (isNaN(parsed.getTime())) return false;
+  return getAlmatyDateString(parsed) <= todayStr;
+}
+
 export default function OrderForm({ orderId, duplicateFrom, onSave, creatorId, editorName }: OrderFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -59,22 +80,52 @@ export default function OrderForm({ orderId, duplicateFrom, onSave, creatorId, e
 
     async function loadData() {
       try {
-        const { data: inst } = await supabase
-          .from('profiles')
-          .select('id, full_name, telegram_chat_id')
-          .in('role', ['installer', 'admin']);
+        const [{ data: inst }, { data: activeOrders }] = await Promise.all([
+          supabase
+            .from('profiles')
+            .select('id, full_name, name, telegram_chat_id, role')
+            .in('role', ['installer', 'admin']),
+          supabase
+            .from('orders')
+            .select('id, assigned_to, deadline, status')
+            .not('status', 'in', '("completed","cancelled")'),
+        ]);
 
-        let installersData: any[] = inst ?? [];
+        const installersData: any[] = inst ? [...inst] : [];
         if (creatorId && !installersData.some(i => i.id === creatorId)) {
           const { data: creatorProfile } = await supabase
             .from('profiles')
-            .select('id, full_name, telegram_chat_id')
+            .select('id, full_name, name, telegram_chat_id, role')
             .eq('id', creatorId)
             .single();
           if (creatorProfile) installersData.push(creatorProfile);
         }
 
-        setInstallers(installersData);
+        const todayStr = getAlmatyDateString(new Date());
+        const statsByUser: Record<string, { total: number; urgent: number }> = {};
+        for (const ord of activeOrders || []) {
+          if (!ord.assigned_to) continue;
+          const current = statsByUser[ord.assigned_to] || { total: 0, urgent: 0 };
+          current.total += 1;
+          if (isOrderUrgent(ord.deadline, todayStr)) {
+            current.urgent += 1;
+          }
+          statsByUser[ord.assigned_to] = current;
+        }
+
+        const enrichedInstallers = installersData
+          .map((person) => {
+            const counts = statsByUser[person.id] || { total: 0, urgent: 0 };
+            return {
+              ...person,
+              full_name: person.full_name || person.name || 'Сотрудник',
+              activeCount: counts.total,
+              urgentCount: counts.urgent,
+            };
+          })
+          .sort((a, b) => a.activeCount - b.activeCount || String(a.full_name).localeCompare(String(b.full_name), 'ru'));
+
+        setInstallers(enrichedInstallers);
 
         if (orderId) {
           const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
@@ -320,7 +371,17 @@ export default function OrderForm({ orderId, duplicateFrom, onSave, creatorId, e
               <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Лично исполнителю</label>
               <select disabled={formData.is_general} className="w-full h-10 px-3 bg-background text-foreground border border-border rounded focus:border-primary outline-none transition disabled:opacity-30" value={formData.assigned_to} onChange={e => setFormData({...formData, assigned_to: e.target.value})}>
                 <option value="">Не назначен...</option>
-                {installers.map(i => <option key={i.id} value={i.id}>{i.full_name}</option>)}
+                {installers.map((i) => {
+                  const total = i.activeCount || 0;
+                  const urgent = i.urgentCount || 0;
+                  const icon = total === 0 ? '🟢' : total <= 2 ? '🟡' : '🔴';
+                  const loadText = total === 0 ? 'свободен (0)' : `в работе: ${total}${urgent > 0 ? `, 🔥 ${urgent}` : ''}`;
+                  return (
+                    <option key={i.id} value={i.id}>
+                      {icon} {i.full_name} — {loadText}
+                    </option>
+                  );
+                })}
               </select>
             </div>
           </div>
