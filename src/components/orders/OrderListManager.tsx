@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Grid3x3, List, LayoutGrid, ChevronDown, Eye, Pencil, Copy } from 'lucide-react';
 import { OrderCard } from './OrderCard';
-import { useRouter } from 'next/navigation';
 import { OrderTemplate } from '@/lib/types';
 
 interface OrderListManagerProps {
@@ -12,8 +11,8 @@ interface OrderListManagerProps {
   onSearch?: (query: string) => void;
   onEdit: (orderId: string) => void;
   onDuplicate?: (order: OrderTemplate) => void;
-  onDelete: (id: string, creatorId: string, title: string, status: string) => void;
-  onComplete: (id: string, title: string) => void;
+  onDelete: (id: string, assignedToChatId: string | null, title: string, status?: string) => void;
+  onComplete: (id: string) => void;
   onAssignOrder: (orderId: string) => void;
   onTransferToInstallation: (orderId: string) => void;
   onRestore?: (orderId: string) => void;
@@ -39,6 +38,28 @@ export default function OrderListManager({
   const [viewMode, setViewMode] = useState<'grid' | 'list' | 'compact'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'name_asc' | 'deadline'>('newest');
+  const isFirstSearchRun = useRef(true);
+  const onSearchRef = useRef(onSearch);
+  onSearchRef.current = onSearch;
+
+  useEffect(() => {
+    if (isFirstSearchRun.current) {
+      isFirstSearchRun.current = false;
+      return;
+    }
+
+    const trimmed = searchQuery.trim();
+    if (!trimmed) {
+      onSearchRef.current?.('');
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      onSearchRef.current?.(searchQuery);
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const sortedOrders = useMemo(() => {
     const arr = [...orders];
@@ -69,11 +90,7 @@ export default function OrderListManager({
             type="text"
             placeholder="🔍 Поиск по названию или описанию..."
             value={searchQuery}
-            onChange={(e) => {
-              const query = e.target.value;
-              setSearchQuery(query);
-              onSearch?.(query);
-            }}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full p-3 bg-background text-foreground placeholder:text-muted-foreground border border-border rounded-lg outline-none focus:border-primary transition"
           />
         </div>
@@ -143,7 +160,7 @@ export default function OrderListManager({
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {sortedOrders.map((order) => (
               <div key={order.id} className="h-full">
-                <OrderCard order={order} onView={onView} onEdit={onEdit} onDuplicate={onDuplicate} onDelete={(id, cid, title) => onDelete(id, cid, title, order.status)} onComplete={onComplete} onAssignOrder={onAssignOrder} onTransferToInstallation={onTransferToInstallation} onRestore={onRestore} isAdmin={isAdmin} />
+                <OrderCard order={order} onView={onView} onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete} onComplete={onComplete} onAssignOrder={onAssignOrder} onTransferToInstallation={onTransferToInstallation} onRestore={onRestore} isAdmin={isAdmin} />
               </div>
             ))}
           </div>

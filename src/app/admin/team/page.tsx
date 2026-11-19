@@ -116,8 +116,8 @@ export default function AdminTeamPage() {
             <h1 className="text-3xl font-headline font-bold">Управление командой</h1>
             <p className="text-sm text-muted-foreground">Добавляйте монтажников и управляйте PIN-кодами.</p>
           </div>
-          <Button variant="secondary" onClick={() => router.push('/admin')}>
-            <Shield className="w-4 h-4" /> Назад в админку
+          <Button variant="secondary" onClick={() => router.push('/')}>
+            <Shield className="w-4 h-4" /> Назад в панель
           </Button>
         </div>
 

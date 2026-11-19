@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin, sendTelegram, formatOrderLine } from '../lib';
 
-function getAlmatyTodayEnd() {
-  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Almaty' }));
-  now.setHours(23, 59, 59, 999);
-  return now;
+function getAlmatyDateString(date: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Almaty',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
 }
 
 export async function GET(request: Request) {
@@ -25,20 +28,30 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const todayEnd = getAlmatyTodayEnd();
+    const todayStr = getAlmatyDateString(new Date());
 
     const overdueOrders = (orders || []).filter((order: any) => {
       if (!order.deadline) return false;
-      const deadlineAt = new Date(order.deadline);
-      return !isNaN(deadlineAt.getTime()) && deadlineAt <= todayEnd;
+      const rawDeadline = String(order.deadline).trim();
+      let deadlineDateStr: string;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(rawDeadline)) {
+        deadlineDateStr = rawDeadline;
+      } else {
+        const deadlineAt = new Date(rawDeadline);
+        if (isNaN(deadlineAt.getTime())) return false;
+        deadlineDateStr = getAlmatyDateString(deadlineAt);
+      }
+      return deadlineDateStr <= todayStr;
     });
 
     const assignedIds = Array.from(new Set(overdueOrders.map((order: any) => order.assigned_to).filter(Boolean)));
-    const { data: profiles } = await supabaseAdmin.from('profiles').select('id, name, full_name').in('id', assignedIds);
-    const assignedNames = (profiles || []).reduce((acc: Record<string, string>, profile: any) => {
-      acc[profile.id] = profile.name || profile.full_name || 'Сотрудник';
-      return acc;
-    }, {});
+    const assignedNames: Record<string, string> = {};
+    if (assignedIds.length > 0) {
+      const { data: profiles } = await supabaseAdmin.from('profiles').select('id, name, full_name').in('id', assignedIds);
+      (profiles || []).forEach((profile: any) => {
+        assignedNames[profile.id] = profile.name || profile.full_name || 'Сотрудник';
+      });
+    }
 
     const text = overdueOrders.length
       ? `<b>🌙 Вечерняя сводка Montazhka PRO</b>\n\nЗаказы с дедлайном сегодня или просроченные:\n\n${overdueOrders.map((order: any) => formatOrderLine(order, assignedNames)).join('\n\n')}`

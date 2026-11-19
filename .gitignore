@@ -43,4 +43,17 @@ next-env.d.ts
 # firebase
 firebase-debug.log
 firestore-debug.log
-.env
+
+# logs & temp files
+*.log
+.modified
+
+# python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+get-pip.py
+
+# archives
+*.zip

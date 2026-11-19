@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -15,11 +15,11 @@ import { OrderCard } from '@/components/orders/OrderCard';
 import OrderListManager from '@/components/orders/OrderListManager';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import * as XLSX from 'xlsx';
 
 async function fetchAllOrders(searchQuery = '') {
-  const filter = searchQuery
-    ? `title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`
+  const sanitizedQuery = searchQuery.trim().replace(/[,()]/g, ' ');
+  const filter = sanitizedQuery
+    ? `title.ilike.%${sanitizedQuery}%,description.ilike.%${sanitizedQuery}%`
     : null;
   let countQuery = supabase.from('orders').select('*', { count: 'exact', head: true });
   if (filter) countQuery = countQuery.or(filter);
@@ -82,8 +82,29 @@ export default function Dashboard() {
   
   const { toast } = useToast();
 
-  const openDuplicateOrder = (order: OrderTemplate) => {
-    if (!currentUserId) {
+  const profilesRef = useRef<any[]>(profiles);
+  profilesRef.current = profiles;
+
+  const ordersRef = useRef<Order[]>(orders);
+  ordersRef.current = orders;
+
+  const currentUserIdRef = useRef<string | null>(currentUserId);
+  currentUserIdRef.current = currentUserId;
+
+  const searchRequestIdRef = useRef(0);
+
+  const handleEditOrder = useCallback((id: string) => {
+    if (!currentUserIdRef.current) {
+      alert('❌ Ошибка: Вы не авторизованы. Пожалуйста, пройдите вход в систему.');
+      return;
+    }
+    setEditingOrderId(id);
+    setDuplicateOrder(null);
+    setIsModalOpen(true);
+  }, []);
+
+  const openDuplicateOrder = useCallback((order: OrderTemplate) => {
+    if (!currentUserIdRef.current) {
       alert('❌ Ошибка: Вы не авторизованы. Пожалуйста, пройдите вход в систему.');
       return;
     }
@@ -98,7 +119,7 @@ export default function Dashboard() {
       source_link: order.source_link,
     });
     setIsModalOpen(true);
-  };
+  }, []);
 
   useEffect(() => {
     const savedAuth = localStorage.getItem('adminAuth');
@@ -165,23 +186,25 @@ export default function Dashboard() {
     };
   }, [currentUserId]);
 
-  const fetchAllData = async () => {
+  const fetchAllData = useCallback(async () => {
     try {
       const [
         { orders: rawOrders, count: totalCount },
         { count: doneCount, error: doneCountError },
         { count: cancelledCount, error: cancelledCountError },
+        { data: rawProfiles },
       ] = await Promise.all([
         fetchAllOrders(),
         supabase.from('orders').select('id', { count: 'exact', head: true }).eq('status', 'completed'),
         supabase.from('orders').select('id', { count: 'exact', head: true }).eq('status', 'cancelled'),
+        supabase.from('profiles').select('*').order('full_name', { ascending: true }),
       ]);
       if (doneCountError) throw doneCountError;
       if (cancelledCountError) throw cancelledCountError;
 
-      const { data: rawProfiles } = await supabase.from('profiles').select('*').order('full_name', { ascending: true });
-
       if (rawProfiles) setProfiles(rawProfiles);
+      const profilesMap = new Map((rawProfiles || []).map((p: any) => [p.id, p]));
+
       const total = totalCount || 0;
       const done = doneCount || 0;
       const cancelled = cancelledCount || 0;
@@ -189,14 +212,14 @@ export default function Dashboard() {
       setTotalOrdersCount(totalCount || 0);
 
       const mergedOrders = (rawOrders || []).map((order: any) => {
-        const assignedProfile = rawProfiles?.find(p => p.id === order.assigned_to);
-        const creatorProfile = rawProfiles?.find(p => p.id === order.created_by);
-        
+        const assignedProfile = order.assigned_to ? profilesMap.get(order.assigned_to) : undefined;
+        const creatorProfile = order.created_by ? profilesMap.get(order.created_by) : undefined;
+
         return {
           ...order,
-          profiles: assignedProfile ? { 
-            full_name: assignedProfile.full_name, 
-            telegram_chat_id: assignedProfile.telegram_chat_id 
+          profiles: assignedProfile ? {
+            full_name: assignedProfile.full_name,
+            telegram_chat_id: assignedProfile.telegram_chat_id
           } : null,
           creator_name: creatorProfile ? creatorProfile.full_name : 'Админ'
         };
@@ -208,9 +231,10 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const searchOrders = async (query: string) => {
+  const searchOrders = useCallback(async (query: string) => {
+    const requestId = ++searchRequestIdRef.current;
     const trimmedQuery = query.trim();
     if (!trimmedQuery) {
       setListSearchResults(null);
@@ -225,9 +249,12 @@ export default function Dashboard() {
       return;
     }
 
+    if (requestId !== searchRequestIdRef.current) return;
+
+    const profilesMap = new Map(profilesRef.current.map((profile: any) => [profile.id, profile]));
     const results = rawOrders.map((order: any) => {
-      const assignedProfile = profiles.find(profile => profile.id === order.assigned_to);
-      const creatorProfile = profiles.find(profile => profile.id === order.created_by);
+      const assignedProfile = order.assigned_to ? profilesMap.get(order.assigned_to) : undefined;
+      const creatorProfile = order.created_by ? profilesMap.get(order.created_by) : undefined;
 
       return {
         ...order,
@@ -240,22 +267,31 @@ export default function Dashboard() {
     });
 
     setListSearchResults(results);
-  };
+  }, []);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      fetchAllData();
-      const channel = supabase
-        .channel('global_changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
-          const text = payload.eventType === 'INSERT' ? 'Создан новый заказ' : 'Заказ обновлен';
-          addNotification(text);
+    if (!isAuthenticated) return;
+
+    fetchAllData();
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const channel = supabase
+      .channel('global_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
+        const text = payload.eventType === 'INSERT' ? 'Создан новый заказ' : 'Заказ обновлен';
+        addNotification(text);
+        if (refreshTimer) clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(() => {
           fetchAllData();
-        })
-        .subscribe();
-      return () => { supabase.removeChannel(channel); };
-    }
-  }, [isAuthenticated]);
+        }, 400);
+      })
+      .subscribe();
+
+    return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      supabase.removeChannel(channel);
+    };
+  }, [isAuthenticated, fetchAllData]);
 
   const addNotification = (text: string) => {
     const newNotif = { id: Math.random().toString(), text, time: new Date().toLocaleTimeString() };
@@ -300,7 +336,7 @@ export default function Dashboard() {
     setPassword('');
   };
 
-  const notifyTelegram = async (chatId: string, text: string) => {
+  const notifyTelegram = useCallback(async (chatId: string, text: string) => {
     const token = process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN;
     if (!token || !chatId) return;
     await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -308,9 +344,9 @@ export default function Dashboard() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: chatId, text: text, parse_mode: 'HTML' })
     });
-  };
+  }, []);
 
-  const handleDelete = async (id: string, chatId: string | null, title: string, status: string) => {
+  const handleDelete = useCallback(async (id: string, chatId: string | null, title: string, status = '') => {
     if (!confirm(`Удалить заказ "${title}"?`)) return;
     const { error } = await supabase.from('orders').delete().eq('id', id);
     if (!error) {
@@ -320,12 +356,12 @@ export default function Dashboard() {
       }
       fetchAllData();
     }
-  };
+  }, [fetchAllData, notifyTelegram, toast]);
 
-  const openAssignModal = (id: string) => {
+  const openAssignModal = useCallback((id: string) => {
     setAssigningOrderId(id);
     setIsAssignModalOpen(true);
-  };
+  }, []);
 
   const executeAssign = async (workerId: string) => {
     if (!assigningOrderId) return;
@@ -357,10 +393,10 @@ export default function Dashboard() {
     }
   };
 
-  const handleComplete = async (id: string) => {
+  const handleComplete = useCallback((id: string) => {
     setCompletingOrderId(id);
     setCompletionPhotos([]);
-  };
+  }, []);
 
   const submitOrderCompletion = async () => {
     if (!completingOrderId) return;
@@ -412,7 +448,7 @@ export default function Dashboard() {
     }
   };
 
-  const handleRestore = async (id: string) => {
+  const handleRestore = useCallback(async (id: string) => {
     try {
       const { error } = await supabase.from('orders').update({ status: 'in_progress' }).eq('id', id);
       if (error) throw error;
@@ -421,23 +457,23 @@ export default function Dashboard() {
     } catch (err: any) {
       alert('Ошибка: ' + err.message);
     }
-  };
+  }, [fetchAllData, toast]);
 
- const handleTransferToInstallation = async (id: string) => {
-    const GROUP_ID = "-1003935954352"; 
+  const handleTransferToInstallation = useCallback(async (id: string) => {
+    const GROUP_ID = "-1003935954352";
     try {
       const { error } = await supabase
         .from('orders')
-        .update({ 
-          department: 'installation', 
-          status: 'new', 
-          assigned_to: null, 
-          is_general: true 
+        .update({
+          department: 'installation',
+          status: 'new',
+          assigned_to: null,
+          is_general: true
         })
         .eq('id', id);
       if (error) throw error;
-      
-      const orderTitle = orders.find(o => o.id === id)?.title || 'Неизвестный объект';
+
+      const orderTitle = ordersRef.current.find(o => o.id === id)?.title || 'Неизвестный объект';
       const text = `🛠 <b>ПЕРЕДАНО МОНТАЖНИКАМ!</b>\n\nНапечатанный баннер готов:\n📍 Объект: <b>${orderTitle}</b>\n\nЗайдите в раздел «🆓 Свободные заказы» в боте.`;
       await notifyTelegram(GROUP_ID, text);
 
@@ -446,9 +482,9 @@ export default function Dashboard() {
     } catch (err: any) {
       alert('Ошибка: ' + err.message);
     }
-  };
+  }, [fetchAllData, notifyTelegram, toast]);
 
-  const executeExport = () => {
+  const executeExport = async () => {
     let filteredForExport = orders;
     if (exportStart) {
       const start = new Date(exportStart);
@@ -464,25 +500,43 @@ export default function Dashboard() {
       alert("Нет заказов за выбранный период");
       return;
     }
-    const dataToExport = filteredForExport.map((o: any) => ({
-      'Объект': o.title,
-      'Описание': o.description || '-',
-      'Статус': o.status === 'completed' ? 'Завершен' : o.status === 'in_progress' ? 'В работе' : 'Новый',
-      'Дедлайн': o.deadline ? new Date(o.deadline).toLocaleDateString() : '-',
-      'Отдел': o.department === 'installation' ? 'Монтаж' : o.department === 'print' ? 'Печать' : o.department === 'production' ? 'Изготовление' : 'Не указан',
-      'Тип заказа': o.is_general ? 'Общий' : 'Личный',
-      'Исполнитель': o.profiles?.full_name || 'Не назначен',
-      'Создал (Админ)': o.creator_name || 'Система',
-      'Дата создания': new Date(o.created_at).toLocaleDateString()
-    }));
-    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Заказы");
-    let fileName = "Отчет_Монтажка";
-    if (exportStart && exportEnd) fileName += `_${exportStart}_по_${exportEnd}`;
-    XLSX.writeFile(workbook, `${fileName}.xlsx`);
-    toast({ title: "Excel файл скачан!" });
-    setIsExportModalOpen(false);
+
+    try {
+      const { default: writeExcelFile } = await import('write-excel-file/browser');
+      const sheetData = [
+        [
+          { value: 'Объект', fontWeight: 'bold' as const },
+          { value: 'Описание', fontWeight: 'bold' as const },
+          { value: 'Статус', fontWeight: 'bold' as const },
+          { value: 'Дедлайн', fontWeight: 'bold' as const },
+          { value: 'Отдел', fontWeight: 'bold' as const },
+          { value: 'Тип заказа', fontWeight: 'bold' as const },
+          { value: 'Исполнитель', fontWeight: 'bold' as const },
+          { value: 'Создал (Админ)', fontWeight: 'bold' as const },
+          { value: 'Дата создания', fontWeight: 'bold' as const },
+        ],
+        ...filteredForExport.map((o: any) => [
+          { value: o.title || '' },
+          { value: o.description || '-' },
+          { value: o.status === 'completed' ? 'Завершен' : o.status === 'in_progress' ? 'В работе' : 'Новый' },
+          { value: o.deadline ? new Date(o.deadline).toLocaleDateString('ru-RU') : '-' },
+          { value: o.department === 'installation' ? 'Монтаж' : o.department === 'print' ? 'Печать' : o.department === 'production' ? 'Изготовление' : 'Не указан' },
+          { value: o.is_general ? 'Общий' : 'Личный' },
+          { value: o.profiles?.full_name || 'Не назначен' },
+          { value: o.creator_name || 'Система' },
+          { value: new Date(o.created_at).toLocaleDateString('ru-RU') },
+        ]),
+      ];
+
+      let fileName = "Отчет_Монтажка";
+      if (exportStart && exportEnd) fileName += `_${exportStart}_по_${exportEnd}`;
+      await writeExcelFile(sheetData, { sheet: 'Заказы' }).toFile(`${fileName}.xlsx`);
+      toast({ title: "Excel файл скачан!" });
+      setIsExportModalOpen(false);
+    } catch (err: any) {
+      console.error('Ошибка экспорта в Excel:', err);
+      alert('Не удалось сформировать Excel файл: ' + (err?.message || 'Неизвестная ошибка'));
+    }
   };
 
   const addStaff = async () => {
@@ -508,14 +562,36 @@ export default function Dashboard() {
     if (!error) fetchAllData();
   };
 
-  const filteredOrders = orders.filter((o: any) => {
-    const matchesSearch = (o.title || '').toLowerCase().includes(searchQuery.toLowerCase());
-    if (!matchesSearch) return false;
-    if (activeTab === 'active') return o.status === 'new' || o.status === 'in_progress';
-    if (activeTab === 'completed') return o.status === 'completed';
-    if (activeTab === 'general') return o.is_general === true;
-    return true;
-  });
+  const inProgressCount = useMemo(
+    () => orders.filter(o => o.status === 'new' || o.status === 'in_progress').length,
+    [orders]
+  );
+
+  const filteredOrders = useMemo(() => {
+    const query = searchQuery.toLowerCase();
+    return orders.filter((o: any) => {
+      const matchesSearch = (o.title || '').toLowerCase().includes(query);
+      if (!matchesSearch) return false;
+      if (activeTab === 'active') return o.status === 'new' || o.status === 'in_progress';
+      if (activeTab === 'completed') return o.status === 'completed';
+      if (activeTab === 'general') return o.is_general === true;
+      return true;
+    });
+  }, [orders, searchQuery, activeTab]);
+
+  const { newOrders, inProgressOrders, completedOrders } = useMemo(() => {
+    const grouped = {
+      newOrders: [] as Order[],
+      inProgressOrders: [] as Order[],
+      completedOrders: [] as Order[],
+    };
+    for (const o of filteredOrders) {
+      if (o.status === 'new') grouped.newOrders.push(o);
+      else if (o.status === 'in_progress') grouped.inProgressOrders.push(o);
+      else if (o.status === 'completed') grouped.completedOrders.push(o);
+    }
+    return grouped;
+  }, [filteredOrders]);
 
   if (!isAuthenticated) {
     return (
@@ -541,7 +617,7 @@ export default function Dashboard() {
           </div>
           <div className="bg-card p-4 rounded-xl border border-border flex items-center gap-4">
             <div className="p-3 bg-brand/10 rounded-lg"><Clock className="text-brand" /></div>
-            <div><p className="text-xs text-muted-foreground font-bold">В работе</p><p className="text-2xl font-bold">{orders.filter(o => o.status === 'new' || o.status === 'in_progress').length}</p></div>
+            <div><p className="text-xs text-muted-foreground font-bold">В работе</p><p className="text-2xl font-bold">{inProgressCount}</p></div>
           </div>
           <div className="bg-card p-4 rounded-xl border border-border flex items-center gap-4">
             <div className="p-3 bg-emerald-500/10 rounded-lg"><CheckCircle2 className="text-emerald-500" /></div>
@@ -608,17 +684,9 @@ export default function Dashboard() {
                 orders={listSearchResults ?? orders}
                 totalOrdersCount={totalOrdersCount}
                 onSearch={searchOrders}
-                onEdit={(id) => {
-                  if (!currentUserId) {
-                    alert('❌ Ошибка: Вы не авторизованы. Пожалуйста, пройдите вход в систему.');
-                    return;
-                  }
-                  setEditingOrderId(id);
-                  setDuplicateOrder(null);
-                  setIsModalOpen(true);
-                }}
+                onEdit={handleEditOrder}
                 onDuplicate={openDuplicateOrder}
-                onDelete={(id, cid, title) => handleDelete(id, cid, title, '')}
+                onDelete={handleDelete}
                 onComplete={handleComplete}
                 onAssignOrder={openAssignModal}
                 onTransferToInstallation={handleTransferToInstallation}
@@ -645,55 +713,31 @@ export default function Dashboard() {
                 
                 {/* КОЛОНКА 1: НОВЫЕ */}
                 <div className="w-full md:min-w-[320px] md:flex-1 bg-muted/20 border border-border p-4 rounded-xl flex flex-col gap-4">
-                  <h3 className="font-bold border-b border-border pb-2 flex justify-between">🆕 Новые <span>{filteredOrders.filter(o => o.status === 'new').length}</span></h3>
-                  {filteredOrders.filter(o => o.status === 'new').map((o: any) => (
-                    <OrderCard key={o.id} order={o} onView={setViewingOrder} onEdit={id => {
-                      if (!currentUserId) {
-                        alert('❌ Ошибка: Вы не авторизованы. Пожалуйста, пройдите вход в систему.');
-                        return;
-                      }
-                      setEditingOrderId(id);
-                      setDuplicateOrder(null);
-                      setIsModalOpen(true);
-                    }} onDuplicate={openDuplicateOrder} onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} onComplete={handleComplete} onAssignOrder={openAssignModal} onTransferToInstallation={handleTransferToInstallation} />
+                  <h3 className="font-bold border-b border-border pb-2 flex justify-between">🆕 Новые <span>{newOrders.length}</span></h3>
+                  {newOrders.map((o: any) => (
+                    <OrderCard key={o.id} order={o} onView={setViewingOrder} onEdit={handleEditOrder} onDuplicate={openDuplicateOrder} onDelete={handleDelete} onComplete={handleComplete} onAssignOrder={openAssignModal} onTransferToInstallation={handleTransferToInstallation} />
                   ))}
                 </div>
 
                 {/* КОЛОНКА 2: В РАБОТЕ */}
                 <div className="w-full md:min-w-[320px] md:flex-1 bg-brand/5 border border-brand/20 p-4 rounded-xl flex flex-col gap-4">
-                  <h3 className="font-bold border-b border-brand/20 pb-2 flex justify-between">⏳ В работе <span>{filteredOrders.filter(o => o.status === 'in_progress').length}</span></h3>
-                  {filteredOrders.filter(o => o.status === 'in_progress').map((o: any) => (
-                    <OrderCard key={o.id} order={o} onView={setViewingOrder} onEdit={id => {
-                      if (!currentUserId) {
-                        alert('❌ Ошибка: Вы не авторизованы. Пожалуйста, пройдите вход в систему.');
-                        return;
-                      }
-                      setEditingOrderId(id);
-                      setDuplicateOrder(null);
-                      setIsModalOpen(true);
-                    }} onDuplicate={openDuplicateOrder} onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)} onComplete={handleComplete} onAssignOrder={openAssignModal} onTransferToInstallation={handleTransferToInstallation} />
+                  <h3 className="font-bold border-b border-brand/20 pb-2 flex justify-between">⏳ В работе <span>{inProgressOrders.length}</span></h3>
+                  {inProgressOrders.map((o: any) => (
+                    <OrderCard key={o.id} order={o} onView={setViewingOrder} onEdit={handleEditOrder} onDuplicate={openDuplicateOrder} onDelete={handleDelete} onComplete={handleComplete} onAssignOrder={openAssignModal} onTransferToInstallation={handleTransferToInstallation} />
                   ))}
                 </div>
 
                 {/* КОЛОНКА 3: ГОТОВО */}
                 <div className="w-full md:min-w-[320px] md:flex-1 bg-emerald-500/5 border border-emerald-500/20 p-4 rounded-xl flex flex-col gap-4">
-                  <h3 className="font-bold border-b border-emerald-500/20 pb-2 flex justify-between">✅ Готово <span>{filteredOrders.filter(o => o.status === 'completed').length}</span></h3>
-                  {filteredOrders.filter(o => o.status === 'completed').map((o: any) => (
+                  <h3 className="font-bold border-b border-emerald-500/20 pb-2 flex justify-between">✅ Готово <span>{completedOrders.length}</span></h3>
+                  {completedOrders.map((o: any) => (
                     <OrderCard
                       key={o.id}
                       order={o}
                       onView={setViewingOrder}
-                      onEdit={id => {
-                        if (!currentUserId) {
-                          alert('❌ Ошибка: Вы не авторизованы. Пожалуйста, пройдите вход в систему.');
-                          return;
-                        }
-                        setEditingOrderId(id);
-                        setDuplicateOrder(null);
-                        setIsModalOpen(true);
-                      }}
+                      onEdit={handleEditOrder}
                       onDuplicate={openDuplicateOrder}
-                      onDelete={(id, cid, title) => handleDelete(id, cid, title, o.status)}
+                      onDelete={handleDelete}
                       onComplete={handleComplete}
                       onAssignOrder={openAssignModal}
                       onTransferToInstallation={handleTransferToInstallation}

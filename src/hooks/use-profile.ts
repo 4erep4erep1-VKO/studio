@@ -75,5 +75,5 @@ export function useProfiles() {
         fetchProfiles();
     }, [fetchProfiles]);
 
-    return { profiles, isLoading, error, refetchProfiles: fetchProfiles };
+    return { profiles, isLoading, error, refetchProfiles: fetchProfiles, refresh: fetchProfiles };
 }

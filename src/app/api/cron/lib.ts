@@ -29,11 +29,35 @@ export async function sendTelegram(text: string) {
     return null;
   }
 
-  return fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: GROUP_CHAT_ID, text, parse_mode: 'HTML', disable_web_page_preview: true }),
+  const endpoint = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
+  const postMessage = (body: Record<string, any>) =>
+    fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10000),
+    });
+
+  const res = await postMessage({
+    chat_id: GROUP_CHAT_ID,
+    text,
+    parse_mode: 'HTML',
+    disable_web_page_preview: true,
   });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error('Telegram cron error:', errText);
+    if (res.status === 400 && /parse entities/i.test(errText)) {
+      return postMessage({
+        chat_id: GROUP_CHAT_ID,
+        text,
+        disable_web_page_preview: true,
+      });
+    }
+  }
+
+  return res;
 }
 
 export function formatOrderLine(order: any, assignedNames: Record<string, string>) {
@@ -41,6 +65,7 @@ export function formatOrderLine(order: any, assignedNames: Record<string, string
   const statusMap: Record<string, string> = {
     'new': '🆕 Новые',
     'in_progress': '⏳ В работе',
+    'awaiting_photos': '📸 Ожидание фото',
     'completed': '✅ Готово'
   };
 

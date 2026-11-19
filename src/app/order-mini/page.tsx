@@ -34,21 +34,21 @@ export default function OrderMiniPage() {
         const tgId = params.get('tg_id');
         
         if (tgId) {
-            async function loadCreatorProfile() {
+            async function loadCreatorProfile(tgIdValue: string) {
                 const { data } = await supabase
                     .from('profiles')
                     .select('id, full_name, name')
-                    .eq('telegram_chat_id', tgId)
+                    .eq('telegram_chat_id', tgIdValue)
                     .limit(1)
                     .maybeSingle();
                 
                 if (data) {
                     setCreatorName(data.full_name || data.name || 'Сотрудник');
-                    setCreatorTgId(tgId);
+                    setCreatorTgId(tgIdValue);
                     setCreatorUuid(data.id); // UUID из базы
                 }
             }
-            loadCreatorProfile();
+            loadCreatorProfile(tgId);
         }
     }, []);
 
@@ -140,7 +140,7 @@ export default function OrderMiniPage() {
                         department,
                         deadline,
                         is_general: isGeneral,
-                        assigned_to: isGeneral ? null : assignedTo,
+                        assigned_to: isGeneral ? undefined : (assignedTo || undefined),
                         image_urls: imageUrls,
                         creator_id: creatorTgId || undefined,
                         creator_full_name: creatorName, 
@@ -173,7 +173,7 @@ export default function OrderMiniPage() {
                 console.error(err);
                 if (tg) {
                     tg.MainButton.hideProgress();
-                    tg.MainButton.showAlert('Ошибка при сохранении в базу');
+                    tg.showAlert('Ошибка при сохранении в базу');
                 }
             } finally {
                 setLoading(false);
@@ -196,7 +196,8 @@ export default function OrderMiniPage() {
                 return compressedBlob;
             }
 
-            return new File([compressedBlob], file.name, { type: compressedBlob.type || file.type });
+            const blob: Blob = compressedBlob;
+            return new File([blob], file.name, { type: blob.type || file.type });
         } catch (err) {
             console.error('Image compression failed:', err);
             return file;
@@ -274,7 +275,7 @@ export default function OrderMiniPage() {
 
     return (
         <>
-            <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
+            <Script src="https://telegram.org/js/telegram-web-app.js" strategy="afterInteractive" />
 
             <div style={{
                 backgroundColor: 'var(--tg-theme-bg-color, #ffffff)',

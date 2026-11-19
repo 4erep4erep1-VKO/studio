@@ -5,7 +5,6 @@ const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const GROUP_CHAT_ID = process.env.TELEGRAM_GROUP_CHAT_ID;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 let rawUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL || 'https://studio-cherepok.vercel.app';
 if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
@@ -28,45 +27,78 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#039;');
 }
 
-// Железобетонный прямой HTTP-запрос к Gemini 2.5 через v1beta
-async function fetchGeminiAI(promptText: string): Promise<string> {
-  if (!GEMINI_API_KEY) return "Ошибка: На сервере не задан GEMINI_API_KEY.";
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-  
-  const systemRole = "ИНСТРУКЦИЯ ДЛЯ ИИ: Ты — ведущий технический инженер, аналитик и диспетчер компании 'Монтажка PRO' (производство наружной рекламы). Твоя задача — консультировать монтажников по технологиям, делать выжимки и давать экспертные комментарии по заказам, а также собирать аналитические отчеты по цехам. Отвечай профессионально, кратко, доступным языком и строго по делу. Конец инструкции.\n\n";
-
-  const payload = {
-    contents: [{ 
-      parts: [{ text: `${systemRole}${promptText}` }] 
-    }]
-  };
-
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    const data = await response.json();
-    if (!response.ok) return `Ошибка API Gemini (${response.status}): ${data?.error?.message || JSON.stringify(data)}`;
-
-    return data?.candidates?.[0]?.content?.parts?.[0]?.text || "ИИ прислал пустой ответ.";
-  } catch (err: any) {
-    return `Ошибка сети при запросе к Gemini: ${err?.message || String(err)}`;
-  }
+function formatDepartment(department?: string | null): string {
+  if (department === 'print') return '🖨 Печать';
+  if (department === 'production') return '🏭 Изготовление';
+  if (department === 'installation') return '🛠 Монтаж';
+  return '';
 }
 
-async function sendTelegram(payload: Record<string, any>) {
+function getAlmatyDateString(date: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Almaty',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+function isOrderUrgent(deadline: unknown, todayStr: string): boolean {
+  if (!deadline) return false;
+  const raw = String(deadline).trim();
+  if (!raw) return false;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return raw <= todayStr;
+  }
+  const parsed = new Date(raw);
+  if (isNaN(parsed.getTime())) return false;
+  return getAlmatyDateString(parsed) <= todayStr;
+}
+
+async function sendTelegram(payload: Record<string, any>): Promise<Response | null> {
   if (!TELEGRAM_TOKEN) return null;
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/${payload.method}`, {
+  const endpoint = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/${payload.method}`;
+  const postTelegram = (body: Record<string, any>) =>
+    fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload.body),
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10000),
     });
-    if (!res.ok) console.error(`❌ Telegram Error [${payload.method}]:`, await res.text());
+
+  try {
+    const res = await postTelegram(payload.body);
+    if (res.ok) return res;
+
+    const errText = await res.text();
+    console.error(`❌ Telegram Error [${payload.method}]:`, errText);
+
+    if (res.status === 429) {
+      let retryAfter = 1;
+      try {
+        const parsed = JSON.parse(errText);
+        if (typeof parsed?.parameters?.retry_after === 'number') {
+          retryAfter = parsed.parameters.retry_after;
+        }
+      } catch (_) {}
+      const delayMs = Math.min(Math.max(retryAfter, 1), 3) * 1000;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      const retryRes = await postTelegram(payload.body);
+      if (!retryRes.ok) {
+        console.error(`❌ Telegram Retry Error [${payload.method}]:`, await retryRes.text());
+      }
+      return retryRes;
+    }
+
+    if (res.status === 400 && payload.body?.parse_mode && /parse entities/i.test(errText)) {
+      const { parse_mode: _ignored, ...plainBody } = payload.body;
+      const fallbackRes = await postTelegram(plainBody);
+      if (!fallbackRes.ok) {
+        console.error(`❌ Telegram Plain Fallback Error [${payload.method}]:`, await fallbackRes.text());
+      }
+      return fallbackRes;
+    }
+
     return res;
   } catch (err) {
     console.error(`❌ Fetch Failed [${payload.method}]:`, err);
@@ -96,7 +128,11 @@ async function sendOrderToTelegram(chatId: string | number, text: string, replyM
   }
   
   if (images.length === 1) {
-    return sendTelegramPhoto(chatId, images[0], text, { reply_markup: replyMarkup });
+    const res = await sendTelegramPhoto(chatId, images[0], text, { reply_markup: replyMarkup });
+    if (!res || !res.ok) {
+      return sendTelegramMessage(chatId, text, { reply_markup: replyMarkup });
+    }
+    return res;
   }
   
   const media = images.slice(0, 10).map((url, index) => ({
@@ -106,14 +142,20 @@ async function sendOrderToTelegram(chatId: string | number, text: string, replyM
     parse_mode: index === 0 ? 'HTML' : undefined
   }));
   
-  await sendTelegram({
+  const mediaRes = await sendTelegram({
     method: 'sendMediaGroup',
     body: { chat_id: chatId, media }
   });
+
+  if (!mediaRes || !mediaRes.ok) {
+    return sendTelegramMessage(chatId, text, { reply_markup: replyMarkup });
+  }
   
   if (replyMarkup) {
     return sendTelegramMessage(chatId, '🎛 <b>Действия с заказом:</b>', { reply_markup: replyMarkup });
   }
+
+  return mediaRes;
 }
 
 async function answerCallbackQuery(callbackQueryId: string, text: string) {
@@ -132,7 +174,7 @@ async function findProfileByTelegramId(telegramId: string) {
   return data;
 }
 
-export async function handlePinAuthorization(chatId: number | string, telegramId: string, text: string): Promise<boolean> {
+async function handlePinAuthorization(chatId: number | string, telegramId: string, text: string): Promise<boolean> {
   try {
     const pin = (text || '').trim();
     if (!pin) return false;
@@ -160,7 +202,7 @@ export async function handlePinAuthorization(chatId: number | string, telegramId
     }
 
     if (!profile) {
-      await sendTelegramMessage(chatId, `❌ Неверный ПИН-код. Код "${pin}" не найден в системе. Проверьте цифры на сайте.`);
+      await sendTelegramMessage(chatId, `❌ Неверный ПИН-код. Код "${escapeHtml(pin)}" не найден в системе. Проверьте цифры на сайте.`);
       return true;
     }
 
@@ -177,31 +219,27 @@ export async function handlePinAuthorization(chatId: number | string, telegramId
     }
 
     const name = profile.full_name || profile.name || 'сотрудник';
-    await sendTelegramMessage(chatId, `✅ Авторизация успешна! ${escapeHtml(name)}, вы привязаны к системе Montazhka PRO.`);
+    await sendTelegramMessage(
+      chatId,
+      `✅ Авторизация успешна! ${escapeHtml(name)}, вы привязаны к системе Montazhka PRO.`,
+      { reply_markup: buildMainMenuKeyboard(Boolean(profile.can_print), chatId) }
+    );
     return true;
   } catch (err: any) {
     console.error('❌ Ошибка в handlePinAuthorization:', err);
-    try { await sendTelegramMessage(chatId, `❌ Внутренняя ошибка авторизации: ${err?.message || err}`); } catch (_) {}
+    try { await sendTelegramMessage(chatId, `❌ Внутренняя ошибка авторизации: ${escapeHtml(String(err?.message || err))}`); } catch (_) {}
     return true;
   }
 }
 
 function buildMainMenuKeyboard(canPrint: boolean, chatId: string | number) {
   const keyboard = [
-    [{ text: '➕ Создать заказ', web_app: { url: `${WEB_APP_URL}?tg_id=${chatId}` } }, { text: '📋 Активные заказы' }], 
-    [{ text: '🔓 Свободные заказы' }, { text: '💼 Мои заказы' }], 
-    [{ text: '📊 Рейтинг' }, { text: '👤 Мой профиль' }],
-    [{ text: '🤖 ИИ-Технолог' }]
+    [{ text: '➕ Создать заказ', web_app: { url: `${WEB_APP_URL}?tg_id=${chatId}` } }, { text: '📋 Активные заказы' }],
+    [{ text: '🔓 Свободные заказы' }, { text: '💼 Мои заказы' }],
+    [{ text: '👥 Занятость' }, { text: '👤 Мой профиль' }],
   ];
   if (canPrint) keyboard.splice(2, 0, [{ text: '🖨 Очередь на печать' }]);
   return { keyboard, resize_keyboard: true };
-}
-
-function buildAIKeyboard() {
-  return {
-    keyboard: [[{ text: '⬅️ Выйти из ИИ' }]],
-    resize_keyboard: true
-  };
 }
 
 async function sendMainMenu(chatId: string | number, canPrint: boolean) {
@@ -247,7 +285,6 @@ async function handleStartCommand(chatId: number | string, telegramId: string) {
     await sendTelegramMessage(chatId, `Привет! Ваш Telegram не привязан к системе Montazhka PRO.\n\nВведите <b>персональный ПИН-код</b>, который вам выдал администратор:`);
     return;
   }
-  await supabase.from('profiles').update({ ai_mode: false }).eq('id', profile.id);
   await sendMainMenu(chatId, Boolean(profile.can_print));
 }
 
@@ -278,7 +315,8 @@ async function handleActiveOrders(chatId: number | string) {
     }
   }
 
-  for (const order of orders) {
+  for (let i = 0; i < orders.length; i++) {
+    const order = orders[i];
     let text = [`<b>📋 Активный заказ</b>`, buildOrderPreview(order)].join('\n');
     const statusText = statusMap[order.status] || order.status;
     text += `\n⚡ Статус: <b>${escapeHtml(statusText)}</b>`;
@@ -289,12 +327,11 @@ async function handleActiveOrders(chatId: number | string) {
       text += `\n👤 Исполнитель: <b>Не назначен (Свободный)</b>`;
     }
 
-    // Решение проблемы 2: Ставим микрозадержку перед отправкой карточки, чтобы все картинки подгрузились
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    const { data: refreshedOrder } = await supabase.from('orders').select('image_urls').eq('id', order.id).single();
-    const urls = refreshedOrder?.image_urls || order.image_urls;
+    await sendOrderToTelegram(chatId, text, undefined, order.image_urls);
 
-    await sendOrderToTelegram(chatId, text, undefined, urls);
+    if (i < orders.length - 1 && Array.isArray(order.image_urls) && order.image_urls.length > 0) {
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
   }
 }
 
@@ -304,8 +341,18 @@ async function handleFreeOrders(chatId: number | string) {
   if (!orders || !orders.length) return sendTelegramMessage(chatId, 'Свободных заказов пока нет.');
   
   for (const order of orders) {
-    const itemText = [`<b>🔓 Свободный заказ</b>`, buildOrderPreview(order)].join('\n');
-    const replyMarkup = { inline_keyboard: [[{ text: 'Забрать заказ', callback_data: `take_${order.id}` }]] };
+    const deptLabel = formatDepartment(order.department);
+    const itemParts = [`<b>🔓 Свободный заказ</b>`, buildOrderPreview(order)];
+    if (deptLabel) itemParts.push(`🏢 Цех: <b>${deptLabel}</b>`);
+    const itemText = itemParts.join('\n');
+    const replyMarkup = {
+      inline_keyboard: [
+        [
+          { text: '✋ Забрать заказ', callback_data: `take_${order.id}` },
+          { text: '📄 Описание заказа', callback_data: `desc_${order.id}` },
+        ],
+      ],
+    };
     await sendOrderToTelegram(chatId, itemText, replyMarkup, order.image_urls);
   }
 }
@@ -351,14 +398,24 @@ async function handleIncomingPhoto(chatId: number | string, telegramId: string, 
   }
 
   const photo = photoArray[photoArray.length - 1];
-  const fileRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/getFile?file_id=${photo.file_id}`).then(r => r.json());
+  const fileRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/getFile?file_id=${photo.file_id}`, {
+    signal: AbortSignal.timeout(10000),
+  }).then(r => r.json());
   if (!fileRes.ok) {
     console.error('❌ Telegram не смог получить фотоотчет:', fileRes);
     await sendTelegramMessage(chatId, '❌ Не удалось загрузить фотоотчет. Попробуйте отправить фотографию еще раз.');
     return;
   }
 
-  const blob = await fetch(`https://api.telegram.org/file/bot${TELEGRAM_TOKEN}/${fileRes.result.file_path}`).then(r => r.blob());
+  const downloadRes = await fetch(`https://api.telegram.org/file/bot${TELEGRAM_TOKEN}/${fileRes.result.file_path}`, {
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!downloadRes.ok) {
+    console.error('❌ Telegram не смог скачать файл фотоотчета:', downloadRes.status);
+    await sendTelegramMessage(chatId, '❌ Не удалось скачать фотоотчет. Попробуйте отправить фотографию еще раз.');
+    return;
+  }
+  const blob = await downloadRes.blob();
   const storagePath = `completed/${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
   
   const { error: uploadErr } = await supabase.storage.from('order-photos').upload(storagePath, blob, { contentType: 'image/jpeg' });
@@ -420,7 +477,8 @@ async function handleRejectOrder(orderId: string, profile: any, callbackQuery: a
   const { error } = await supabase
     .from('orders')
     .update({ assigned_to: null, status: 'new' })
-    .eq('id', orderId);
+    .eq('id', orderId)
+    .eq('assigned_to', profile.id);
 
   if (error) return `Ошибка БД: ${error.message}`;
 
@@ -454,12 +512,83 @@ async function handleCallbackQuery(callbackQuery: any) {
   const { action, id: orderId } = parseCallbackData(callbackData);
   if (!orderId) return answerCallbackQuery(callbackId, 'Ошибка команды.');
 
+  if (action === 'busy') {
+    if (orderId === 'refresh') {
+      const view = await buildWorkloadView();
+      const msgChatId = callbackQuery.message?.chat?.id;
+      const msgId = callbackQuery.message?.message_id;
+      if (msgChatId && msgId) {
+        await sendTelegram({
+          method: 'editMessageText',
+          body: {
+            chat_id: msgChatId,
+            message_id: msgId,
+            text: view.text,
+            parse_mode: 'HTML',
+            disable_web_page_preview: true,
+            reply_markup: view.reply_markup,
+          },
+        });
+      } else if (msgChatId) {
+        await sendTelegramMessage(msgChatId, view.text, view.reply_markup ? { reply_markup: view.reply_markup } : {});
+      }
+      await answerCallbackQuery(callbackId, 'Обновлено');
+      return;
+    }
+
+    if (callbackQuery.message?.chat?.id) {
+      await handleEmployeeWorkload(callbackQuery.message.chat.id, orderId);
+    }
+    await answerCallbackQuery(callbackId, 'Список загружен');
+    return;
+  }
+
   if (action === 'desc') {
-    const { data: order } = await supabase.from('orders').select('title, description').eq('id', orderId).single();
-    let descText = order?.description || 'Описание отсутствует.';
-    descText = descText.replace(/\[album:.*?\]/g, '').trim();
-    const fullMsg = `<b>📄 Описание объекта:</b> ${escapeHtml(order?.title || '')}\n\n${escapeHtml(descText || 'Деталей нет.')}`;
-    if (callbackQuery.message?.chat?.id) { await sendTelegramMessage(callbackQuery.message.chat.id, fullMsg); }
+    const { data: order } = await supabase
+      .from('orders')
+      .select('title, description, department, dimensions, material, source_link, deadline')
+      .eq('id', orderId)
+      .maybeSingle();
+
+    if (!order) {
+      await answerCallbackQuery(callbackId, 'Заказ не найден.');
+      return;
+    }
+
+    const lines: string[] = [`<b>📄 Описание объекта:</b> ${escapeHtml(order.title || '')}`];
+    const deptLabel = formatDepartment(order.department);
+    if (deptLabel) lines.push(`🏢 <b>Цех:</b> ${deptLabel}`);
+
+    if (order.deadline) {
+      const rawDeadline = String(order.deadline).trim();
+      const deadlineDate = new Date(rawDeadline);
+      const formattedDeadline = !isNaN(deadlineDate.getTime())
+        ? deadlineDate.toLocaleDateString('ru-RU')
+        : rawDeadline;
+      lines.push(`📅 <b>Дедлайн:</b> ${escapeHtml(formattedDeadline)}`);
+    }
+
+    if (order.dimensions) {
+      lines.push(`📐 <b>Размеры:</b> ${escapeHtml(String(order.dimensions))}`);
+    }
+    if (order.material) {
+      lines.push(`🎨 <b>Материал:</b> ${escapeHtml(String(order.material))}`);
+    }
+    if (order.source_link) {
+      const link = String(order.source_link).trim();
+      if (/^https?:\/\//i.test(link)) {
+        lines.push(`🔗 <b>Макет:</b> <a href="${escapeHtml(link)}">открыть</a>`);
+      } else {
+        lines.push(`🔗 <b>Макет:</b> ${escapeHtml(link)}`);
+      }
+    }
+
+    const descText = String(order.description || '').replace(/\[album:.*?\]/g, '').trim();
+    lines.push('', escapeHtml(descText || 'Деталей нет.'));
+
+    if (callbackQuery.message?.chat?.id) {
+      await sendTelegramMessage(callbackQuery.message.chat.id, lines.join('\n'));
+    }
     await answerCallbackQuery(callbackId, 'Описание выведено!');
     return;
   }
@@ -478,18 +607,37 @@ async function handleCallbackQuery(callbackQuery: any) {
 
 async function handleTakeOrder(orderId: string, profile: any, callbackQuery: any) {
   const { data: order, error: fetchError } = await supabase.from('orders').select('*').eq('id', orderId).single();
-  if (fetchError || !order || order.status === 'completed' || (order.assigned_to && order.status !== 'new')) {
+  const assignedToAnother = Boolean(order?.assigned_to && order.assigned_to !== profile.id);
+  if (
+    fetchError ||
+    !order ||
+    order.status === 'completed' ||
+    assignedToAnother ||
+    (order.assigned_to === profile.id && order.status !== 'new')
+  ) {
     return 'Заказ недоступен или уже кем-то занят.';
   }
 
-  const { error: updateError } = await supabase
+  let updateQuery = supabase
     .from('orders')
     .update({ assigned_to: profile.id, status: 'in_progress', is_general: false })
     .eq('id', orderId);
 
+  if (!order.assigned_to) {
+    updateQuery = updateQuery.is('assigned_to', null).neq('status', 'completed');
+  } else {
+    updateQuery = updateQuery.eq('assigned_to', profile.id).eq('status', 'new');
+  }
+
+  const { data: updatedOrder, error: updateError } = await updateQuery.select('id').maybeSingle();
+
   if (updateError) {
     console.error('❌ Ошибка Supabase при попытке взять заказ:', updateError);
     return `Ошибка БД: ${updateError.message}`;
+  }
+
+  if (!updatedOrder) {
+    return 'Заказ недоступен или уже кем-то занят.';
   }
 
   const employeeName = profile.name || profile.full_name || 'Сотрудник';
@@ -510,11 +658,18 @@ async function handleTakeOrder(orderId: string, profile: any, callbackQuery: any
 }
 
 async function handleRequestPhotoOrder(orderId: string, profile: any, callbackQuery: any) {
-  const { error: updateError } = await supabase.from('orders').update({ status: 'awaiting_photos' }).eq('id', orderId);
-  if (updateError) console.error('❌ Ошибка перевода в awaiting_photos:', updateError);
-
   const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
   if (!order || order.assigned_to !== profile.id) return 'Ошибка доступа.';
+
+  const { error: updateError } = await supabase
+    .from('orders')
+    .update({ status: 'awaiting_photos' })
+    .eq('id', orderId)
+    .eq('assigned_to', profile.id);
+  if (updateError) {
+    console.error('❌ Ошибка перевода в awaiting_photos:', updateError);
+    return 'Ошибка обновления статуса.';
+  }
 
   if (callbackQuery?.message?.chat?.id && callbackQuery?.message?.message_id) {
     const chatId = callbackQuery.message.chat.id;
@@ -531,11 +686,18 @@ async function handleRequestPhotoOrder(orderId: string, profile: any, callbackQu
 }
 
 async function handleCompleteOrder(orderId: string, profile: any, withoutPhoto = false, callbackQuery: any) {
-  const { error: updateError } = await supabase.from('orders').update({ status: 'completed' }).eq('id', orderId);
-  if (updateError) console.error('❌ Ошибка закрытия заказа:', updateError);
-
   const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
   if (!order || order.assigned_to !== profile.id) return 'Ошибка доступа.';
+
+  const { error: updateError } = await supabase
+    .from('orders')
+    .update({ status: 'completed' })
+    .eq('id', orderId)
+    .eq('assigned_to', profile.id);
+  if (updateError) {
+    console.error('❌ Ошибка закрытия заказа:', updateError);
+    return 'Ошибка закрытия заказа.';
+  }
 
   await notifyGroup(`✅ Заказ <b>${escapeHtml(order.title)}</b> завершен${withoutPhoto ? ' без фото' : ''}.`);
 
@@ -553,11 +715,19 @@ async function handleCompleteOrder(orderId: string, profile: any, withoutPhoto =
 }
 
 async function handleMoveToOffice(orderId: string, profile: any, callbackQuery: any) {
-  const { error: updateError } = await supabase.from('orders').update({ status: 'completed' }).eq('id', orderId);
-  if (updateError) console.error('❌ Ошибка передачи в офис:', updateError);
-
   const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
-  if (!order || order.assigned_to !== profile.id) return 'Ошибка.';
+  if (!order || order.assigned_to !== profile.id) return 'Ошибка доступа.';
+
+  const { error: updateError } = await supabase
+    .from('orders')
+    .update({ status: 'completed' })
+    .eq('id', orderId)
+    .eq('assigned_to', profile.id);
+  if (updateError) {
+    console.error('❌ Ошибка передачи в офис:', updateError);
+    return 'Ошибка передачи в офис.';
+  }
+
   await notifyGroup(`🏢 Заказ <b>${escapeHtml(order.title)}</b> передан в офис.`);
 
   if (callbackQuery?.message?.chat?.id && callbackQuery?.message?.message_id) {
@@ -575,11 +745,20 @@ async function handleMoveToOffice(orderId: string, profile: any, callbackQuery: 
 }
 
 async function handleMoveToProduction(orderId: string, profile: any, callbackQuery: any) {
-  const { error: updateError } = await supabase.from('orders').update({ department: 'production', status: 'new', assigned_to: null }).eq('id', orderId);
-  if (updateError) console.error('❌ Ошибка перевода на изготовление:', updateError);
-
   const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
-  if (!order) return 'Ошибка доступа.';
+  if (!order || (order.assigned_to !== profile.id && !profile.can_print && profile.role !== 'admin')) {
+    return 'Ошибка доступа.';
+  }
+
+  const { error: updateError } = await supabase
+    .from('orders')
+    .update({ department: 'production', status: 'new', assigned_to: null })
+    .eq('id', orderId);
+  if (updateError) {
+    console.error('❌ Ошибка перевода на изготовление:', updateError);
+    return 'Ошибка перевода на изготовление.';
+  }
+
   await notifyGroup(`🏭 Заказ <b>${escapeHtml(order.title)}</b> переведен на изготовление.`);
 
   if (callbackQuery?.message?.chat?.id && callbackQuery?.message?.message_id) {
@@ -597,11 +776,20 @@ async function handleMoveToProduction(orderId: string, profile: any, callbackQue
 }
 
 async function handleMoveToInstallation(orderId: string, profile: any, callbackQuery: any) {
-  const { error: updateError } = await supabase.from('orders').update({ department: 'installation', status: 'new', assigned_to: null }).eq('id', orderId);
-  if (updateError) console.error('❌ Ошибка перевода на монтаж:', updateError);
-
   const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
-  if (!order) return 'Ошибка доступа.';
+  if (!order || (order.assigned_to !== profile.id && !profile.can_print && profile.role !== 'admin')) {
+    return 'Ошибка доступа.';
+  }
+
+  const { error: updateError } = await supabase
+    .from('orders')
+    .update({ department: 'installation', status: 'new', assigned_to: null })
+    .eq('id', orderId);
+  if (updateError) {
+    console.error('❌ Ошибка перевода на монтаж:', updateError);
+    return 'Ошибка перевода на монтаж.';
+  }
+
   await notifyGroup(`🛠 Заказ <b>${escapeHtml(order.title)}</b> переведен на монтаж.`);
 
   if (callbackQuery?.message?.chat?.id && callbackQuery?.message?.message_id) {
@@ -627,14 +815,130 @@ async function handlePrintQueue(chatId: number | string, profile: any) {
 
   for (const order of filteredOrders) {
     const text = [`<b>🖨 Очередь на печать</b>`, buildOrderPreview(order)].join('\n');
-    const replyMarkup = { inline_keyboard: [[{ text: 'Взять в работу', callback_data: `take_${order.id}` }]] };
+    const replyMarkup = {
+      inline_keyboard: [
+        [
+          { text: 'Взять в работу', callback_data: `take_${order.id}` },
+          { text: '📄 Описание заказа', callback_data: `desc_${order.id}` },
+        ],
+      ],
+    };
     await sendOrderToTelegram(chatId, text, replyMarkup, order.image_urls);
   }
 }
 
+async function buildWorkloadView(): Promise<{ text: string; reply_markup?: { inline_keyboard: any[][] } }> {
+  const [{ data: profiles, error: profilesError }, { data: activeOrders, error: ordersError }] = await Promise.all([
+    supabase.from('profiles').select('id, name, full_name, role'),
+    supabase
+      .from('orders')
+      .select('id, assigned_to, deadline, status')
+      .not('status', 'in', '("completed","cancelled")'),
+  ]);
+
+  if (profilesError || ordersError) {
+    console.error('❌ Ошибка загрузки занятости:', profilesError || ordersError);
+    return { text: '❌ Не удалось загрузить занятость сотрудников. Попробуйте позже.' };
+  }
+
+  const todayStr = getAlmatyDateString(new Date());
+  const statsByUser: Record<string, { total: number; urgent: number }> = {};
+  let freeCount = 0;
+  let assignedTotal = 0;
+
+  for (const order of activeOrders || []) {
+    if (!order.assigned_to) {
+      freeCount++;
+      continue;
+    }
+    assignedTotal++;
+    const current = statsByUser[order.assigned_to] || { total: 0, urgent: 0 };
+    current.total += 1;
+    if (isOrderUrgent(order.deadline, todayStr)) {
+      current.urgent += 1;
+    }
+    statsByUser[order.assigned_to] = current;
+  }
+
+  const staffList = (profiles || [])
+    .filter((p: any) => p.role !== 'admin' || (statsByUser[p.id]?.total || 0) > 0)
+    .map((p: any) => {
+      const counts = statsByUser[p.id] || { total: 0, urgent: 0 };
+      const displayName = String(p.full_name || p.name || 'Сотрудник');
+      return {
+        id: p.id,
+        displayName,
+        total: counts.total,
+        urgent: counts.urgent,
+      };
+    })
+    .sort((a, b) => a.total - b.total || a.displayName.localeCompare(b.displayName, 'ru'));
+
+  const inline_keyboard = staffList.map((emp) => {
+    const icon = emp.total === 0 ? '🟢' : emp.total <= 2 ? '🟡' : '🔴';
+    const urgentSuffix = emp.urgent > 0 ? ` (${emp.urgent} 🔥)` : '';
+    return [
+      {
+        text: `${icon} ${emp.displayName} — ${emp.total}${urgentSuffix}`,
+        callback_data: `busy_${emp.id}`,
+      },
+    ];
+  });
+  inline_keyboard.push([{ text: '🔄 Обновить', callback_data: 'busy_refresh' }]);
+
+  const text = [
+    '<b>👥 Занятость сотрудников</b>',
+    `В работе у сотрудников: <b>${assignedTotal}</b> | Свободных: <b>${freeCount}</b>`,
+    '',
+    staffList.length ? 'Нажмите на сотрудника, чтобы посмотреть его заказы:' : 'Сотрудники не найдены.',
+  ].join('\n');
+
+  return { text, reply_markup: { inline_keyboard } };
+}
+
+async function handleWorkloadMenu(chatId: number | string) {
+  const view = await buildWorkloadView();
+  await sendTelegramMessage(chatId, view.text, view.reply_markup ? { reply_markup: view.reply_markup } : {});
+}
+
+async function handleEmployeeWorkload(chatId: number | string, employeeId: string) {
+  const [{ data: employee }, { data: orders, error }] = await Promise.all([
+    supabase.from('profiles').select('id, name, full_name').eq('id', employeeId).maybeSingle(),
+    supabase
+      .from('orders')
+      .select('title')
+      .eq('assigned_to', employeeId)
+      .not('status', 'in', '("completed","cancelled")')
+      .order('deadline', { ascending: true }),
+  ]);
+
+  if (error) {
+    console.error('❌ Ошибка загрузки заказов сотрудника:', error);
+    await sendTelegramMessage(chatId, '❌ Не удалось загрузить заказы сотрудника.');
+    await handleWorkloadMenu(chatId);
+    return;
+  }
+
+  const empName = String(employee?.full_name || employee?.name || 'Сотрудник');
+  const activeOrders = orders || [];
+
+  let text: string;
+  if (activeOrders.length > 0) {
+    const titles = activeOrders
+      .map((o: any, idx: number) => `${idx + 1}. ${escapeHtml(String(o.title || 'Без названия'))}`)
+      .join('\n');
+    text = `<b>👷 ${escapeHtml(empName)}</b> — активных заказов: <b>${activeOrders.length}</b>\n\n${titles}`;
+  } else {
+    text = `<b>👷 ${escapeHtml(empName)}</b>\n\nСейчас свободен — активных заказов нет.`;
+  }
+
+  await sendTelegramMessage(chatId, text);
+  await handleWorkloadMenu(chatId);
+}
+
 function parseCallbackData(data: string) {
   const normalized = data.replace(/:/g, '_');
-  const knownActions = ['reject', 'complete_without_photo', 'complete_with_photo', 'finish_without_photo', 'print_to_office', 'print_to_production', 'print_to_installation', 'take_print', 'take', 'office', 'production', 'installation', 'complete', 'desc'];
+  const knownActions = ['reject', 'complete_without_photo', 'complete_with_photo', 'finish_without_photo', 'print_to_office', 'print_to_production', 'print_to_installation', 'take_print', 'take', 'office', 'production', 'installation', 'complete', 'desc', 'busy'];
   for (const action of knownActions) { if (normalized.startsWith(`${action}_`)) return { action, id: normalized.slice(action.length + 1) }; }
   const [action, ...rest] = normalized.split('_');
   return { action, id: rest.join('_') };
@@ -688,45 +992,6 @@ export async function POST(request: Request) {
         return new Response('OK', { status: 200 });
       }
 
-      // --- ОБНОВЛЕННЫЙ ОПТИМИЗИРОВАННЫЙ ИИ-РЕЖИМ ---
-      if (currentProfile.ai_mode && text !== '⬅️ Выйти из ИИ' && text !== '/start') {
-        await sendTelegram({ method: 'sendChatAction', body: { chat_id: chatId, action: 'typing' } });
-        
-        const isReportRequest = /отчет|сводка|аналитика|статистика|что по заказам/i.test(text);
-        const limitCount = isReportRequest ? 20 : 7;
-        
-        const { data: allOrders } = await supabase
-          .from('orders')
-          .select('title, department, status, deadline, description')
-          .neq('status', 'completed')
-          .order('updated_at', { ascending: false })
-          .limit(limitCount);
-        
-        let ordersContext = "СПИСОК АКТИВНЫХ ЗАКАЗОВ В СИСТЕМЕ МОНТАЖКА PRO:\n";
-        if (allOrders && allOrders.length > 0) {
-          allOrders.forEach((o, i) => {
-            ordersContext += `- [${i + 1}] "${o.title}" | Цех: ${o.department} | Статус: ${o.status} | Срок: ${o.deadline || 'нет'} | ТЗ: ${o.description || 'нет'}\n`;
-          });
-        } else {
-          ordersContext += "Сейчас active заказов в базе нет.\n";
-        }
-
-        const currentDateStr = new Date().toLocaleDateString('ru-RU');
-        const timeContext = `Сегодняшняя дата: ${currentDateStr}.\n\n`;
-
-        if (isReportRequest) {
-          const reportPrompt = `${timeContext}${ordersContext}\nИнструкция: Сделай краткий директорский отчет по цехам (print, production, installation). Сгруппируй сколько заказов где висит, выдели жирным шрифтом объекты, у которых горят сроки. Отвечай строго в HTML разметке Telegram (используй <b>, <i>, <code>).`;
-          const reportResponse = await fetchGeminiAI(reportPrompt);
-          await sendTelegramMessage(chatId, reportResponse, { reply_markup: buildAIKeyboard() });
-          return new Response('OK', { status: 200 });
-        }
-
-        const generalPrompt = `${timeContext}${ordersContext}\nИнструкция: Если пользователь спрашивает про конкретный заказ, найди его по смыслу, выведи его описание, ТЗ и дай свои экспертные рекомендации/комментарии по его выполнению или монтажу.\nЗапрос пользователя: ${text}`;
-        const generalResponse = await fetchGeminiAI(generalPrompt);
-        await sendTelegramMessage(chatId, generalResponse, { reply_markup: buildAIKeyboard() });
-        return new Response('OK', { status: 200 });
-      }
-
       switch (text) {
         case '/start': await handleStartCommand(chatId, telegramId); break;
         case '📋 Активные заказы': await handleActiveOrders(chatId); break;
@@ -740,30 +1005,13 @@ export async function POST(request: Request) {
           await sendTelegramMessage(chatId, `<b>👤 Мой профиль</b>\nВ работе: ${activeOrders?.length || 0}\nЗавершено: ${completedOrders?.length || 0}\n\n<b>Ближайшие дедлайны</b>:\n${deadlines.length ? deadlines.join('\n') : 'Нет дедлайнов.'}`);
           break;
         }
-        case '📊 Рейтинг': {
-          const { data } = await supabase.from('orders').select('assigned_to').eq('status', 'completed');
-          const counts = (data || []).reduce<Record<string, number>>((acc, o) => { if (o.assigned_to) acc[o.assigned_to] = (acc[o.assigned_to] || 0) + 1; return acc; }, {});
-          const sorted = Object.entries(counts).sort(([, a], [, b]) => b - a).slice(0, 10);
-          if (!sorted.length) { await sendTelegramMessage(chatId, 'Рейтинг пока пуст.'); break; }
-          const { data: profiles } = await supabase.from('profiles').select('id, name, full_name').in('id', sorted.map(([id]) => id));
-          const namesById = (profiles || []).reduce<Record<string, string>>((acc, p) => { acc[p.id] = p.name || p.full_name || 'Сотрудник'; return acc; }, {});
-          const lines = sorted.map(([id, count], index) => `${index + 1}. ${escapeHtml(namesById[id] || 'Сотрудник')} — ${count}`);
-          await sendTelegramMessage(chatId, `<b>📊 Рейтинг</b>\n${lines.join('\n')}`);
+        case '👥 Занятость': {
+          await handleWorkloadMenu(chatId);
           break;
         }
         case '🖨 Очередь на печать': {
           if (currentProfile?.can_print) await handlePrintQueue(chatId, currentProfile);
           else await sendMainMenu(chatId, false);
-          break;
-        }
-        case '🤖 ИИ-Технолог': {
-          await supabase.from('profiles').update({ ai_mode: true }).eq('id', currentProfile.id);
-          await sendTelegramMessage(chatId, '🤖 <b>Режим ИИ-Технолога активирован.</b>\n\nВы можете:\n1. <b>Искать заказы и просить советы:</b> <i>"Что там по трикотажке? Дай рекомендации"</i>\n2. <b>Просить аналитику:</b> <i>"Выдай отчет по цехам"</i>\n3. <b>Задавать вопросы по монтажу:</b> <i>"Как закрепить короб на вентилируемый фасад?"</i>', { reply_markup: buildAIKeyboard() });
-          break;
-        }
-        case '⬅️ Выйти из ИИ': {
-          await supabase.from('profiles').update({ ai_mode: false }).eq('id', currentProfile.id);
-          await sendMainMenu(chatId, Boolean(currentProfile?.can_print));
           break;
         }
         default: {

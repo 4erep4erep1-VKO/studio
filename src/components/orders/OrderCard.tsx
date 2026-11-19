@@ -8,7 +8,7 @@ interface OrderCardProps {
   order: any;
   onView: (order: any) => void;
   onEdit: (id: string) => void;
-  onDelete: (id: string, assignedToChatId: string | null, title: string) => void;
+  onDelete: (id: string, assignedToChatId: string | null, title: string, status?: string) => void;
   onComplete: (id: string) => void;
   onDuplicate?: (order: OrderTemplate) => void;
   onAssignOrder?: (id: string) => void;
@@ -17,7 +17,7 @@ interface OrderCardProps {
   isAdmin?: boolean;
 }
 
-export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onDuplicate, onAssignOrder, onTransferToInstallation, onRestore, isAdmin }: OrderCardProps) {
+export const OrderCard = React.memo(function OrderCard({ order, onView, onEdit, onDelete, onComplete, onDuplicate, onAssignOrder, onTransferToInstallation, onRestore, isAdmin }: OrderCardProps) {
   const chatId = order.profiles?.telegram_chat_id || null;
   const reportPhotos = Array.from(new Set([
     ...(Array.isArray(order.report_photos) ? order.report_photos : []),
@@ -185,9 +185,9 @@ export function OrderCard({ order, onView, onEdit, onDelete, onComplete, onDupli
         <div className="flex items-center justify-end gap-3 pt-2 mt-2 border-t border-border/40">
           <button onClick={() => onDuplicate?.(order)} className="flex items-center gap-1 px-1.5 py-1 text-primary hover:bg-primary/10 rounded-lg text-xs font-bold transition whitespace-nowrap" title="Как образец" aria-label={`Создать заказ по образцу: ${order.title}`}><Copy className="h-3.5 w-3.5" /> Как образец</button>
           <button onClick={() => onEdit(order.id)} className="px-1.5 py-1 text-primary hover:bg-primary/10 rounded-lg text-xs font-bold transition whitespace-nowrap">Правка</button>
-          <button onClick={() => onDelete(order.id, chatId, order.title)} className="p-1.5 text-destructive hover:bg-destructive/10 rounded-lg transition" title="Удалить"><Trash2 className="w-4 h-4" /></button>
+          <button onClick={() => onDelete(order.id, chatId, order.title, order.status)} className="p-1.5 text-destructive hover:bg-destructive/10 rounded-lg transition" title="Удалить"><Trash2 className="w-4 h-4" /></button>
         </div>
       </div>
     </div>
   );
-}
+});

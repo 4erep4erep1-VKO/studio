@@ -130,7 +130,8 @@ export default function OrderForm({ orderId, duplicateFrom, onSave, creatorId, e
         fileType: file.type,
       });
       if (compressedBlob instanceof File) return compressedBlob;
-      return new File([compressedBlob], file.name, { type: compressedBlob.type || file.type });
+      const blob: Blob = compressedBlob;
+      return new File([blob], file.name, { type: blob.type || file.type });
     } catch (err) {
       console.error('Image compression failed:', err);
       return file;
