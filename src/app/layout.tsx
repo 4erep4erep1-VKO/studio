@@ -3,6 +3,7 @@ import Link from "next/link"
 import { ThemeProvider } from "@/components/theme-provider"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import CalculatorWidget from "@/components/CalculatorWidget"
+import { Toaster } from "@/components/ui/toaster"
 import "./globals.css"
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -15,11 +16,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           enableSystem
           disableTransitionOnChange
         >
-          <header className="relative p-4 flex justify-between items-center border-b bg-card">
-            <Link href="/" className="flex items-center gap-2.5">
-              <img
+          <header className="relative px-4 py-3 flex justify-between items-center gap-3 border-b bg-card">
+            <Link href="/" className="flex items-center gap-2.5 shrink-0">
+              <Image
                 src="/Logo2.png"
                 alt="Монтажка PRO"
+                width={66}
+                height={36}
+                priority
                 className="h-9 w-auto object-contain rounded-md shrink-0"
               />
               <span className="hidden sm:inline-block text-sm md:text-base font-bold tracking-tight text-foreground/90">
@@ -34,14 +38,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 src="/logo.png"
                 alt="Монтажка PRO"
                 width={280}
-                height={100}
-                className="object-contain h-8 w-auto md:h-auto"
+                height={49}
+                priority
+                className="object-contain h-7 sm:h-8 w-auto max-w-[130px] sm:max-w-[180px] md:max-w-[220px] lg:max-w-[260px]"
               />
             </Link>
             <ThemeToggle />
           </header>
           <main>{children}</main>
           <CalculatorWidget />
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>

@@ -1,6 +1,6 @@
 // components/orders/OrderCard.tsx
 import React from 'react';
-import { Trash2, CheckCircle, User, UserPlus, Truck, Copy } from 'lucide-react';
+import { Trash2, CheckCircle, User, UserPlus, Truck, Copy, Pencil } from 'lucide-react';
 import { OrderTemplate } from '@/lib/types';
 import confetti from 'canvas-confetti';
 
@@ -70,33 +70,33 @@ export const OrderCard = React.memo(function OrderCard({ order, onView, onEdit, 
 
       {/* ЗАГОЛОВОК И ОПИСАНИЕ - КЛИКАБЕЛЬНЫЕ */}
       <div onClick={() => onView(order)} className="cursor-pointer group mb-4 -mx-5 -mt-5 px-5 pt-5 pb-4 relative z-20">
-        <div className="flex justify-between items-start">
+        <div className="flex justify-between items-start gap-2">
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            <h3 className="min-w-0 font-bold text-lg leading-[1.375rem] text-card-foreground group-hover:text-primary transition mb-2 line-clamp-2 min-h-[2.75rem]">{order.title}</h3>
+            <h3 className="min-w-0 font-bold text-lg leading-[1.375rem] text-card-foreground group-hover:text-primary transition mb-2 line-clamp-2 min-h-[2.75rem] break-words">{order.title}</h3>
           </div>
-          <div className="flex gap-2">
-             {order.preview_url && <span className="text-[10px] text-primary bg-primary/10 border border-primary/20 px-2 py-1 rounded uppercase font-bold">Эскиз</span>}
-             <span className={`text-[10px] px-2 py-1 rounded uppercase font-bold ${order.department === 'print' ? 'bg-purple-500/10 text-purple-500' : order.department === 'production' ? 'bg-brand/10 text-brand' : 'bg-blue-500/10 text-blue-500'}`}>
+          <div className="flex items-center gap-1.5 shrink-0">
+             {order.preview_url && <span className="text-[10px] text-primary bg-primary/10 border border-primary/20 px-2 py-1 rounded uppercase font-bold whitespace-nowrap">Эскиз</span>}
+             <span className={`text-[10px] px-2 py-1 rounded uppercase font-bold whitespace-nowrap ${order.department === 'print' ? 'bg-purple-500/10 text-purple-500' : order.department === 'production' ? 'bg-brand/10 text-brand' : 'bg-blue-500/10 text-blue-500'}`}>
                {order.department === 'print' ? '🖨 Печать' : order.department === 'production' ? '🏭 Изготовление' : '🛠 Монтаж'}
              </span>
           </div>
         </div>
         
-        <p className="text-muted-foreground text-sm line-clamp-2 min-h-[2.5rem]">
+        <p className="text-muted-foreground text-sm line-clamp-2 min-h-[2.5rem] break-words">
           {order.description || 'Нет описания'}
         </p>
       </div>
       
       <div className="space-y-2 text-sm mb-4 bg-background/50 p-3 rounded-lg border border-border/50 relative z-20">
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Дедлайн:</span>
-          <span className={`font-bold ${deadlineStatus === 'critical' ? 'text-red-500' : deadlineStatus === 'warning' ? 'text-brand' : 'text-foreground'}`}>
+        <div className="flex justify-between items-center gap-2">
+          <span className="text-muted-foreground shrink-0">Дедлайн:</span>
+          <span className={`font-bold text-right ${deadlineStatus === 'critical' ? 'text-red-500' : deadlineStatus === 'warning' ? 'text-brand' : 'text-foreground'}`}>
             {order.deadline ? new Date(order.deadline).toLocaleDateString('ru-RU') : '—'}
           </span>
         </div>
-        <div className="flex justify-between items-center">
-          <span className="text-muted-foreground">Исполнитель:</span>
-          <span className="text-foreground font-medium">
+        <div className="flex justify-between items-center gap-2">
+          <span className="text-muted-foreground shrink-0">Исполнитель:</span>
+          <span className="text-foreground font-medium min-w-0 truncate text-right">
             {order.is_general ? (
               <span className="text-primary text-xs uppercase font-bold">Общий заказ</span>
             ) : (
@@ -105,11 +105,11 @@ export const OrderCard = React.memo(function OrderCard({ order, onView, onEdit, 
           </span>
         </div>
         
-        <div className="flex justify-between items-center border-t border-border/80 pt-2 mt-2">
-          <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider">Создал:</span>
-          <div className="flex items-center gap-1 text-muted-foreground">
-            <User className="w-3 h-3" />
-            <span className="text-xs">{order.creator_name || 'Админ'}</span>
+        <div className="flex justify-between items-center gap-2 border-t border-border/80 pt-2 mt-2">
+          <span className="text-muted-foreground text-xs uppercase font-bold tracking-wider shrink-0">Создал:</span>
+          <div className="flex items-center gap-1 text-muted-foreground min-w-0">
+            <User className="w-3 h-3 shrink-0" />
+            <span className="text-xs truncate">{order.creator_name || 'Админ'}</span>
           </div>
         </div>
       </div>
@@ -128,8 +128,8 @@ export const OrderCard = React.memo(function OrderCard({ order, onView, onEdit, 
       )}
 
       <div className="mt-auto pt-3 relative z-20">
-        <div className="flex items-center justify-between gap-2 min-h-[32px]">
-          <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
+        <div className="flex flex-wrap items-center justify-between gap-2 min-h-[32px]">
+          <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${
             order.status === 'completed' ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 
             order.status === 'in_progress' ? 'bg-brand/20 text-brand' :
             'bg-muted text-muted-foreground border border-border'
@@ -137,9 +137,9 @@ export const OrderCard = React.memo(function OrderCard({ order, onView, onEdit, 
             {order.status === 'completed' ? 'Завершен' : order.status === 'in_progress' ? 'В работе' : 'Новый'}
           </span>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             {order.status === 'new' && onAssignOrder && (
-              <button onClick={() => onAssignOrder(order.id)} className="flex items-center gap-1 px-1.5 py-1 text-brand hover:bg-brand/10 rounded-lg text-xs font-bold transition whitespace-nowrap" title="Назначить исполнителя">
+              <button onClick={() => onAssignOrder(order.id)} className="h-7 px-2 inline-flex items-center gap-1 text-brand hover:bg-brand/10 rounded-md text-xs font-bold transition whitespace-nowrap" title="Назначить исполнителя">
                 <UserPlus className="w-3.5 h-3.5"/> Назначить
               </button>
             )}
@@ -148,7 +148,7 @@ export const OrderCard = React.memo(function OrderCard({ order, onView, onEdit, 
               <>
                 <button
                   onClick={handleComplete}
-                  className="flex items-center gap-1 px-1.5 py-1 text-emerald-600 hover:bg-emerald-500/10 rounded-lg text-xs font-bold transition whitespace-nowrap"
+                  className="h-7 px-2 inline-flex items-center gap-1 text-emerald-600 hover:bg-emerald-500/10 rounded-md text-xs font-bold transition whitespace-nowrap"
                   title="Завершить (В офис)"
                 >
                   <CheckCircle className="w-3.5 h-3.5" /> В офис
@@ -156,7 +156,7 @@ export const OrderCard = React.memo(function OrderCard({ order, onView, onEdit, 
                 {onTransferToInstallation && (
                   <button
                     onClick={() => onTransferToInstallation(order.id)}
-                    className="flex items-center gap-1 px-1.5 py-1 text-blue-600 hover:bg-blue-500/10 rounded-lg text-xs font-bold transition whitespace-nowrap"
+                    className="h-7 px-2 inline-flex items-center gap-1 text-blue-600 hover:bg-blue-500/10 rounded-md text-xs font-bold transition whitespace-nowrap"
                     title="Передать на монтаж"
                   >
                     <Truck className="w-3.5 h-3.5" /> На монтаж
@@ -165,7 +165,7 @@ export const OrderCard = React.memo(function OrderCard({ order, onView, onEdit, 
               </>
             ) : (
               order.status !== 'completed' && (
-                <button onClick={handleComplete} className="p-1.5 text-emerald-600 hover:bg-emerald-500/10 rounded-lg transition" title="Завершить">
+                <button onClick={handleComplete} className="h-7 w-7 inline-flex items-center justify-center text-emerald-600 hover:bg-emerald-500/10 rounded-md transition" title="Завершить" aria-label="Завершить заказ">
                   <CheckCircle className="w-4 h-4" />
                 </button>
               )
@@ -174,7 +174,7 @@ export const OrderCard = React.memo(function OrderCard({ order, onView, onEdit, 
             {order.status === 'completed' && isAdmin && onRestore && (
               <button
                 onClick={() => onRestore(order.id)}
-                className="flex items-center gap-1 px-1.5 py-1 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-bold transition whitespace-nowrap"
+                className="h-7 px-2 inline-flex items-center gap-1 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md text-xs font-bold transition whitespace-nowrap"
                 title="Вернуть заказ в работу"
               >
                 ↩️ Вернуть в работу
@@ -182,10 +182,10 @@ export const OrderCard = React.memo(function OrderCard({ order, onView, onEdit, 
             )}
           </div>
         </div>
-        <div className="flex items-center justify-end gap-3 pt-2 mt-2 border-t border-border/40">
-          <button onClick={() => onDuplicate?.(order)} className="flex items-center gap-1 px-1.5 py-1 text-primary hover:bg-primary/10 rounded-lg text-xs font-bold transition whitespace-nowrap" title="Как образец" aria-label={`Создать заказ по образцу: ${order.title}`}><Copy className="h-3.5 w-3.5" /> Как образец</button>
-          <button onClick={() => onEdit(order.id)} className="px-1.5 py-1 text-primary hover:bg-primary/10 rounded-lg text-xs font-bold transition whitespace-nowrap">Правка</button>
-          <button onClick={() => onDelete(order.id, chatId, order.title, order.status)} className="p-1.5 text-destructive hover:bg-destructive/10 rounded-lg transition" title="Удалить"><Trash2 className="w-4 h-4" /></button>
+        <div className="flex flex-wrap items-center justify-end gap-1.5 pt-2 mt-2 border-t border-border/40">
+          <button onClick={() => onDuplicate?.(order)} className="h-7 px-2 inline-flex items-center gap-1 text-primary hover:bg-primary/10 rounded-md text-xs font-bold transition whitespace-nowrap" title="Как образец" aria-label={`Создать заказ по образцу: ${order.title}`}><Copy className="h-3.5 w-3.5" /> Как образец</button>
+          <button onClick={() => onEdit(order.id)} className="h-7 px-2 inline-flex items-center gap-1 text-primary hover:bg-primary/10 rounded-md text-xs font-bold transition whitespace-nowrap"><Pencil className="h-3.5 w-3.5" /> Правка</button>
+          <button onClick={() => onDelete(order.id, chatId, order.title, order.status)} className="h-7 w-7 shrink-0 inline-flex items-center justify-center text-destructive hover:bg-destructive/10 rounded-md transition" title="Удалить" aria-label={`Удалить заказ: ${order.title}`}><Trash2 className="w-4 h-4" /></button>
         </div>
       </div>
     </div>

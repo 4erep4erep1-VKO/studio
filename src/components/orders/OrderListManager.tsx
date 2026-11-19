@@ -114,31 +114,31 @@ export default function OrderListManager({
           </div>
 
           {/* Кнопки переключения вида (Добавлена плитка) */}
-          <div className="flex bg-background border border-border rounded-lg p-1 w-full md:w-auto overflow-x-auto">
+          <div className="flex bg-background border border-border rounded-lg p-1 w-full md:w-auto gap-1">
             <button
               onClick={() => setViewMode('grid')}
-              className={`flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-bold transition whitespace-nowrap ${viewMode === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              className={`flex-1 md:flex-none h-9 flex items-center justify-center gap-2 px-3 rounded-md text-sm font-bold transition whitespace-nowrap ${viewMode === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               title="Крупная сетка"
             >
-              <Grid3x3 className="w-4 h-4" />
+              <Grid3x3 className="w-4 h-4 shrink-0" />
               <span className="hidden lg:inline">Плитки</span>
             </button>
             
             <button
               onClick={() => setViewMode('compact')}
-              className={`flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-bold transition whitespace-nowrap ${viewMode === 'compact' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              className={`flex-1 md:flex-none h-9 flex items-center justify-center gap-2 px-3 rounded-md text-sm font-bold transition whitespace-nowrap ${viewMode === 'compact' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               title="Мелкая сетка"
             >
-              <LayoutGrid className="w-4 h-4" />
+              <LayoutGrid className="w-4 h-4 shrink-0" />
               <span className="hidden lg:inline">Мелкая плитка</span>
             </button>
 
             <button
               onClick={() => setViewMode('list')}
-              className={`flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-bold transition whitespace-nowrap ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              className={`flex-1 md:flex-none h-9 flex items-center justify-center gap-2 px-3 rounded-md text-sm font-bold transition whitespace-nowrap ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               title="Вид списком"
             >
-              <List className="w-4 h-4" />
+              <List className="w-4 h-4 shrink-0" />
               <span className="hidden lg:inline">Список</span>
             </button>
           </div>
@@ -157,44 +157,44 @@ export default function OrderListManager({
             <p className="text-muted-foreground font-medium">{searchQuery ? 'Заказов не найдено' : 'Нет заказов'}</p>
           </div>
         ) : viewMode === 'grid' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {sortedOrders.map((order) => (
-              <div key={order.id} className="h-full">
+              <div key={order.id} className="h-full min-w-0">
                 <OrderCard order={order} onView={onView} onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete} onComplete={onComplete} onAssignOrder={onAssignOrder} onTransferToInstallation={onTransferToInstallation} onRestore={onRestore} isAdmin={isAdmin} />
               </div>
             ))}
           </div>
         ) : viewMode === 'compact' ? (
           /* РЕЖИМ МЕЛКОЙ ПЛИТКИ */
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2.5">
             {sortedOrders.map((order) => (
               <div 
                 key={order.id} 
-                className="bg-card border border-border p-2 rounded-lg hover:border-primary transition flex flex-col justify-between h-32 cursor-pointer group relative shadow-sm"
+                className="bg-card border border-border p-2.5 rounded-lg hover:border-primary transition flex flex-col justify-between min-h-[136px] cursor-pointer group relative shadow-sm min-w-0"
                 onClick={() => onView(order)}
               >
                 <div>
                   <div className="flex items-center justify-between gap-1 mb-1">
-                    <span className={`text-[8px] px-1 rounded font-black uppercase ${order.department === 'print' ? 'bg-purple-500/20 text-purple-500' : order.department === 'production' ? 'bg-brand/20 text-brand' : 'bg-blue-500/20 text-blue-500'}`}>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-black uppercase truncate max-w-[75%] ${order.department === 'print' ? 'bg-purple-500/20 text-purple-500' : order.department === 'production' ? 'bg-brand/20 text-brand' : 'bg-blue-500/20 text-blue-500'}`}>
                       {order.department === 'print' ? 'ПЕЧАТЬ' : order.department === 'production' ? 'ИЗГОТОВЛЕНИЕ' : 'МОНТАЖ'}
                     </span>
-                    <span className="text-[10px]">{order.status === 'completed' ? '✅' : order.status === 'in_progress' ? '⏳' : '🆕'}</span>
+                    <span className="text-[10px] shrink-0">{order.status === 'completed' ? '✅' : order.status === 'in_progress' ? '⏳' : '🆕'}</span>
                   </div>
-                  <h4 className="text-xs font-bold text-foreground leading-tight line-clamp-2 group-hover:text-primary transition uppercase">
+                  <h4 className="text-xs font-bold text-foreground leading-tight line-clamp-2 group-hover:text-primary transition uppercase break-words">
                     {order.title}
                   </h4>
                 </div>
 
-                <div className="mt-auto">
+                <div className="mt-auto pt-2">
                    {order.deadline && (
-                      <div className="text-[9px] text-muted-foreground flex items-center gap-1 font-medium">
+                      <div className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium mb-1.5">
                         📅 {new Date(order.deadline).toLocaleDateString('ru-RU', { month: 'numeric', day: 'numeric' })}
                       </div>
                    )}
-                   <div className="flex gap-1 mt-1">
-                      <button onClick={(e) => { e.stopPropagation(); onDuplicate?.(order); }} className="p-1 bg-background border border-border rounded hover:text-primary" title="Как образец" aria-label={`Создать заказ по образцу: ${order.title}`}><Copy className="w-3 h-3"/></button>
-                      <button onClick={(e) => { e.stopPropagation(); onEdit(order.id); }} className="p-1 bg-background border border-border rounded hover:text-primary"><Pencil className="w-3 h-3"/></button>
-                      <button onClick={(e) => { e.stopPropagation(); onView(order); }} className="p-1 bg-background border border-border rounded hover:text-primary"><Eye className="w-3 h-3"/></button>
+                   <div className="flex items-center gap-1.5">
+                      <button onClick={(e) => { e.stopPropagation(); onDuplicate?.(order); }} className="h-7 w-7 inline-flex items-center justify-center bg-background border border-border rounded hover:text-primary hover:border-primary transition" title="Как образец" aria-label={`Создать заказ по образцу: ${order.title}`}><Copy className="w-3.5 h-3.5"/></button>
+                      <button onClick={(e) => { e.stopPropagation(); onEdit(order.id); }} className="h-7 w-7 inline-flex items-center justify-center bg-background border border-border rounded hover:text-primary hover:border-primary transition" title="Редактировать" aria-label={`Редактировать заказ: ${order.title}`}><Pencil className="w-3.5 h-3.5"/></button>
+                      <button onClick={(e) => { e.stopPropagation(); onView(order); }} className="h-7 w-7 inline-flex items-center justify-center bg-background border border-border rounded hover:text-primary hover:border-primary transition" title="Открыть" aria-label={`Открыть заказ: ${order.title}`}><Eye className="w-3.5 h-3.5"/></button>
                    </div>
                 </div>
               </div>
@@ -208,7 +208,7 @@ export default function OrderListManager({
                 <div className="flex-grow min-w-0 text-left">
                   <div className="flex items-center gap-2 mb-1">
                     <h4 className="font-bold text-foreground truncate group-hover:text-primary transition uppercase">{order.title}</h4>
-                    <span className={`text-[9px] px-2 py-0.5 rounded font-bold whitespace-nowrap ${order.status === 'completed' ? 'bg-emerald-500/20 text-emerald-600' : order.status === 'in_progress' ? 'bg-brand/20 text-brand' : 'bg-blue-500/20 text-blue-600'}`}>
+                    <span className={`text-[9px] px-2 py-0.5 rounded font-bold whitespace-nowrap shrink-0 ${order.status === 'completed' ? 'bg-emerald-500/20 text-emerald-600' : order.status === 'in_progress' ? 'bg-brand/20 text-brand' : 'bg-blue-500/20 text-blue-600'}`}>
                       {order.status === 'completed' ? '✅ ГОТОВО' : order.status === 'in_progress' ? '⏳ В РАБОТЕ' : '🆕 НОВЫЙ'}
                     </span>
                   </div>
@@ -219,10 +219,10 @@ export default function OrderListManager({
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                  <button onClick={() => onView(order)} className="text-xs px-2 py-1 bg-background border border-border rounded hover:bg-primary hover:text-primary-foreground transition font-bold">👁</button>
-                  <button onClick={() => onDuplicate?.(order)} className="text-xs px-2 py-1 bg-background border border-border rounded hover:bg-primary hover:text-primary-foreground transition font-bold" title="Как образец" aria-label={`Создать заказ по образцу: ${order.title}`}><Copy className="w-4 h-4"/></button>
-                  <button onClick={() => onEdit(order.id)} className="text-xs px-2 py-1 bg-background border border-border rounded hover:bg-primary hover:text-primary-foreground transition font-bold">✏️</button>
+                <div className="flex items-center gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                  <button onClick={() => onView(order)} className="h-8 w-8 inline-flex items-center justify-center bg-background border border-border rounded-md hover:bg-primary hover:text-primary-foreground transition" title="Открыть" aria-label={`Открыть заказ: ${order.title}`}><Eye className="w-4 h-4"/></button>
+                  <button onClick={() => onDuplicate?.(order)} className="h-8 w-8 inline-flex items-center justify-center bg-background border border-border rounded-md hover:bg-primary hover:text-primary-foreground transition" title="Как образец" aria-label={`Создать заказ по образцу: ${order.title}`}><Copy className="w-4 h-4"/></button>
+                  <button onClick={() => onEdit(order.id)} className="h-8 w-8 inline-flex items-center justify-center bg-background border border-border rounded-md hover:bg-primary hover:text-primary-foreground transition" title="Редактировать" aria-label={`Редактировать заказ: ${order.title}`}><Pencil className="w-4 h-4"/></button>
                 </div>
               </div>
             ))}

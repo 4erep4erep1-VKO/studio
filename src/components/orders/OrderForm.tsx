@@ -299,11 +299,11 @@ export default function OrderForm({ orderId, duplicateFrom, onSave, creatorId, e
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Объект</label>
-              <input required className="w-full p-2 bg-background text-foreground placeholder:text-muted-foreground border border-border rounded focus:border-primary outline-none transition" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+              <input required className="w-full h-10 px-3 bg-background text-foreground placeholder:text-muted-foreground border border-border rounded focus:border-primary outline-none transition" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
             </div>
             <div>
               <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Куда отправить</label>
-              <select className="w-full p-2 bg-background text-foreground border border-border rounded focus:border-primary outline-none transition" value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})}>
+              <select className="w-full h-10 px-3 bg-background text-foreground border border-border rounded focus:border-primary outline-none transition" value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})}>
                 <option value="installation">🛠 На монтаж</option>
                 <option value="print">🖨 На печать</option>
                 <option value="production">🏭 Изготовление</option>
@@ -314,11 +314,11 @@ export default function OrderForm({ orderId, duplicateFrom, onSave, creatorId, e
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Дедлайн</label>
-              <input type="date" className="w-full p-2 bg-background text-foreground border border-border rounded focus:border-primary outline-none transition" value={formData.deadline} onChange={e => setFormData({...formData, deadline: e.target.value})} />
+              <input type="date" className="w-full h-10 px-3 bg-background text-foreground border border-border rounded focus:border-primary outline-none transition" value={formData.deadline} onChange={e => setFormData({...formData, deadline: e.target.value})} />
             </div>
             <div>
               <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Лично исполнителю</label>
-              <select disabled={formData.is_general} className="w-full p-2 bg-background text-foreground border border-border rounded focus:border-primary outline-none transition disabled:opacity-30" value={formData.assigned_to} onChange={e => setFormData({...formData, assigned_to: e.target.value})}>
+              <select disabled={formData.is_general} className="w-full h-10 px-3 bg-background text-foreground border border-border rounded focus:border-primary outline-none transition disabled:opacity-30" value={formData.assigned_to} onChange={e => setFormData({...formData, assigned_to: e.target.value})}>
                 <option value="">Не назначен...</option>
                 {installers.map(i => <option key={i.id} value={i.id}>{i.full_name}</option>)}
               </select>
@@ -332,14 +332,14 @@ export default function OrderForm({ orderId, duplicateFrom, onSave, creatorId, e
             </label>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <input placeholder="Размеры (3х6м)" className="w-full p-2 bg-background text-foreground placeholder:text-muted-foreground border border-border rounded focus:border-primary outline-none" value={formData.dimensions} onChange={e => setFormData({...formData, dimensions: e.target.value})} />
-            <input placeholder="Материал" className="w-full p-2 bg-background text-foreground placeholder:text-muted-foreground border border-border rounded focus:border-primary outline-none" value={formData.material} onChange={e => setFormData({...formData, material: e.target.value})} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <input placeholder="Размеры (3х6м)" className="w-full h-10 px-3 bg-background text-foreground placeholder:text-muted-foreground border border-border rounded focus:border-primary outline-none" value={formData.dimensions} onChange={e => setFormData({...formData, dimensions: e.target.value})} />
+            <input placeholder="Материал" className="w-full h-10 px-3 bg-background text-foreground placeholder:text-muted-foreground border border-border rounded focus:border-primary outline-none" value={formData.material} onChange={e => setFormData({...formData, material: e.target.value})} />
           </div>
 
           <div>
             <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Ссылка на макет</label>
-            <input placeholder="Облако / Диск" className="w-full p-2 bg-background text-foreground placeholder:text-muted-foreground border border-border rounded focus:border-primary outline-none" value={formData.source_link} onChange={e => setFormData({...formData, source_link: e.target.value})} />
+            <input placeholder="Облако / Диск" className="w-full h-10 px-3 bg-background text-foreground placeholder:text-muted-foreground border border-border rounded focus:border-primary outline-none" value={formData.source_link} onChange={e => setFormData({...formData, source_link: e.target.value})} />
           </div>
 
           <div>
@@ -350,7 +350,7 @@ export default function OrderForm({ orderId, duplicateFrom, onSave, creatorId, e
                accept="image/jpeg,image/png,image/webp" 
                multiple 
                onChange={e => e.target.files && uploadImages(e.target.files)} 
-               className="text-xs w-full text-foreground file:bg-primary file:text-primary-foreground file:border-0 file:rounded file:px-3 file:py-1 cursor-pointer"
+               className="text-xs w-full text-foreground file:bg-primary file:text-primary-foreground file:border-0 file:rounded file:px-3 file:py-1.5 file:mr-3 cursor-pointer"
              />
              
              {formData.image_urls.length > 0 && (
@@ -362,7 +362,7 @@ export default function OrderForm({ orderId, duplicateFrom, onSave, creatorId, e
                      <button
                        type="button"
                        onClick={() => handleDeleteImage(idx)}
-                       className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground hover:bg-destructive/90 border border-border rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold shadow transition-transform group-hover:scale-110"
+                       className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground hover:bg-destructive/90 border border-border rounded-full w-5 h-5 flex items-center justify-center text-[10px] leading-none font-bold shadow transition-transform group-hover:scale-110"
                        title="Удалить картинку"
                      >
                        ×
@@ -375,7 +375,7 @@ export default function OrderForm({ orderId, duplicateFrom, onSave, creatorId, e
 
           <div>
             <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Задача</label>
-            <textarea rows={3} placeholder="Что именно нужно сделать..." className="w-full p-2 bg-background text-foreground placeholder:text-muted-foreground border border-border rounded focus:border-primary outline-none" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+            <textarea rows={3} placeholder="Что именно нужно сделать..." className="w-full p-3 bg-background text-foreground placeholder:text-muted-foreground border border-border rounded focus:border-primary outline-none" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
           </div>
         </div>
 
