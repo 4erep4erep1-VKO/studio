@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Grid3x3, List, LayoutGrid, ChevronDown, Eye, Pencil, Copy } from 'lucide-react';
+import { Grid3x3, List, LayoutGrid, ChevronDown, Eye, Pencil, Copy, Image as ImageIcon } from 'lucide-react';
 import { OrderCard } from './OrderCard';
 import { OrderTemplate } from '@/lib/types';
 
@@ -170,12 +170,12 @@ export default function OrderListManager({
             {sortedOrders.map((order) => (
               <div 
                 key={order.id} 
-                className="bg-card border border-border p-2.5 rounded-lg hover:border-primary transition flex flex-col justify-between min-h-[136px] cursor-pointer group relative shadow-sm min-w-0"
+                className="bg-card border border-border p-2.5 rounded-lg hover:border-primary/40 hover:-translate-y-0.5 hover:shadow-md transition-all duration-200 flex flex-col justify-between min-h-[136px] cursor-pointer group relative shadow-sm min-w-0"
                 onClick={() => onView(order)}
               >
                 <div>
                   <div className="flex items-center justify-between gap-1 mb-1">
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-black uppercase truncate max-w-[75%] ${order.department === 'print' ? 'bg-purple-500/20 text-purple-500' : order.department === 'production' ? 'bg-brand/20 text-brand' : 'bg-blue-500/20 text-blue-500'}`}>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-black uppercase truncate max-w-[75%] ${order.department === 'print' ? 'bg-purple-500/15 text-purple-600 dark:text-purple-400' : order.department === 'production' ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'bg-blue-500/15 text-blue-600 dark:text-blue-400'}`}>
                       {order.department === 'print' ? 'ПЕЧАТЬ' : order.department === 'production' ? 'ИЗГОТОВЛЕНИЕ' : 'МОНТАЖ'}
                     </span>
                     <span className="text-[10px] shrink-0">{order.status === 'completed' ? '✅' : order.status === 'in_progress' ? '⏳' : '🆕'}</span>
@@ -192,9 +192,9 @@ export default function OrderListManager({
                       </div>
                    )}
                    <div className="flex items-center gap-1.5">
-                      <button onClick={(e) => { e.stopPropagation(); onDuplicate?.(order); }} className="h-7 w-7 inline-flex items-center justify-center bg-background border border-border rounded hover:text-primary hover:border-primary transition" title="Как образец" aria-label={`Создать заказ по образцу: ${order.title}`}><Copy className="w-3.5 h-3.5"/></button>
-                      <button onClick={(e) => { e.stopPropagation(); onEdit(order.id); }} className="h-7 w-7 inline-flex items-center justify-center bg-background border border-border rounded hover:text-primary hover:border-primary transition" title="Редактировать" aria-label={`Редактировать заказ: ${order.title}`}><Pencil className="w-3.5 h-3.5"/></button>
-                      <button onClick={(e) => { e.stopPropagation(); onView(order); }} className="h-7 w-7 inline-flex items-center justify-center bg-background border border-border rounded hover:text-primary hover:border-primary transition" title="Открыть" aria-label={`Открыть заказ: ${order.title}`}><Eye className="w-3.5 h-3.5"/></button>
+                      <button onClick={(e) => { e.stopPropagation(); onDuplicate?.(order); }} className="h-7 w-7 inline-flex items-center justify-center bg-background border border-border rounded hover:text-primary hover:border-primary transition active:scale-[0.97]" title="Как образец" aria-label={`Создать заказ по образцу: ${order.title}`}><Copy className="w-3.5 h-3.5"/></button>
+                      <button onClick={(e) => { e.stopPropagation(); onEdit(order.id); }} className="h-7 w-7 inline-flex items-center justify-center bg-background border border-border rounded hover:text-primary hover:border-primary transition active:scale-[0.97]" title="Редактировать" aria-label={`Редактировать заказ: ${order.title}`}><Pencil className="w-3.5 h-3.5"/></button>
+                      <button onClick={(e) => { e.stopPropagation(); onView(order); }} className="h-7 w-7 inline-flex items-center justify-center bg-background border border-border rounded hover:text-primary hover:border-primary transition active:scale-[0.97]" title="Открыть" aria-label={`Открыть заказ: ${order.title}`}><Eye className="w-3.5 h-3.5"/></button>
                    </div>
                 </div>
               </div>
@@ -203,29 +203,37 @@ export default function OrderListManager({
         ) : (
           /* РЕЖИМ СПИСКА */
           <div className="space-y-2">
-            {sortedOrders.map((order) => (
-              <div key={order.id} className="bg-card border border-border p-3 rounded-lg hover:border-primary transition flex items-center justify-between gap-4 cursor-pointer group" onClick={() => onView(order)}>
-                <div className="flex-grow min-w-0 text-left">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h4 className="font-bold text-foreground truncate group-hover:text-primary transition uppercase">{order.title}</h4>
-                    <span className={`text-[9px] px-2 py-0.5 rounded font-bold whitespace-nowrap shrink-0 ${order.status === 'completed' ? 'bg-emerald-500/20 text-emerald-600' : order.status === 'in_progress' ? 'bg-brand/20 text-brand' : 'bg-blue-500/20 text-blue-600'}`}>
-                      {order.status === 'completed' ? '✅ ГОТОВО' : order.status === 'in_progress' ? '⏳ В РАБОТЕ' : '🆕 НОВЫЙ'}
-                    </span>
+            {sortedOrders.map((order) => {
+              const photoCount = Array.isArray(order.image_urls) ? order.image_urls.filter(Boolean).length : 0;
+              return (
+                <div key={order.id} className="bg-card border border-border p-3 rounded-lg hover:border-primary/40 hover:shadow-sm transition-all duration-150 flex items-center justify-between gap-4 cursor-pointer group" onClick={() => onView(order)}>
+                  <div className="flex-grow min-w-0 text-left">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="font-bold text-foreground truncate group-hover:text-primary transition uppercase">{order.title}</h4>
+                      <span className={`text-[9px] px-2 py-0.5 rounded font-bold whitespace-nowrap shrink-0 ${order.status === 'completed' ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : order.status === 'in_progress' ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400' : 'bg-blue-500/20 text-blue-600 dark:text-blue-400'}`}>
+                        {order.status === 'completed' ? '✅ ГОТОВО' : order.status === 'in_progress' ? '⏳ В РАБОТЕ' : '🆕 НОВЫЙ'}
+                      </span>
+                    </div>
+                    <div className="text-xs text-muted-foreground flex items-center gap-2.5 flex-wrap">
+                      {order.deadline && <span className="flex items-center gap-1 whitespace-nowrap">📅 {new Date(order.deadline).toLocaleDateString('ru-RU')}</span>}
+                      <span className={`text-[10px] font-bold ${order.department === 'print' ? 'text-purple-500 dark:text-purple-400' : order.department === 'production' ? 'text-amber-600 dark:text-amber-400' : 'text-blue-500 dark:text-blue-400'}`}>
+                         {order.department === 'print' ? '🖨 ПЕЧАТЬ' : order.department === 'production' ? '🏭 ИЗГОТОВЛЕНИЕ' : '🛠 МОНТАЖ'}
+                      </span>
+                      {photoCount > 0 && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground whitespace-nowrap">
+                          <ImageIcon className="w-3 h-3" /> {photoCount}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
-                    {order.deadline && <span className="flex items-center gap-1 whitespace-nowrap">📅 {new Date(order.deadline).toLocaleDateString('ru-RU')}</span>}
-                    <span className={`text-[10px] font-bold ${order.department === 'print' ? 'text-purple-400' : order.department === 'production' ? 'text-brand' : 'text-blue-400'}`}>
-                       {order.department === 'print' ? '🖨 ПЕЧАТЬ' : order.department === 'production' ? '🏭 ИЗГОТОВЛЕНИЕ' : '🛠 МОНТАЖ'}
-                    </span>
+                  <div className="flex items-center gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => onView(order)} className="h-8 w-8 inline-flex items-center justify-center bg-background border border-border rounded-md hover:bg-primary hover:text-primary-foreground transition active:scale-[0.97]" title="Открыть" aria-label={`Открыть заказ: ${order.title}`}><Eye className="w-4 h-4"/></button>
+                    <button onClick={() => onDuplicate?.(order)} className="h-8 w-8 inline-flex items-center justify-center bg-background border border-border rounded-md hover:bg-primary hover:text-primary-foreground transition active:scale-[0.97]" title="Как образец" aria-label={`Создать заказ по образцу: ${order.title}`}><Copy className="w-4 h-4"/></button>
+                    <button onClick={() => onEdit(order.id)} className="h-8 w-8 inline-flex items-center justify-center bg-background border border-border rounded-md hover:bg-primary hover:text-primary-foreground transition active:scale-[0.97]" title="Редактировать" aria-label={`Редактировать заказ: ${order.title}`}><Pencil className="w-4 h-4"/></button>
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                  <button onClick={() => onView(order)} className="h-8 w-8 inline-flex items-center justify-center bg-background border border-border rounded-md hover:bg-primary hover:text-primary-foreground transition" title="Открыть" aria-label={`Открыть заказ: ${order.title}`}><Eye className="w-4 h-4"/></button>
-                  <button onClick={() => onDuplicate?.(order)} className="h-8 w-8 inline-flex items-center justify-center bg-background border border-border rounded-md hover:bg-primary hover:text-primary-foreground transition" title="Как образец" aria-label={`Создать заказ по образцу: ${order.title}`}><Copy className="w-4 h-4"/></button>
-                  <button onClick={() => onEdit(order.id)} className="h-8 w-8 inline-flex items-center justify-center bg-background border border-border rounded-md hover:bg-primary hover:text-primary-foreground transition" title="Редактировать" aria-label={`Редактировать заказ: ${order.title}`}><Pencil className="w-4 h-4"/></button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

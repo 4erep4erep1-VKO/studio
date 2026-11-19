@@ -1,8 +1,7 @@
 // components/orders/OrderCard.tsx
 import React from 'react';
-import { Trash2, CheckCircle, User, UserPlus, Truck, Copy, Pencil } from 'lucide-react';
+import { Trash2, CheckCircle, User, UserPlus, Truck, Copy, Pencil, Image as ImageIcon } from 'lucide-react';
 import { OrderTemplate } from '@/lib/types';
-import confetti from 'canvas-confetti';
 
 interface OrderCardProps {
   order: any;
@@ -19,18 +18,13 @@ interface OrderCardProps {
 
 export const OrderCard = React.memo(function OrderCard({ order, onView, onEdit, onDelete, onComplete, onDuplicate, onAssignOrder, onTransferToInstallation, onRestore, isAdmin }: OrderCardProps) {
   const chatId = order.profiles?.telegram_chat_id || null;
+  const photoCount = Array.isArray(order.image_urls) ? order.image_urls.filter(Boolean).length : 0;
   const reportPhotos = Array.from(new Set([
     ...(Array.isArray(order.report_photos) ? order.report_photos : []),
     ...(order.report_photo ? [order.report_photo] : []),
   ].filter((photo): photo is string => typeof photo === 'string' && photo.length > 0)));
 
   const handleComplete = () => {
-    confetti({
-      particleCount: 100,
-      spread: 70,
-      origin: { y: 0.6 },
-      colors: ['#FF7F50', '#4B2C20', '#10B981']
-    });
     onComplete(order.id);
   };
 
@@ -55,11 +49,21 @@ export const OrderCard = React.memo(function OrderCard({ order, onView, onEdit, 
 
   const deadlineStatus = getDeadlineStatus();
 
+  const deptStripeClass =
+    order.department === 'print'
+      ? 'bg-purple-500'
+      : order.department === 'production'
+        ? 'bg-amber-500'
+        : 'bg-blue-500';
+
   // Добавили relative, чтобы абсолютная рамка легла ровно по краям карточки
-  const containerClass = `relative p-5 rounded-xl shadow-sm hover:border-muted-foreground/30 transition flex flex-col justify-between min-h-[310px] h-full bg-card border border-border`;
+  const containerClass = `relative overflow-hidden p-5 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-primary/35 transition-all duration-200 flex flex-col justify-between min-h-[310px] h-full bg-card border border-border`;
 
   return (
     <div className={containerClass}>
+      {/* Тонкий цветовой маркер цеха */}
+      <div className={`absolute inset-x-0 top-0 h-[3px] pointer-events-none z-10 ${deptStripeClass}`} />
+
       {/* Слой пульсации дедлайна */}
       {deadlineStatus === 'critical' && (
         <div className="absolute inset-0 rounded-xl border-2 border-red-500 animate-pulse pointer-events-none z-10" />
@@ -76,7 +80,7 @@ export const OrderCard = React.memo(function OrderCard({ order, onView, onEdit, 
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
              {order.preview_url && <span className="text-[10px] text-primary bg-primary/10 border border-primary/20 px-2 py-1 rounded uppercase font-bold whitespace-nowrap">Эскиз</span>}
-             <span className={`text-[10px] px-2 py-1 rounded uppercase font-bold whitespace-nowrap ${order.department === 'print' ? 'bg-purple-500/10 text-purple-500' : order.department === 'production' ? 'bg-brand/10 text-brand' : 'bg-blue-500/10 text-blue-500'}`}>
+             <span className={`text-[10px] px-2 py-1 rounded uppercase font-bold whitespace-nowrap ${order.department === 'print' ? 'bg-purple-500/15 text-purple-600 dark:text-purple-400' : order.department === 'production' ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'bg-blue-500/15 text-blue-600 dark:text-blue-400'}`}>
                {order.department === 'print' ? '🖨 Печать' : order.department === 'production' ? '🏭 Изготовление' : '🛠 Монтаж'}
              </span>
           </div>
@@ -129,17 +133,24 @@ export const OrderCard = React.memo(function OrderCard({ order, onView, onEdit, 
 
       <div className="mt-auto pt-3 relative z-20">
         <div className="flex flex-wrap items-center justify-between gap-2 min-h-[32px]">
-          <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${
-            order.status === 'completed' ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 
-            order.status === 'in_progress' ? 'bg-brand/20 text-brand' :
-            'bg-muted text-muted-foreground border border-border'
-          }`}>
-            {order.status === 'completed' ? 'Завершен' : order.status === 'in_progress' ? 'В работе' : 'Новый'}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${
+              order.status === 'completed' ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 
+              order.status === 'in_progress' ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400' :
+              'bg-muted text-muted-foreground border border-border'
+            }`}>
+              {order.status === 'completed' ? 'Завершен' : order.status === 'in_progress' ? 'В работе' : 'Новый'}
+            </span>
+            {photoCount > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold bg-muted text-muted-foreground border border-border whitespace-nowrap" title={`Прикреплено фото: ${photoCount}`}>
+                <ImageIcon className="w-3 h-3" /> {photoCount}
+              </span>
+            )}
+          </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
             {order.status === 'new' && onAssignOrder && (
-              <button onClick={() => onAssignOrder(order.id)} className="h-7 px-2 inline-flex items-center gap-1 text-brand hover:bg-brand/10 rounded-md text-xs font-bold transition whitespace-nowrap" title="Назначить исполнителя">
+              <button onClick={() => onAssignOrder(order.id)} className="h-7 px-2 inline-flex items-center gap-1 text-primary hover:bg-primary/10 rounded-md text-xs font-bold transition active:scale-[0.97] whitespace-nowrap" title="Назначить исполнителя">
                 <UserPlus className="w-3.5 h-3.5"/> Назначить
               </button>
             )}
@@ -148,7 +159,7 @@ export const OrderCard = React.memo(function OrderCard({ order, onView, onEdit, 
               <>
                 <button
                   onClick={handleComplete}
-                  className="h-7 px-2 inline-flex items-center gap-1 text-emerald-600 hover:bg-emerald-500/10 rounded-md text-xs font-bold transition whitespace-nowrap"
+                  className="h-7 px-2 inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 rounded-md text-xs font-bold transition active:scale-[0.97] whitespace-nowrap"
                   title="Завершить (В офис)"
                 >
                   <CheckCircle className="w-3.5 h-3.5" /> В офис
@@ -156,7 +167,7 @@ export const OrderCard = React.memo(function OrderCard({ order, onView, onEdit, 
                 {onTransferToInstallation && (
                   <button
                     onClick={() => onTransferToInstallation(order.id)}
-                    className="h-7 px-2 inline-flex items-center gap-1 text-blue-600 hover:bg-blue-500/10 rounded-md text-xs font-bold transition whitespace-nowrap"
+                    className="h-7 px-2 inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 rounded-md text-xs font-bold transition active:scale-[0.97] whitespace-nowrap"
                     title="Передать на монтаж"
                   >
                     <Truck className="w-3.5 h-3.5" /> На монтаж
@@ -165,7 +176,7 @@ export const OrderCard = React.memo(function OrderCard({ order, onView, onEdit, 
               </>
             ) : (
               order.status !== 'completed' && (
-                <button onClick={handleComplete} className="h-7 w-7 inline-flex items-center justify-center text-emerald-600 hover:bg-emerald-500/10 rounded-md transition" title="Завершить" aria-label="Завершить заказ">
+                <button onClick={handleComplete} className="h-7 w-7 inline-flex items-center justify-center text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 rounded-md transition active:scale-[0.97]" title="Завершить" aria-label="Завершить заказ">
                   <CheckCircle className="w-4 h-4" />
                 </button>
               )
@@ -174,7 +185,7 @@ export const OrderCard = React.memo(function OrderCard({ order, onView, onEdit, 
             {order.status === 'completed' && isAdmin && onRestore && (
               <button
                 onClick={() => onRestore(order.id)}
-                className="h-7 px-2 inline-flex items-center gap-1 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md text-xs font-bold transition whitespace-nowrap"
+                className="h-7 px-2 inline-flex items-center gap-1 text-secondary-foreground bg-secondary hover:bg-secondary/80 rounded-md text-xs font-bold transition active:scale-[0.97] whitespace-nowrap"
                 title="Вернуть заказ в работу"
               >
                 ↩️ Вернуть в работу
@@ -183,9 +194,9 @@ export const OrderCard = React.memo(function OrderCard({ order, onView, onEdit, 
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-1.5 pt-2 mt-2 border-t border-border/40">
-          <button onClick={() => onDuplicate?.(order)} className="h-7 px-2 inline-flex items-center gap-1 text-primary hover:bg-primary/10 rounded-md text-xs font-bold transition whitespace-nowrap" title="Как образец" aria-label={`Создать заказ по образцу: ${order.title}`}><Copy className="h-3.5 w-3.5" /> Как образец</button>
-          <button onClick={() => onEdit(order.id)} className="h-7 px-2 inline-flex items-center gap-1 text-primary hover:bg-primary/10 rounded-md text-xs font-bold transition whitespace-nowrap"><Pencil className="h-3.5 w-3.5" /> Правка</button>
-          <button onClick={() => onDelete(order.id, chatId, order.title, order.status)} className="h-7 w-7 shrink-0 inline-flex items-center justify-center text-destructive hover:bg-destructive/10 rounded-md transition" title="Удалить" aria-label={`Удалить заказ: ${order.title}`}><Trash2 className="w-4 h-4" /></button>
+          <button onClick={() => onDuplicate?.(order)} className="h-7 px-2 inline-flex items-center gap-1 text-primary hover:bg-primary/10 rounded-md text-xs font-bold transition active:scale-[0.97] whitespace-nowrap" title="Как образец" aria-label={`Создать заказ по образцу: ${order.title}`}><Copy className="h-3.5 w-3.5" /> Как образец</button>
+          <button onClick={() => onEdit(order.id)} className="h-7 px-2 inline-flex items-center gap-1 text-primary hover:bg-primary/10 rounded-md text-xs font-bold transition active:scale-[0.97] whitespace-nowrap"><Pencil className="h-3.5 w-3.5" /> Правка</button>
+          <button onClick={() => onDelete(order.id, chatId, order.title, order.status)} className="h-7 w-7 shrink-0 inline-flex items-center justify-center text-destructive hover:bg-destructive/10 rounded-md transition active:scale-[0.97]" title="Удалить" aria-label={`Удалить заказ: ${order.title}`}><Trash2 className="w-4 h-4" /></button>
         </div>
       </div>
     </div>

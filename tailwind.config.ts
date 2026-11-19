@@ -18,9 +18,9 @@ const config = {
       },
     },
     extend: {
-      // ВОТ ЭТО МЫ ДОБАВИЛИ, ЧТОБЫ НЕ БЫЛО ОШИБОК
       fontFamily: {
-        headline: ["Inter", "sans-serif"],
+        sans: ["var(--font-inter)", "system-ui", "sans-serif"],
+        headline: ["var(--font-inter)", "system-ui", "sans-serif"],
       },
       colors: {
         border: "hsl(var(--border))",

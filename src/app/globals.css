@@ -4,60 +4,66 @@
 
 @layer base {
   :root {
-    /* СВЕТЛАЯ ТЕМА: Белый, Шоколад и Коралл */
-    --background: 0 0% 100%; /* Белый */
-    --foreground: 20 25% 15%; /* Почти черный с оттенком шоколада */
-    
+    /* СВЕТЛАЯ ТЕМА: Светлый графит, чистые карточки и фирменный красный (#C62828) */
+    --background: 20 14% 96%;
+    --foreground: 220 20% 12%;
+
     --card: 0 0% 100%;
-    --card-foreground: 20 25% 15%;
- 
-    --primary: 16 100% 66%; /* Коралловый (#FF7F50) */
+    --card-foreground: 220 20% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 12%;
+
+    --primary: 0 66% 47%;
     --primary-foreground: 0 0% 100%;
- 
-    --secondary: 19 40% 21%; /* Шоколадный (#4B2C20) */
-    --secondary-foreground: 0 0% 100%;
- 
-    --muted: 20 10% 95%;
-    --muted-foreground: 20 10% 40%;
- 
-    --accent: 16 100% 66%;
-    --accent-foreground: 0 0% 100%;
- 
-    --destructive: 0 84.2% 60.2%;
+
+    --secondary: 220 14% 92%;
+    --secondary-foreground: 220 20% 16%;
+
+    --muted: 220 14% 93%;
+    --muted-foreground: 220 10% 42%;
+
+    --accent: 220 14% 91%;
+    --accent-foreground: 220 20% 14%;
+
+    --destructive: 0 84% 55%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 20 15% 90%;
-    --input: 20 15% 90%;
-    --ring: 16 100% 66%;
+    --border: 220 13% 88%;
+    --input: 220 13% 88%;
+    --ring: 0 66% 47%;
     --radius: 0.75rem;
   }
- 
+
   .dark {
-    /* ТЕМНАЯ ТЕМА: Оставляем классический темный, но с коралловым акцентом */
-    --background: 20 20% 4%;
-    --foreground: 0 0% 98%;
- 
-    --card: 20 20% 6%;
-    --card-foreground: 0 0% 98%;
- 
-    --primary: 16 100% 66%; /* Коралл остается акцентом */
+    /* ТЕМНАЯ ТЕМА: Глубокий графит и фирменный красный акцент */
+    --background: 220 18% 7%;
+    --foreground: 210 20% 96%;
+
+    --card: 220 16% 11%;
+    --card-foreground: 210 20% 96%;
+
+    --popover: 220 16% 11%;
+    --popover-foreground: 210 20% 96%;
+
+    --primary: 0 72% 55%;
     --primary-foreground: 0 0% 100%;
- 
-    --secondary: 20 15% 15%;
-    --secondary-foreground: 0 0% 98%;
- 
-    --muted: 20 15% 15%;
-    --muted-foreground: 20 10% 65%;
- 
-    --accent: 16 100% 66%;
-    --accent-foreground: 0 0% 100%;
- 
-    --destructive: 0 72% 51%;
+
+    --secondary: 220 14% 18%;
+    --secondary-foreground: 210 20% 95%;
+
+    --muted: 220 14% 16%;
+    --muted-foreground: 220 10% 62%;
+
+    --accent: 220 14% 18%;
+    --accent-foreground: 210 20% 96%;
+
+    --destructive: 0 72% 52%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 20 15% 15%;
-    --input: 20 15% 15%;
-    --ring: 16 100% 66%;
+    --border: 220 14% 20%;
+    --input: 220 14% 20%;
+    --ring: 0 72% 55%;
   }
 }
 
@@ -66,6 +72,29 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
   }
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.35) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground) / 0.35);
+  border-radius: 9999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground) / 0.55);
 }

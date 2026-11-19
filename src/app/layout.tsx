@@ -1,22 +1,29 @@
 import Image from "next/image"
 import Link from "next/link"
+import { Inter } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import CalculatorWidget from "@/components/CalculatorWidget"
 import { Toaster } from "@/components/ui/toaster"
 import "./globals.css"
 
+const inter = Inter({
+  subsets: ["latin", "cyrillic"],
+  variable: "--font-inter",
+  display: "swap",
+})
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ru" suppressHydrationWarning>
-      <body>
+    <html lang="ru" className={inter.variable} suppressHydrationWarning>
+      <body className="font-sans antialiased">
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
         >
-          <header className="relative px-4 py-3 flex justify-between items-center gap-3 border-b bg-card">
+          <header className="sticky top-0 z-30 px-4 py-3 flex justify-between items-center gap-3 border-b border-border/80 bg-card/85 backdrop-blur-md shadow-sm supports-[backdrop-filter]:bg-card/75">
             <Link href="/" className="flex items-center gap-2.5 shrink-0">
               <Image
                 src="/Logo2.png"
@@ -27,7 +34,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 className="h-9 w-auto object-contain rounded-md shrink-0"
               />
               <span className="hidden sm:inline-block text-sm md:text-base font-bold tracking-tight text-foreground/90">
-                Монтажка <span className="text-red-500">PRO</span>
+                Монтажка <span className="text-primary">PRO</span>
               </span>
             </Link>
             <Link

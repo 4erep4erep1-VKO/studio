@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { Calculator, X, Plus } from 'lucide-react';
 
 const defaultPrices = {
   'Баннер литой': 1500,
@@ -72,32 +73,44 @@ export default function CalculatorWidget() {
   return (
     <>
       <button
+        type="button"
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-primary text-primary-foreground rounded-full shadow-2xl flex items-center justify-center text-2xl hover:scale-110 transition-transform z-40"
+        className="fixed bottom-6 right-6 w-14 h-14 bg-primary text-primary-foreground rounded-full shadow-2xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all duration-200 ring-4 ring-primary/20 z-40"
         title="Калькулятор"
+        aria-label="Открыть калькулятор"
       >
-        🧮
+        <Calculator className="w-6 h-6" />
       </button>
 
       <div 
         className={`fixed top-0 right-0 h-full w-80 bg-card border-l border-border shadow-2xl z-50 transform transition-transform duration-300 flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
         <div className="p-4 border-b border-border flex justify-between items-center bg-muted/30">
-          <h2 className="font-bold text-lg text-foreground">Калькулятор</h2>
-          <button onClick={() => setIsOpen(false)} className="text-muted-foreground hover:text-foreground text-xl">
-            ✕
+          <h2 className="font-bold text-lg text-foreground flex items-center gap-2">
+            <Calculator className="w-5 h-5 text-primary" />
+            Калькулятор
+          </h2>
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            className="h-8 w-8 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition"
+            aria-label="Закрыть калькулятор"
+          >
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         <div className="flex border-b border-border">
           <button 
-            className={`flex-1 py-3 text-sm font-bold uppercase ${activeTab === 'calc' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
+            type="button"
+            className={`flex-1 py-3 text-sm font-bold uppercase transition ${activeTab === 'calc' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
             onClick={() => setActiveTab('calc')}
           >
             Расчет
           </button>
           <button 
-            className={`flex-1 py-3 text-sm font-bold uppercase ${activeTab === 'settings' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
+            type="button"
+            className={`flex-1 py-3 text-sm font-bold uppercase transition ${activeTab === 'settings' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
             onClick={() => setActiveTab('settings')}
           >
             Настройки
@@ -110,18 +123,18 @@ export default function CalculatorWidget() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Ширина (мм)</label>
-                  <input type="number" className="w-full p-2 bg-background text-foreground border border-border rounded focus:border-primary outline-none" value={width} onChange={e => setWidth(e.target.value)} placeholder="0" />
+                  <input type="number" className="w-full h-10 px-3 bg-background text-foreground border border-border rounded focus:border-primary outline-none transition" value={width} onChange={e => setWidth(e.target.value)} placeholder="0" />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Высота (мм)</label>
-                  <input type="number" className="w-full p-2 bg-background text-foreground border border-border rounded focus:border-primary outline-none" value={height} onChange={e => setHeight(e.target.value)} placeholder="0" />
+                  <input type="number" className="w-full h-10 px-3 bg-background text-foreground border border-border rounded focus:border-primary outline-none transition" value={height} onChange={e => setHeight(e.target.value)} placeholder="0" />
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Материал</label>
                 <select 
-                  className="w-full p-2 bg-background text-foreground border border-border rounded focus:border-primary outline-none"
+                  className="w-full h-10 px-3 bg-background text-foreground border border-border rounded focus:border-primary outline-none transition"
                   value={selectedMaterial}
                   onChange={e => setSelectedMaterial(e.target.value)}
                 >
@@ -148,19 +161,19 @@ export default function CalculatorWidget() {
               
               {Object.entries(prices).map(([mat, price]) => (
                 <div key={mat} className="flex gap-2 items-center">
-                  <input type="text" readOnly value={mat} className="flex-grow p-2 bg-muted text-muted-foreground text-xs border border-border rounded truncate" title={mat} />
-                  <input type="number" value={price} onChange={e => handlePriceChange(mat, e.target.value)} className="w-24 p-2 bg-background text-foreground text-xs border border-border rounded text-center focus:border-primary outline-none" />
-                  <button onClick={() => deleteMaterial(mat)} className="text-red-500 hover:bg-red-500/10 p-2 rounded" title="Удалить">✕</button>
+                  <input type="text" readOnly value={mat} className="flex-grow h-9 px-2.5 bg-muted text-muted-foreground text-xs border border-border rounded truncate" title={mat} />
+                  <input type="number" value={price} onChange={e => handlePriceChange(mat, e.target.value)} className="w-24 h-9 px-2 bg-background text-foreground text-xs border border-border rounded text-center focus:border-primary outline-none" />
+                  <button type="button" onClick={() => deleteMaterial(mat)} className="h-9 w-9 shrink-0 inline-flex items-center justify-center text-destructive hover:bg-destructive/10 rounded transition" title="Удалить" aria-label={`Удалить ${mat}`}><X className="w-4 h-4" /></button>
                 </div>
               ))}
 
               <div className="pt-4 border-t border-border mt-4">
                 <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Добавить материал</label>
                 <div className="flex gap-2 flex-col">
-                  <input type="text" placeholder="Название" value={newMatName} onChange={e => setNewMatName(e.target.value)} className="w-full p-2 bg-background text-foreground border border-border rounded text-sm outline-none focus:border-primary" />
+                  <input type="text" placeholder="Название" value={newMatName} onChange={e => setNewMatName(e.target.value)} className="w-full h-10 px-3 bg-background text-foreground border border-border rounded text-sm outline-none focus:border-primary" />
                   <div className="flex gap-2">
-                    <input type="number" placeholder="Цена за м²" value={newMatPrice} onChange={e => setNewMatPrice(e.target.value)} className="w-full p-2 bg-background text-foreground border border-border rounded text-sm outline-none focus:border-primary" />
-                    <button onClick={addMaterial} className="bg-primary text-primary-foreground font-bold px-4 rounded hover:opacity-90">➕</button>
+                    <input type="number" placeholder="Цена за м²" value={newMatPrice} onChange={e => setNewMatPrice(e.target.value)} className="w-full h-10 px-3 bg-background text-foreground border border-border rounded text-sm outline-none focus:border-primary" />
+                    <button type="button" onClick={addMaterial} className="h-10 w-10 shrink-0 inline-flex items-center justify-center bg-primary text-primary-foreground font-bold rounded hover:bg-primary/90 active:scale-95 transition" title="Добавить" aria-label="Добавить материал"><Plus className="w-4 h-4" /></button>
                   </div>
                 </div>
               </div>
@@ -171,7 +184,7 @@ export default function CalculatorWidget() {
 
       {isOpen && (
         <div 
-          className="fixed inset-0 bg-black/20 z-40 backdrop-blur-sm"
+          className="fixed inset-0 bg-black/30 z-40 backdrop-blur-sm transition-opacity"
           onClick={() => setIsOpen(false)}
         />
       )}
