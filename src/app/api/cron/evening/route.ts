@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin, sendTelegram, formatOrderLine } from '../lib';
+import { logAdminAlert } from '@/lib/admin-logger';
 
 function getAlmatyDateString(date: Date): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -25,6 +26,12 @@ export async function GET(request: Request) {
 
     if (error) {
       console.error('Evening cron order fetch failed:', error.message);
+      await logAdminAlert({
+        level: 'ERROR',
+        source: 'Вечерний Cron',
+        message: 'Ошибка загрузки заказов из Supabase',
+        details: error.message,
+      });
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
@@ -61,6 +68,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: true });
   } catch (err: any) {
     console.error('Evening cron failed:', err);
+    await logAdminAlert({
+      level: 'ERROR',
+      source: 'Вечерний Cron',
+      message: 'Сбой выполнения вечерней сводки',
+      details: String(err?.message || err),
+    });
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

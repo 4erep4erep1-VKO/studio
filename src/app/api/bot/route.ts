@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { isAdminTelegramId, logAdminAlert, getRecentAdminLogs, clearAdminLogs } from '@/lib/admin-logger';
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -174,10 +175,14 @@ async function findProfileByTelegramId(telegramId: string) {
   return data;
 }
 
-async function handlePinAuthorization(chatId: number | string, telegramId: string, text: string): Promise<boolean> {
+async function handlePinAuthorization(chatId: number | string, telegramId: string, text: string, fromUser?: any): Promise<boolean> {
   try {
     const pin = (text || '').trim();
     if (!pin) return false;
+
+    const fullNamePart = [fromUser?.first_name, fromUser?.last_name].filter(Boolean).join(' ').trim();
+    const usernamePart = fromUser?.username ? `(@${fromUser.username})` : '';
+    const userTag = [fullNamePart, usernamePart].filter(Boolean).join(' ') || 'Без имени';
 
     const isNumeric = /^\d+$/.test(pin);
     const pinAsNumber = isNumeric ? parseInt(pin, 10) : null;
@@ -202,11 +207,24 @@ async function handlePinAuthorization(chatId: number | string, telegramId: strin
     }
 
     if (!profile) {
+      await logAdminAlert({
+        level: 'SECURITY',
+        source: 'Авторизация в боте',
+        message: `Введён неверный ПИН-код: "${pin}"`,
+        details: `TG ID: ${telegramId} | Пользователь: ${userTag}`,
+      });
       await sendTelegramMessage(chatId, `❌ Неверный ПИН-код. Код "${escapeHtml(pin)}" не найден в системе. Проверьте цифры на сайте.`);
       return true;
     }
 
     if (profile.telegram_chat_id) {
+      const ownerName = profile.full_name || profile.name || profile.id;
+      await logAdminAlert({
+        level: 'SECURITY',
+        source: 'Авторизация в боте',
+        message: `Попытка входа по уже занятому ПИН-коду сотрудника "${ownerName}"`,
+        details: `TG ID: ${telegramId} | Пользователь: ${userTag}`,
+      });
       await sendTelegramMessage(chatId, '⚠️ Этот ПИН-код уже активирован другим устройством.');
       return true;
     }
@@ -214,11 +232,23 @@ async function handlePinAuthorization(chatId: number | string, telegramId: strin
     const { error: updateError } = await supabase.from('profiles').update({ telegram_chat_id: String(telegramId) }).eq('id', profile.id);
     if (updateError) {
       console.error('❌ Ошибка обновления профиля при привязке Telegram:', updateError);
+      await logAdminAlert({
+        level: 'ERROR',
+        source: 'Авторизация в боте',
+        message: `Ошибка БД при привязке Telegram к профилю "${profile.full_name || profile.name || profile.id}"`,
+        details: updateError.message,
+      });
       await sendTelegramMessage(chatId, '❌ Ошибка при привязке профиля в БД. Попробуйте позже.');
       return true;
     }
 
     const name = profile.full_name || profile.name || 'сотрудник';
+    await logAdminAlert({
+      level: 'SECURITY',
+      source: 'Авторизация в боте',
+      message: `Сотрудник "${name}" успешно привязал Telegram`,
+      details: `TG ID: ${telegramId} | Пользователь: ${userTag}`,
+    });
     await sendTelegramMessage(
       chatId,
       `✅ Авторизация успешна! ${escapeHtml(name)}, вы привязаны к системе Montazhka PRO.`,
@@ -227,6 +257,12 @@ async function handlePinAuthorization(chatId: number | string, telegramId: strin
     return true;
   } catch (err: any) {
     console.error('❌ Ошибка в handlePinAuthorization:', err);
+    await logAdminAlert({
+      level: 'ERROR',
+      source: 'handlePinAuthorization',
+      message: 'Исключение при проверке ПИН-кода',
+      details: String(err?.message || err),
+    });
     try { await sendTelegramMessage(chatId, `❌ Внутренняя ошибка авторизации: ${escapeHtml(String(err?.message || err))}`); } catch (_) {}
     return true;
   }
@@ -239,6 +275,7 @@ function buildMainMenuKeyboard(canPrint: boolean, chatId: string | number) {
     [{ text: '👥 Занятость' }, { text: '👤 Мой профиль' }],
   ];
   if (canPrint) keyboard.splice(2, 0, [{ text: '🖨 Очередь на печать' }]);
+  if (isAdminTelegramId(chatId)) keyboard.push([{ text: '📜 Логи' }]);
   return { keyboard, resize_keyboard: true };
 }
 
@@ -295,7 +332,10 @@ async function handleActiveOrders(chatId: number | string) {
     .neq('status', 'completed')
     .order('deadline', { ascending: true });
 
-  if (error) console.error('❌ Ошибка загрузки активных заказов:', error);
+  if (error) {
+    console.error('❌ Ошибка загрузки активных заказов:', error);
+    await logAdminAlert({ level: 'ERROR', source: 'handleActiveOrders', message: 'Ошибка загрузки данных из Supabase', details: error.message });
+  }
   if (!orders || !orders.length) return sendTelegramMessage(chatId, 'Active orders empty.');
 
   const statusMap: Record<string, string> = {
@@ -337,7 +377,10 @@ async function handleActiveOrders(chatId: number | string) {
 
 async function handleFreeOrders(chatId: number | string) {
   const { data: orders, error } = await supabase.from('orders').select('id, title, deadline, department, image_urls').is('assigned_to', null).neq('status', 'completed').order('deadline', { ascending: true });
-  if (error) console.error('❌ Ошибка загрузки свободных заказов:', error);
+  if (error) {
+    console.error('❌ Ошибка загрузки свободных заказов:', error);
+    await logAdminAlert({ level: 'ERROR', source: 'handleFreeOrders', message: 'Ошибка загрузки данных из Supabase', details: error.message });
+  }
   if (!orders || !orders.length) return sendTelegramMessage(chatId, 'Свободных заказов пока нет.');
   
   for (const order of orders) {
@@ -359,7 +402,10 @@ async function handleFreeOrders(chatId: number | string) {
 
 async function handleMyOrders(chatId: number | string, profile: any) {
   const { data: orders, error } = await supabase.from('orders').select('id, title, department, status, image_urls, deadline').eq('assigned_to', profile.id).neq('status', 'completed').order('deadline', { ascending: true });
-  if (error) console.error('❌ Ошибка загрузки моих заказов:', error);
+  if (error) {
+    console.error('❌ Ошибка загрузки моих заказов:', error);
+    await logAdminAlert({ level: 'ERROR', source: 'handleMyOrders', message: 'Ошибка загрузки данных из Supabase', details: error.message });
+  }
   
   const filteredOrders = (orders || []).filter(order => {
     if (order.department === 'print' && order.status === 'new') return false;
@@ -403,6 +449,12 @@ async function handleIncomingPhoto(chatId: number | string, telegramId: string, 
   }).then(r => r.json());
   if (!fileRes.ok) {
     console.error('❌ Telegram не смог получить фотоотчет:', fileRes);
+    await logAdminAlert({
+      level: 'ERROR',
+      source: 'Фотоотчет (getFile)',
+      message: `Telegram не отдал файл для заказа "${order.title}" (${profile.full_name || profile.name || 'Сотрудник'})`,
+      details: JSON.stringify(fileRes),
+    });
     await sendTelegramMessage(chatId, '❌ Не удалось загрузить фотоотчет. Попробуйте отправить фотографию еще раз.');
     return;
   }
@@ -412,6 +464,12 @@ async function handleIncomingPhoto(chatId: number | string, telegramId: string, 
   });
   if (!downloadRes.ok) {
     console.error('❌ Telegram не смог скачать файл фотоотчета:', downloadRes.status);
+    await logAdminAlert({
+      level: 'ERROR',
+      source: 'Фотоотчет (download)',
+      message: `Не удалось скачать фото из Telegram для заказа "${order.title}"`,
+      details: `HTTP ${downloadRes.status}`,
+    });
     await sendTelegramMessage(chatId, '❌ Не удалось скачать фотоотчет. Попробуйте отправить фотографию еще раз.');
     return;
   }
@@ -421,6 +479,12 @@ async function handleIncomingPhoto(chatId: number | string, telegramId: string, 
   const { error: uploadErr } = await supabase.storage.from('order-photos').upload(storagePath, blob, { contentType: 'image/jpeg' });
   if (uploadErr) {
     console.error('❌ Ошибка загрузки фотоотчета в Supabase Storage:', uploadErr);
+    await logAdminAlert({
+      level: 'ERROR',
+      source: 'Фотоотчет (Storage)',
+      message: `Ошибка загрузки фото в Supabase Storage для заказа "${order.title}"`,
+      details: uploadErr.message,
+    });
     await sendTelegramMessage(chatId, '❌ Не удалось сохранить фотоотчет. Попробуйте отправить фотографию еще раз.');
     return;
   }
@@ -433,6 +497,12 @@ async function handleIncomingPhoto(chatId: number | string, telegramId: string, 
     .maybeSingle();
   if (fetchError) {
     console.error('❌ Ошибка загрузки текущего фотоотчета:', fetchError);
+    await logAdminAlert({
+      level: 'ERROR',
+      source: 'Фотоотчет (БД)',
+      message: `Ошибка чтения фотоотчета в БД для заказа "${order.title}"`,
+      details: fetchError.message,
+    });
     await sendTelegramMessage(chatId, '❌ Не удалось обновить фотоотчет. Попробуйте отправить фотографию еще раз.');
     return;
   }
@@ -455,6 +525,12 @@ async function handleIncomingPhoto(chatId: number | string, telegramId: string, 
   const { error: updateError } = await supabase.from('orders').update(updatePayload).eq('id', order.id);
   if (updateError) {
     console.error('❌ Ошибка сохранения фотоотчета:', updateError);
+    await logAdminAlert({
+      level: 'ERROR',
+      source: 'Фотоотчет (БД)',
+      message: `Ошибка сохранения фотоотчета в БД для заказа "${order.title}"`,
+      details: updateError.message,
+    });
     await sendTelegramMessage(chatId, '❌ Не удалось сохранить фотоотчет. Попробуйте отправить фотографию еще раз.');
     return;
   }
@@ -480,7 +556,15 @@ async function handleRejectOrder(orderId: string, profile: any, callbackQuery: a
     .eq('id', orderId)
     .eq('assigned_to', profile.id);
 
-  if (error) return `Ошибка БД: ${error.message}`;
+  if (error) {
+    await logAdminAlert({
+      level: 'ERROR',
+      source: 'Действие с заказом в боте',
+      message: `Ошибка БД при отказе от заказа (${order?.title || orderId})`,
+      details: error.message,
+    });
+    return `Ошибка БД: ${error.message}`;
+  }
 
   const employeeName = profile.name || profile.full_name || 'Сотрудник';
   // Оповещаем чат производства
@@ -506,11 +590,60 @@ async function handleCallbackQuery(callbackQuery: any) {
   const callbackData = String(callbackQuery.data || '');
   const callbackId = String(callbackQuery.id || '');
   const telegramId = String(callbackQuery.from?.id || '');
-  const profile = await findProfileByTelegramId(telegramId);
-
-  if (!profile) return answerCallbackQuery(callbackId, 'Ошибка профиля.');
   const { action, id: orderId } = parseCallbackData(callbackData);
   if (!orderId) return answerCallbackQuery(callbackId, 'Ошибка команды.');
+
+  if (action === 'logs') {
+    if (!isAdminTelegramId(telegramId)) {
+      return answerCallbackQuery(callbackId, 'Доступ запрещен.');
+    }
+
+    const msgChatId = callbackQuery.message?.chat?.id;
+    const msgId = callbackQuery.message?.message_id;
+
+    if (orderId === 'clear') {
+      clearAdminLogs();
+    } else if (orderId === 'test') {
+      await logAdminAlert({
+        level: 'INFO',
+        source: 'Проверка связи',
+        message: 'Тестовый алерт администратора работает исправно!',
+      });
+    }
+
+    if (orderId === 'refresh' || orderId === 'clear' || orderId === 'test') {
+      const view = await buildAdminLogsView();
+      if (msgChatId && msgId) {
+        await sendTelegram({
+          method: 'editMessageText',
+          body: {
+            chat_id: msgChatId,
+            message_id: msgId,
+            text: view.text,
+            parse_mode: 'HTML',
+            disable_web_page_preview: true,
+            reply_markup: view.reply_markup,
+          },
+        });
+      } else if (msgChatId) {
+        await sendTelegramMessage(msgChatId, view.text, { reply_markup: view.reply_markup });
+      }
+      const feedback =
+        orderId === 'clear'
+          ? 'Журнал очищен'
+          : orderId === 'test'
+            ? 'Тестовый алерт отправлен'
+            : 'Обновлено';
+      await answerCallbackQuery(callbackId, feedback);
+      return;
+    }
+
+    await answerCallbackQuery(callbackId, 'Неизвестная команда.');
+    return;
+  }
+
+  const profile = await findProfileByTelegramId(telegramId);
+  if (!profile) return answerCallbackQuery(callbackId, 'Ошибка профиля.');
 
   if (action === 'busy') {
     if (orderId === 'refresh') {
@@ -633,6 +766,12 @@ async function handleTakeOrder(orderId: string, profile: any, callbackQuery: any
 
   if (updateError) {
     console.error('❌ Ошибка Supabase при попытке взять заказ:', updateError);
+    await logAdminAlert({
+      level: 'ERROR',
+      source: 'Действие с заказом в боте',
+      message: `Ошибка БД при взятии заказа (${order?.title || orderId})`,
+      details: updateError.message,
+    });
     return `Ошибка БД: ${updateError.message}`;
   }
 
@@ -668,6 +807,12 @@ async function handleRequestPhotoOrder(orderId: string, profile: any, callbackQu
     .eq('assigned_to', profile.id);
   if (updateError) {
     console.error('❌ Ошибка перевода в awaiting_photos:', updateError);
+    await logAdminAlert({
+      level: 'ERROR',
+      source: 'Действие с заказом в боте',
+      message: `Ошибка БД при переводе в awaiting_photos (${order?.title || orderId})`,
+      details: updateError.message,
+    });
     return 'Ошибка обновления статуса.';
   }
 
@@ -696,6 +841,12 @@ async function handleCompleteOrder(orderId: string, profile: any, withoutPhoto =
     .eq('assigned_to', profile.id);
   if (updateError) {
     console.error('❌ Ошибка закрытия заказа:', updateError);
+    await logAdminAlert({
+      level: 'ERROR',
+      source: 'Действие с заказом в боте',
+      message: `Ошибка БД при закрытии заказа (${order?.title || orderId})`,
+      details: updateError.message,
+    });
     return 'Ошибка закрытия заказа.';
   }
 
@@ -725,6 +876,12 @@ async function handleMoveToOffice(orderId: string, profile: any, callbackQuery: 
     .eq('assigned_to', profile.id);
   if (updateError) {
     console.error('❌ Ошибка передачи в офис:', updateError);
+    await logAdminAlert({
+      level: 'ERROR',
+      source: 'Действие с заказом в боте',
+      message: `Ошибка БД при передаче в офис (${order?.title || orderId})`,
+      details: updateError.message,
+    });
     return 'Ошибка передачи в офис.';
   }
 
@@ -756,6 +913,12 @@ async function handleMoveToProduction(orderId: string, profile: any, callbackQue
     .eq('id', orderId);
   if (updateError) {
     console.error('❌ Ошибка перевода на изготовление:', updateError);
+    await logAdminAlert({
+      level: 'ERROR',
+      source: 'Действие с заказом в боте',
+      message: `Ошибка БД при переводе на изготовление (${order?.title || orderId})`,
+      details: updateError.message,
+    });
     return 'Ошибка перевода на изготовление.';
   }
 
@@ -787,6 +950,12 @@ async function handleMoveToInstallation(orderId: string, profile: any, callbackQ
     .eq('id', orderId);
   if (updateError) {
     console.error('❌ Ошибка перевода на монтаж:', updateError);
+    await logAdminAlert({
+      level: 'ERROR',
+      source: 'Действие с заказом в боте',
+      message: `Ошибка БД при переводе на монтаж (${order?.title || orderId})`,
+      details: updateError.message,
+    });
     return 'Ошибка перевода на монтаж.';
   }
 
@@ -808,7 +977,10 @@ async function handleMoveToInstallation(orderId: string, profile: any, callbackQ
 
 async function handlePrintQueue(chatId: number | string, profile: any) {
   const { data: orders, error } = await supabase.from('orders').select('id, title, deadline, image_urls, assigned_to, status').eq('department', 'print').neq('status', 'completed').order('deadline', { ascending: true });
-  if (error) return sendTelegramMessage(chatId, 'Ошибка загрузки очереди.');
+  if (error) {
+    await logAdminAlert({ level: 'ERROR', source: 'handlePrintQueue', message: 'Ошибка загрузки данных из Supabase', details: error.message });
+    return sendTelegramMessage(chatId, 'Ошибка загрузки очереди.');
+  }
 
   const filteredOrders = (orders || []).filter(order => !order.assigned_to || (order.assigned_to === profile.id && order.status === 'new'));
   if (!filteredOrders.length) return sendTelegramMessage(chatId, 'Очередь на печать пуста.');
@@ -838,6 +1010,12 @@ async function buildWorkloadView(): Promise<{ text: string; reply_markup?: { inl
 
   if (profilesError || ordersError) {
     console.error('❌ Ошибка загрузки занятости:', profilesError || ordersError);
+    await logAdminAlert({
+      level: 'ERROR',
+      source: 'buildWorkloadView',
+      message: 'Ошибка загрузки данных из Supabase',
+      details: (profilesError || ordersError)?.message,
+    });
     return { text: '❌ Не удалось загрузить занятость сотрудников. Попробуйте позже.' };
   }
 
@@ -914,6 +1092,7 @@ async function handleEmployeeWorkload(chatId: number | string, employeeId: strin
 
   if (error) {
     console.error('❌ Ошибка загрузки заказов сотрудника:', error);
+    await logAdminAlert({ level: 'ERROR', source: 'handleEmployeeWorkload', message: 'Ошибка загрузки данных из Supabase', details: error.message });
     await sendTelegramMessage(chatId, '❌ Не удалось загрузить заказы сотрудника.');
     await handleWorkloadMenu(chatId);
     return;
@@ -936,9 +1115,119 @@ async function handleEmployeeWorkload(chatId: number | string, employeeId: strin
   await handleWorkloadMenu(chatId);
 }
 
+async function buildAdminLogsView(): Promise<{ text: string; reply_markup: { inline_keyboard: any[][] } }> {
+  const t0 = Date.now();
+  const [profilesRes, activeOrdersRes, recentOrdersRes, storageRes] = await Promise.all([
+    supabase.from('profiles').select('id, name, full_name'),
+    supabase
+      .from('orders')
+      .select('id', { count: 'exact', head: true })
+      .not('status', 'in', '("completed","cancelled")'),
+    supabase
+      .from('orders')
+      .select('id, title, status, department, assigned_to, created_at')
+      .order('created_at', { ascending: false })
+      .limit(5),
+    supabase.storage.from('order-photos').list('', { limit: 1 }),
+  ]);
+  const latencyMs = Date.now() - t0;
+
+  const profilesList = profilesRes.data || [];
+  const namesMap: Record<string, string> = {};
+  for (const p of profilesList) {
+    namesMap[p.id] = String(p.full_name || p.name || 'Сотрудник');
+  }
+
+  const dbError = profilesRes.error || activeOrdersRes.error || recentOrdersRes.error;
+  const dbStatus = dbError
+    ? `❌ Ошибка (${escapeHtml(dbError.message)})`
+    : `✅ OK (${latencyMs} мс)`;
+  const storageStatus = storageRes.error
+    ? `❌ Ошибка (${escapeHtml(storageRes.error.message)})`
+    : '✅ OK';
+  const telegramStatus = TELEGRAM_TOKEN && GROUP_CHAT_ID
+    ? '✅ Токен и группа настроены'
+    : `⚠️ Неполный конфиг (Бот: ${TELEGRAM_TOKEN ? 'да' : 'нет'}, Группа: ${GROUP_CHAT_ID ? 'да' : 'нет'})`;
+
+  const statusIcons: Record<string, string> = {
+    new: '🆕',
+    in_progress: '⏳',
+    awaiting_photos: '📸',
+    completed: '✅',
+    cancelled: '🚫',
+  };
+
+  const recentOrders = recentOrdersRes.data || [];
+  const ordersLines = recentOrders.length
+    ? recentOrders.map((ord: any) => {
+        const icon = statusIcons[ord.status] || '📦';
+        const dept = formatDepartment(ord.department);
+        const worker = ord.assigned_to ? (namesMap[ord.assigned_to] || 'Сотрудник') : 'Свободен';
+        const createdAt = ord.created_at
+          ? new Date(ord.created_at).toLocaleString('ru-RU', {
+              timeZone: 'Asia/Almaty',
+              day: '2-digit',
+              month: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+            })
+          : '';
+        return `${icon} <b>${escapeHtml(String(ord.title || 'Без названия'))}</b>\n   ${dept ? `${dept} | ` : ''}${escapeHtml(worker)}${createdAt ? ` • ${escapeHtml(createdAt)}` : ''}`;
+      })
+    : ['Заказов пока нет.'];
+
+  const recentLogs = getRecentAdminLogs().slice(0, 8);
+  const logsLines = recentLogs.length
+    ? recentLogs.map((entry) => {
+        const icon = entry.level === 'ERROR' ? '🚨' : entry.level === 'SECURITY' ? '🔐' : 'ℹ️';
+        const detailsLine = entry.details
+          ? `\n   <code>${escapeHtml(entry.details.slice(0, 140))}</code>`
+          : '';
+        return `${icon} [${escapeHtml(entry.time)}] <b>${escapeHtml(entry.source)}</b>: ${escapeHtml(entry.message)}${detailsLine}`;
+      })
+    : ['✅ Ошибок и подозрительных событий не зафиксировано.'];
+
+  const updatedAt = new Date().toLocaleTimeString('ru-RU', { timeZone: 'Asia/Almaty' });
+  const text = [
+    '<b>🛡 Админ-панель и Логи системы</b>',
+    '',
+    '<b>🩺 Здоровье системы:</b>',
+    `• База данных Supabase: ${dbStatus}`,
+    `• Хранилище (order-photos): ${storageStatus}`,
+    `• Telegram: ${telegramStatus}`,
+    `• Сотрудников: <b>${profilesList.length}</b> | Активных заказов: <b>${activeOrdersRes.count ?? 0}</b>`,
+    '',
+    '<b>🕒 Последние 5 заказов в БД:</b>',
+    ...ordersLines,
+    '',
+    '<b>🚨 Журнал событий (ошибки и входы):</b>',
+    ...logsLines,
+    '',
+    `<i>Обновлено: ${escapeHtml(updatedAt)} (Алматы)</i>`,
+  ].join('\n');
+
+  return {
+    text,
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: '🔄 Обновить', callback_data: 'logs_refresh' },
+          { text: '🧪 Тест алерта', callback_data: 'logs_test' },
+        ],
+        [{ text: '🧹 Очистить журнал', callback_data: 'logs_clear' }],
+      ],
+    },
+  };
+}
+
+async function handleAdminLogsMenu(chatId: number | string) {
+  const view = await buildAdminLogsView();
+  await sendTelegramMessage(chatId, view.text, { reply_markup: view.reply_markup });
+}
+
 function parseCallbackData(data: string) {
   const normalized = data.replace(/:/g, '_');
-  const knownActions = ['reject', 'complete_without_photo', 'complete_with_photo', 'finish_without_photo', 'print_to_office', 'print_to_production', 'print_to_installation', 'take_print', 'take', 'office', 'production', 'installation', 'complete', 'desc', 'busy'];
+  const knownActions = ['reject', 'complete_without_photo', 'complete_with_photo', 'finish_without_photo', 'print_to_office', 'print_to_production', 'print_to_installation', 'take_print', 'take', 'office', 'production', 'installation', 'complete', 'desc', 'busy', 'logs'];
   for (const action of knownActions) { if (normalized.startsWith(`${action}_`)) return { action, id: normalized.slice(action.length + 1) }; }
   const [action, ...rest] = normalized.split('_');
   return { action, id: rest.join('_') };
@@ -950,7 +1239,20 @@ export async function POST(request: Request) {
   if (!update) return NextResponse.json({ ok: false }, { status: 400 });
 
   if (update.message && update.message.chat?.type !== 'private') return new Response('OK', { status: 200 });
-  if (update.callback_query) { await handleCallbackQuery(update.callback_query); return new Response('OK', { status: 200 }); }
+  if (update.callback_query) {
+    try {
+      await handleCallbackQuery(update.callback_query);
+    } catch (error: any) {
+      console.error('Telegram callback failed:', error);
+      await logAdminAlert({
+        level: 'ERROR',
+        source: 'Webhook callback_query',
+        message: 'Необработанная ошибка при обработке кнопки в Telegram',
+        details: String(error?.message || error),
+      });
+    }
+    return new Response('OK', { status: 200 });
+  }
 
   if (update.message) {
     const chatId = update.message.chat?.id;
@@ -977,6 +1279,11 @@ export async function POST(request: Request) {
       }
 
       const text = typeof update.message.text === 'string' ? update.message.text.trim() : '';
+      if ((text === '📜 Логи' || text === '/logs') && (isAdminTelegramId(telegramId) || isAdminTelegramId(chatId))) {
+        await handleAdminLogsMenu(chatId);
+        return new Response('OK', { status: 200 });
+      }
+
       const currentProfile = await findProfileByTelegramId(telegramId);
       
       if (!currentProfile) {
@@ -985,7 +1292,7 @@ export async function POST(request: Request) {
           return NextResponse.json({ ok: true }, { status: 200 });
         }
 
-        const handled = await handlePinAuthorization(chatId, telegramId, text);
+        const handled = await handlePinAuthorization(chatId, telegramId, text, update.message.from);
         if (handled) return NextResponse.json({ ok: true }, { status: 200 });
         
         await sendTelegramMessage(chatId, 'Пожалуйста, введите ваш персональный ПИН-код:');
@@ -1014,13 +1321,28 @@ export async function POST(request: Request) {
           else await sendMainMenu(chatId, false);
           break;
         }
+        case '📜 Логи':
+        case '/logs': {
+          if (isAdminTelegramId(telegramId) || isAdminTelegramId(chatId)) {
+            await handleAdminLogsMenu(chatId);
+          } else {
+            await sendMainMenu(chatId, Boolean(currentProfile?.can_print));
+          }
+          break;
+        }
         default: {
           await sendMainMenu(chatId, Boolean(currentProfile?.can_print));
           break;
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Telegram failed:', error);
+      await logAdminAlert({
+        level: 'ERROR',
+        source: 'Webhook POST',
+        message: 'Необработанная ошибка в Telegram webhook',
+        details: String(error?.message || error),
+      });
     }
     return new Response('OK', { status: 200 });
   }

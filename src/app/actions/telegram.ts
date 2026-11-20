@@ -1,5 +1,7 @@
 'use server';
 
+import { logAdminAlert } from '@/lib/admin-logger';
+
 interface OrderData {
   title: string;
   description?: string;
@@ -47,12 +49,26 @@ export async function notifyNewOrderToGroup(orderData: OrderData) {
         }
         
         const { data: profile, error } = await query.single();
-        if (error) console.error('❌ Ошибка запроса профиля:', error.message);
+        if (error) {
+          console.error('❌ Ошибка запроса профиля:', error.message);
+          await logAdminAlert({
+            level: 'ERROR',
+            source: 'Server Action (Telegram)',
+            message: 'Ошибка чтения профиля автора заказа в Supabase',
+            details: error.message,
+          });
+        }
         if (profile) {
           creatorName = profile.full_name || profile.name;
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('⚠️ Ошибка при подключении к Supabase в Telegram Action:', err);
+        await logAdminAlert({
+          level: 'ERROR',
+          source: 'Server Action (Telegram)',
+          message: 'Ошибка подключения к Supabase при уведомлении о заказе',
+          details: String(err?.message || err),
+        });
       }
     }
 
@@ -102,11 +118,34 @@ ${orderData.source_link ? `🔗 <b>Ссылка на макет:</b> <a href="${
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ chat_id: groupChatId, text: messageText, parse_mode: 'HTML', disable_web_page_preview: true }),
         });
+        if (!response.ok) {
+          const fallbackErr = await response.text();
+          console.error('❌ Telegram API Fallback Error (sendMessage):', fallbackErr);
+          await logAdminAlert({
+            level: 'ERROR',
+            source: 'Server Action (Telegram)',
+            message: `Ошибка отправки нового заказа "${orderData.title}" в группу`,
+            details: `${errorResponse} | fallback: ${fallbackErr}`,
+          });
+        }
+      } else {
+        await logAdminAlert({
+          level: 'ERROR',
+          source: 'Server Action (Telegram)',
+          message: `Ошибка отправки нового заказа "${orderData.title}" в группу`,
+          details: errorResponse,
+        });
       }
     }
     return { success: response.ok };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Критическая ошибка экшена Telegram:', error);
+    await logAdminAlert({
+      level: 'ERROR',
+      source: 'Server Action (Telegram)',
+      message: `Критическая ошибка уведомления о новом заказе "${orderData.title}"`,
+      details: String(error?.message || error),
+    });
     return { success: false, error: 'Internal error' };
   }
 }
@@ -190,11 +229,24 @@ export async function notifyOrderUpdate(
     });
 
     if (!response.ok) {
-      console.error('❌ Telegram update notification failed:', await response.text());
+      const errText = await response.text();
+      console.error('❌ Telegram update notification failed:', errText);
+      await logAdminAlert({
+        level: 'ERROR',
+        source: 'Server Action (Telegram)',
+        message: `Ошибка отправки уведомления об изменении заказа "${orderTitle}"`,
+        details: errText,
+      });
     }
     return { success: response.ok };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Ошибка отправки уведомления об обновлении заказа:', error);
+    await logAdminAlert({
+      level: 'ERROR',
+      source: 'Server Action (Telegram)',
+      message: `Исключение при отправке уведомления об изменении заказа "${orderTitle}"`,
+      details: String(error?.message || error),
+    });
     return { success: false, error: 'Internal error' };
   }
 }

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { logAdminAlert } from '@/lib/admin-logger';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -26,6 +27,12 @@ export function escapeHtml(text: string) {
 export async function sendTelegram(text: string) {
   if (!TELEGRAM_TOKEN || !GROUP_CHAT_ID) {
     console.error('Telegram cron config missing');
+    await logAdminAlert({
+      level: 'ERROR',
+      source: 'Cron-сводка',
+      message: 'Не заданы TELEGRAM_BOT_TOKEN или TELEGRAM_GROUP_CHAT_ID для cron-сводки',
+      notify: false,
+    });
     return null;
   }
 
@@ -49,12 +56,27 @@ export async function sendTelegram(text: string) {
     const errText = await res.text();
     console.error('Telegram cron error:', errText);
     if (res.status === 400 && /parse entities/i.test(errText)) {
-      return postMessage({
+      const fallbackRes = await postMessage({
         chat_id: GROUP_CHAT_ID,
         text,
         disable_web_page_preview: true,
       });
+      if (!fallbackRes.ok) {
+        await logAdminAlert({
+          level: 'ERROR',
+          source: 'Cron-сводка',
+          message: 'Ошибка отправки cron-сводки в Telegram (fallback)',
+          details: await fallbackRes.text().catch(() => `HTTP ${fallbackRes.status}`),
+        });
+      }
+      return fallbackRes;
     }
+    await logAdminAlert({
+      level: 'ERROR',
+      source: 'Cron-сводка',
+      message: 'Ошибка отправки cron-сводки в Telegram',
+      details: errText,
+    });
   }
 
   return res;
