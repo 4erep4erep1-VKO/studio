@@ -73,7 +73,15 @@ export async function GET(request: Request) {
       const statusRu = statusMap[order.status] || order.status || 'В работе';
       const deptRu = deptMap[order.department] || order.department || 'Не указан';
       const worker = assignedNames[order.assigned_to] || 'Не назначен';
-      const deadlineText = order.deadline ? escapeHtml(String(order.deadline)) : 'Без срока';
+      let deadlineText = 'Без срока';
+      if (order.deadline) {
+        try {
+          const d = new Date(order.deadline);
+          deadlineText = !isNaN(d.getTime()) ? d.toLocaleDateString('ru-RU') : escapeHtml(String(order.deadline).split('T')[0]);
+        } catch (_) {
+          deadlineText = escapeHtml(String(order.deadline).split('T')[0]);
+        }
+      }
       return `• <b>${escapeHtml(order.title)}</b>\n${escapeHtml(deptRu)} | ${escapeHtml(statusRu)}\nИсполнитель: ${escapeHtml(worker)}\nДедлайн: ${deadlineText}`;
     }).join('\n\n');
 
